@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Caderneta de Apostas</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Caderneta de Apostas</p>
+        <h1>Controle limpo, decisões mais inteligentes.</h1>
+        <p class="subtitle">
+          Registre suas entradas, acompanhe o desempenho e analise sua banca com foco.
+        </p>
+      </div>
+      <div class="header-actions">
+        <label class="unit-toggle">
+          <span>Visualização</span>
+          <select id="unit-mode">
+            <option value="currency">R$ (Dinheiro)</option>
+            <option value="unit">Unidades (u)</option>
+          </select>
+        </label>
+      </div>
+    </header>
+
+    <main class="app-grid">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Nova Aposta</h2>
+          <p>Entrada rápida com cálculo automático de lucro potencial.</p>
+        </div>
+        <form id="bet-form" class="form-grid">
+          <label>
+            Data
+            <input type="date" id="bet-date" required />
+          </label>
+          <label>
+            Esporte
+            <input type="text" id="bet-sport" placeholder="Ex: Futebol" required />
+          </label>
+          <label>
+            Campeonato
+            <input type="text" id="bet-league" placeholder="Ex: Serie A" />
+          </label>
+          <label>
+            Evento
+            <input type="text" id="bet-event" placeholder="Time A vs Time B" required />
+          </label>
+          <label>
+            Mercado
+            <input type="text" id="bet-market" placeholder="Over 2.5" required />
+          </label>
+          <label>
+            Odd
+            <input type="number" step="0.01" id="bet-odds" placeholder="1.90" required />
+          </label>
+          <label>
+            Stake (Valor)
+            <input type="number" step="0.01" id="bet-stake" placeholder="100" required />
+          </label>
+          <label>
+            Casa de Aposta
+            <input type="text" id="bet-book" placeholder="Bet365" required />
+          </label>
+          <label>
+            Status
+            <select id="bet-status" required>
+              <option value="pending">Pendente</option>
+              <option value="win">Green / Ganhou</option>
+              <option value="loss">Red / Perdeu</option>
+              <option value="void">Devolvida / Void</option>
+              <option value="cashout">Cashout</option>
+            </select>
+          </label>
+          <label>
+            Odd de Fechamento (CLV)
+            <input type="number" step="0.01" id="bet-closing-odds" placeholder="1.70" />
+          </label>
+          <label class="cashout-field">
+            Retorno do Cashout
+            <input type="number" step="0.01" id="bet-cashout-return" placeholder="110" />
+          </label>
+          <label class="full">
+            Diário de Bordo
+            <textarea id="bet-notes" rows="3" placeholder="Motivo da entrada, leitura de jogo, etc."></textarea>
+          </label>
+          <div class="form-footer">
+            <div>
+              <span class="muted">Lucro potencial</span>
+              <strong id="potential-profit">R$ 0,00</strong>
+            </div>
+            <button type="submit" id="submit-button">Salvar aposta</button>
+            <button type="button" class="ghost" id="reset-button">Limpar</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Painel de Inteligência</h2>
+          <div class="panel-actions">
+            <label>
+              Visão
+              <select id="book-filter"></select>
+            </label>
+          </div>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi">
+            <span>Lucro Total</span>
+            <strong id="kpi-profit">R$ 0,00</strong>
+          </div>
+          <div class="kpi">
+            <span>ROI</span>
+            <strong id="kpi-roi">0%</strong>
+          </div>
+          <div class="kpi">
+            <span>Yield</span>
+            <strong id="kpi-yield">0%</strong>
+          </div>
+          <div class="kpi">
+            <span>Taxa de Acerto</span>
+            <strong id="kpi-winrate">0%</strong>
+          </div>
+          <div class="kpi">
+            <span>CLV médio</span>
+            <strong id="kpi-clv">0%</strong>
+          </div>
+        </div>
+
+        <div class="chart-grid">
+          <div class="chart-card">
+            <h3>Evolução da banca</h3>
+            <canvas id="balance-chart" height="150"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Lucro por esporte</h3>
+            <canvas id="sport-chart" height="150"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Lucro por mercado</h3>
+            <canvas id="market-chart" height="150"></canvas>
+          </div>
+        </div>
+
+        <div class="bank-management">
+          <div>
+            <h3>Gestão de banca</h3>
+            <p class="muted">Exposição atual das apostas pendentes.</p>
+          </div>
+          <div class="bank-inputs">
+            <label>
+              Banca (R$)
+              <input type="number" step="0.01" id="bankroll-input" placeholder="1000" />
+            </label>
+            <label>
+              Valor da Unidade (R$)
+              <input type="number" step="0.01" id="unit-value-input" placeholder="10" />
+            </label>
+          </div>
+          <div class="progress">
+            <div class="progress-bar" id="bankroll-progress"></div>
+          </div>
+          <div class="progress-caption">
+            <span id="bankroll-exposure">0%</span>
+            <span class="muted" id="bankroll-exposure-value">R$ 0,00 expostos</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel full">
+        <div class="panel-header">
+          <h2>Histórico de Apostas</h2>
+          <p>Edite status, acompanhe lucro e mantenha tudo organizado.</p>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Evento</th>
+                <th>Mercado</th>
+                <th>Odd</th>
+                <th>Stake</th>
+                <th>Status</th>
+                <th>Lucro</th>
+                <th>CLV</th>
+                <th>Casa</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="bets-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>Dados salvos no Firestore. App local, sem envio para terceiros.</p>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
