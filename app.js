@@ -220,7 +220,7 @@ function renderTable() {
   if (data.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 8;
+    cell.colSpan = 9;
     cell.textContent = "Nenhuma aposta cadastrada ainda.";
     row.appendChild(cell);
     betsBody.appendChild(row);
@@ -230,6 +230,7 @@ function renderTable() {
   data.forEach((bet) => {
     const row = document.createElement("tr");
     const profit = calcProfit(bet);
+    const potentialProfit = calcPotentialProfit(bet.stake, bet.odds);
 
     // Criação segura das colunas
     // 1. Data
@@ -264,12 +265,17 @@ function renderTable() {
     tdProfit.textContent = formatProfit(profit);
     row.appendChild(tdProfit);
 
-    // 7. Casa (Book)
+    // 7. Lucro potencial
+    const tdPotential = document.createElement("td");
+    tdPotential.textContent = formatProfit(potentialProfit);
+    row.appendChild(tdPotential);
+
+    // 8. Casa (Book)
     const tdBook = document.createElement("td");
     tdBook.textContent = bet.book;
     row.appendChild(tdBook);
 
-    // 8. Botões de Ação
+    // 9. Botões de Ação
     const tdActions = document.createElement("td");
     tdActions.innerHTML = `
       <button type="button" class="ghost" data-action="edit" data-id="${bet.id}">Editar</button>
