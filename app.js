@@ -215,13 +215,14 @@ function renderBookFilter() {
 
 function renderTable() {
   const data = getFilteredBets();
-  betsBody.innerHTML = "";
+  betsBody.innerHTML = ""; // Limpa a tabela
 
   if (data.length === 0) {
     const row = document.createElement("tr");
-    row.innerHTML = `
-      <td colspan="8">Nenhuma aposta cadastrada ainda.</td>
-    `;
+    const cell = document.createElement("td");
+    cell.colSpan = 8;
+    cell.textContent = "Nenhuma aposta cadastrada ainda.";
+    row.appendChild(cell);
     betsBody.appendChild(row);
     return;
   }
@@ -230,21 +231,51 @@ function renderTable() {
     const row = document.createElement("tr");
     const profit = calcProfit(bet);
 
-    row.innerHTML = `
-      <td>${bet.date}</td>
-      <td>
-        <strong>${bet.event}</strong>
-      </td>
-      <td>${numberFormatter.format(bet.odds)}</td>
-      <td>${formatStake(bet.stake)}</td>
-      <td>${statusLabel(bet.status)}</td>
-      <td>${formatProfit(profit)}</td>
-      <td>${bet.book}</td>
-      <td>
-        <button type="button" class="ghost" data-action="edit" data-id="${bet.id}">Editar</button>
-        <button type="button" class="ghost" data-action="delete" data-id="${bet.id}">Excluir</button>
-      </td>
-    `;
+    // Criação segura das colunas
+    // 1. Data
+    const tdDate = document.createElement("td");
+    tdDate.textContent = bet.date;
+    row.appendChild(tdDate);
+
+    // 2. Evento (com negrito)
+    const tdEvent = document.createElement("td");
+    const strongEvent = document.createElement("strong");
+    strongEvent.textContent = bet.event; // Aqui usamos textContent para segurança
+    tdEvent.appendChild(strongEvent);
+    row.appendChild(tdEvent);
+
+    // 3. Odd
+    const tdOdds = document.createElement("td");
+    tdOdds.textContent = numberFormatter.format(bet.odds);
+    row.appendChild(tdOdds);
+
+    // 4. Stake
+    const tdStake = document.createElement("td");
+    tdStake.textContent = formatStake(bet.stake);
+    row.appendChild(tdStake);
+
+    // 5. Status
+    const tdStatus = document.createElement("td");
+    tdStatus.textContent = statusLabel(bet.status);
+    row.appendChild(tdStatus);
+
+    // 6. Lucro
+    const tdProfit = document.createElement("td");
+    tdProfit.textContent = formatProfit(profit);
+    row.appendChild(tdProfit);
+
+    // 7. Casa (Book)
+    const tdBook = document.createElement("td");
+    tdBook.textContent = bet.book;
+    row.appendChild(tdBook);
+
+    // 8. Botões de Ação
+    const tdActions = document.createElement("td");
+    tdActions.innerHTML = `
+      <button type="button" class="ghost" data-action="edit" data-id="${bet.id}">Editar</button>
+      <button type="button" class="ghost" data-action="delete" data-id="${bet.id}">Excluir</button>
+    `; // Botões fixos são seguros usar innerHTML, mas poderíamos criar elemento a elemento também
+    row.appendChild(tdActions);
 
     betsBody.appendChild(row);
   });
