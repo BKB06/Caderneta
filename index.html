@@ -21,15 +21,6 @@
           Registre suas entradas, acompanhe o desempenho e analise sua banca com foco.
         </p>
       </div>
-      <div class="header-actions">
-        <label class="unit-toggle">
-          <span>Visualização</span>
-          <select id="unit-mode">
-            <option value="currency">R$ (Dinheiro)</option>
-            <option value="unit">Unidades (u)</option>
-          </select>
-        </label>
-      </div>
     </header>
 
     <main class="app-grid">
@@ -41,31 +32,27 @@
         <form id="bet-form" class="form-grid">
           <label>
             Data
-            <input type="date" id="bet-date" required />
-          </label>
-          <label>
-            Esporte
-            <input type="text" id="bet-sport" placeholder="Ex: Futebol" required />
-          </label>
-          <label>
-            Campeonato
-            <input type="text" id="bet-league" placeholder="Ex: Serie A" />
+            <div class="input-group">
+              <input type="date" id="bet-date" inputmode="numeric"  required />
+            </div>
           </label>
           <label>
             Evento
             <input type="text" id="bet-event" placeholder="Time A vs Time B" required />
           </label>
           <label>
-            Mercado
-            <input type="text" id="bet-market" placeholder="Over 2.5" required />
-          </label>
-          <label>
             Odd
-            <input type="number" step="0.01" id="bet-odds" placeholder="1.90" required />
+            <div class="input-group">
+              <input type="text" inputmode="decimal" id="bet-odds" placeholder="1,00" required />
+              <span class="suffix">x</span>
+            </div>
           </label>
           <label>
-            Stake (Valor)
-            <input type="number" step="0.01" id="bet-stake" placeholder="100" required />
+            Stake
+            <div class="input-group">
+              <span class="prefix">R$</span>
+              <input type="text" inputmode="decimal" id="bet-stake" placeholder="100" required />
+            </div>
           </label>
           <label>
             Casa de Aposta
@@ -80,18 +67,6 @@
               <option value="void">Devolvida / Void</option>
               <option value="cashout">Cashout</option>
             </select>
-          </label>
-          <label>
-            Odd de Fechamento (CLV)
-            <input type="number" step="0.01" id="bet-closing-odds" placeholder="1.70" />
-          </label>
-          <label class="cashout-field">
-            Retorno do Cashout
-            <input type="number" step="0.01" id="bet-cashout-return" placeholder="110" />
-          </label>
-          <label class="full">
-            Diário de Bordo
-            <textarea id="bet-notes" rows="3" placeholder="Motivo da entrada, leitura de jogo, etc."></textarea>
           </label>
           <div class="form-footer">
             <div>
@@ -120,20 +95,8 @@
             <strong id="kpi-profit">R$ 0,00</strong>
           </div>
           <div class="kpi">
-            <span>ROI</span>
-            <strong id="kpi-roi">0%</strong>
-          </div>
-          <div class="kpi">
-            <span>Yield</span>
-            <strong id="kpi-yield">0%</strong>
-          </div>
-          <div class="kpi">
             <span>Taxa de Acerto</span>
             <strong id="kpi-winrate">0%</strong>
-          </div>
-          <div class="kpi">
-            <span>CLV médio</span>
-            <strong id="kpi-clv">0%</strong>
           </div>
         </div>
 
@@ -141,14 +104,6 @@
           <div class="chart-card">
             <h3>Evolução da banca</h3>
             <canvas id="balance-chart" height="150"></canvas>
-          </div>
-          <div class="chart-card">
-            <h3>Lucro por esporte</h3>
-            <canvas id="sport-chart" height="150"></canvas>
-          </div>
-          <div class="chart-card">
-            <h3>Lucro por mercado</h3>
-            <canvas id="market-chart" height="150"></canvas>
           </div>
         </div>
 
@@ -161,10 +116,6 @@
             <label>
               Banca (R$)
               <input type="number" step="0.01" id="bankroll-input" placeholder="1000" />
-            </label>
-            <label>
-              Valor da Unidade (R$)
-              <input type="number" step="0.01" id="unit-value-input" placeholder="10" />
             </label>
           </div>
           <div class="progress">
@@ -188,12 +139,10 @@
               <tr>
                 <th>Data</th>
                 <th>Evento</th>
-                <th>Mercado</th>
                 <th>Odd</th>
                 <th>Stake</th>
                 <th>Status</th>
                 <th>Lucro</th>
-                <th>CLV</th>
                 <th>Casa</th>
                 <th>Ações</th>
               </tr>
