@@ -130,7 +130,7 @@ function updateBankrollDisplay() {
   if (!Number.isFinite(effective)) {
     return;
   }
-  bankrollInput.value = effective.toFixed(2);
+  bankrollInput.value = numberFormatter.format(effective);
 }
 
 function formatDateDisplay(value) {
