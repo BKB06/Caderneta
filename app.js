@@ -12,6 +12,7 @@ const bankrollProgress = document.getElementById("bankroll-progress");
 const bankrollExposure = document.getElementById("bankroll-exposure");
 const bankrollExposureValue = document.getElementById("bankroll-exposure-value");
 const bookFilter = document.getElementById("book-filter");
+const statusFilter = document.getElementById("status-filter");
 
 const kpiProfit = document.getElementById("kpi-profit");
 const kpiWinrate = document.getElementById("kpi-winrate");
@@ -187,10 +188,26 @@ function updatePotentialProfit() {
 
 function getFilteredBets() {
   const selected = bookFilter.value;
+  const status = statusFilter?.value || "all";
   if (!selected || selected === "all") {
+    if (status === "pending") {
+      return bets.filter((bet) => bet.status === "pending");
+    }
+    if (status === "settled") {
+      return bets.filter((bet) => bet.status === "win" || bet.status === "loss");
+    }
     return bets;
   }
-  return bets.filter((bet) => bet.book === selected);
+  return bets.filter((bet) => {
+    const matchBook = bet.book === selected;
+    if (status === "pending") {
+      return matchBook && bet.status === "pending";
+    }
+    if (status === "settled") {
+      return matchBook && (bet.status === "win" || bet.status === "loss");
+    }
+    return matchBook;
+  });
 }
 
 function renderBookFilter() {
@@ -482,8 +499,8 @@ function startEdit(bet) {
   editingId = bet.id;
   document.getElementById("bet-date").value = formatDateForInput(bet.date);
   document.getElementById("bet-event").value = bet.event;
-  document.getElementById("bet-odds").value = bet.odds;
-  document.getElementById("bet-stake").value = bet.stake;
+  document.getElementById("bet-odds").value = numberFormatter.format(bet.odds);
+  document.getElementById("bet-stake").value = numberFormatter.format(bet.stake);
   document.getElementById("bet-book").value = bet.book;
   document.getElementById("bet-status").value = bet.status;
   updatePotentialProfit();
@@ -528,6 +545,7 @@ resetButton.addEventListener("click", resetForm);
 
 bankrollInput.addEventListener("input", handleBankrollInput);
 bookFilter.addEventListener("change", refreshAll);
+statusFilter?.addEventListener("change", refreshAll);
 betsBody.addEventListener("click", handleTableClick);
 
 init();
