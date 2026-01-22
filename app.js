@@ -1,11 +1,16 @@
 const STORAGE_KEY = "caderneta.bets.v1";
 const BANKROLL_KEY = "caderneta.bankroll.base.v1";
+const CASHFLOW_KEY = "caderneta.cashflow.v1";
 
 const form = document.getElementById("bet-form");
 const potentialProfitEl = document.getElementById("potential-profit");
 const betsBody = document.getElementById("bets-body");
 const resetButton = document.getElementById("reset-button");
 const submitButton = document.getElementById("submit-button");
+const cashflowForm = document.getElementById("cashflow-form");
+const cashflowBody = document.getElementById("cashflow-body");
+const cashflowReset = document.getElementById("cashflow-reset");
+const cashflowSubmit = document.getElementById("cashflow-submit");
 
 const bankrollInput = document.getElementById("bankroll-input");
 const bankrollProgress = document.getElementById("bankroll-progress");
@@ -18,7 +23,9 @@ const kpiProfit = document.getElementById("kpi-profit");
 const kpiWinrate = document.getElementById("kpi-winrate");
 
 let bets = [];
+let cashflows = [];
 let editingId = null;
+let cashflowEditingId = null;
 let balanceChart = null;
 let baseBankroll = null;
 
@@ -62,6 +69,15 @@ function loadBets() {
   });
 }
 
+function loadCashflows() {
+  const raw = localStorage.getItem(CASHFLOW_KEY);
+  cashflows = raw ? JSON.parse(raw) : [];
+  cashflows = cashflows.map((flow) => ({
+    ...flow,
+    amount: Number(flow.amount),
+  }));
+}
+
 function loadBankrollBase() {
   const raw = localStorage.getItem(BANKROLL_KEY);
   const value = Number(raw);
@@ -78,6 +94,10 @@ function saveBankrollBase() {
 
 function saveBets() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(bets));
+}
+
+function saveCashflows() {
+  localStorage.setItem(CASHFLOW_KEY, JSON.stringify(cashflows));
 }
 
 function parseLocaleNumber(value) {
@@ -119,11 +139,23 @@ function calcSettledProfit(list = bets) {
     .reduce((sum, bet) => sum + calcProfit(bet), 0);
 }
 
+function calcCashflowTotal(list = cashflows) {
+  return list.reduce((sum, flow) => {
+    if (flow.type === "deposit") {
+      return sum + flow.amount;
+    }
+    if (flow.type === "withdraw") {
+      return sum - flow.amount;
+    }
+    return sum;
+  }, 0);
+}
+
 function getEffectiveBankroll() {
   if (!Number.isFinite(baseBankroll)) {
     return null;
   }
-  return baseBankroll + calcSettledProfit();
+  return baseBankroll + calcSettledProfit() + calcCashflowTotal();
 }
 
 function updateBankrollDisplay() {
@@ -304,6 +336,62 @@ function renderTable() {
   });
 }
 
+function cashflowLabel(type) {
+  const map = {
+    deposit: "Depósito",
+    withdraw: "Saque",
+  };
+  return map[type] || type;
+}
+
+function renderCashflowTable() {
+  if (!cashflowBody) {
+    return;
+  }
+
+  cashflowBody.innerHTML = "";
+
+  if (cashflows.length === 0) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.textContent = "Nenhuma movimentação cadastrada ainda.";
+    row.appendChild(cell);
+    cashflowBody.appendChild(row);
+    return;
+  }
+
+  cashflows.forEach((flow) => {
+    const row = document.createElement("tr");
+
+    const tdDate = document.createElement("td");
+    tdDate.textContent = flow.date;
+    row.appendChild(tdDate);
+
+    const tdType = document.createElement("td");
+    tdType.textContent = cashflowLabel(flow.type);
+    row.appendChild(tdType);
+
+    const tdAmount = document.createElement("td");
+    const signedAmount = flow.type === "withdraw" ? -Math.abs(flow.amount) : flow.amount;
+    tdAmount.textContent = formatProfit(signedAmount);
+    row.appendChild(tdAmount);
+
+    const tdNote = document.createElement("td");
+    tdNote.textContent = flow.note || "-";
+    row.appendChild(tdNote);
+
+    const tdActions = document.createElement("td");
+    tdActions.innerHTML = `
+      <button type="button" class="ghost" data-action="edit" data-id="${flow.id}">Editar</button>
+      <button type="button" class="ghost" data-action="delete" data-id="${flow.id}">Excluir</button>
+    `;
+    row.appendChild(tdActions);
+
+    cashflowBody.appendChild(row);
+  });
+}
+
 function statusLabel(status) {
   const map = {
     pending: "Pendente",
@@ -349,7 +437,7 @@ function handleBankrollInput() {
     return;
   }
 
-  baseBankroll = current - calcSettledProfit();
+  baseBankroll = current - calcSettledProfit() - calcCashflowTotal();
   saveBankrollBase();
   updateBankrollExposure();
 }
@@ -446,6 +534,7 @@ function renderBalanceChart() {
 function refreshAll() {
   renderBookFilter();
   renderTable();
+  renderCashflowTable();
   renderKpis();
   updateBankrollDisplay();
   updateBankrollExposure();
@@ -457,6 +546,15 @@ function resetForm() {
   updatePotentialProfit();
   editingId = null;
   submitButton.textContent = "Salvar aposta";
+}
+
+function resetCashflowForm() {
+  if (!cashflowForm) {
+    return;
+  }
+  cashflowForm.reset();
+  cashflowEditingId = null;
+  cashflowSubmit.textContent = "Salvar movimentação";
 }
 
 function handleSubmit(event) {
@@ -495,6 +593,40 @@ function handleSubmit(event) {
   resetForm();
 }
 
+function handleCashflowSubmit(event) {
+  event.preventDefault();
+
+  const rawDate = document.getElementById("cashflow-date").value.trim();
+  const formattedDate = formatDateDisplay(rawDate);
+  const amountValue = parseLocaleNumber(document.getElementById("cashflow-amount").value);
+
+  const flow = {
+    id: crypto.randomUUID(),
+    date: formattedDate,
+    type: document.getElementById("cashflow-type").value,
+    amount: amountValue,
+    note: document.getElementById("cashflow-note").value.trim(),
+  };
+
+  if (!flow.date || !Number.isFinite(flow.amount)) {
+    alert("Preencha data e valor da movimentação.");
+    return;
+  }
+
+  if (cashflowEditingId) {
+    const index = cashflows.findIndex((item) => item.id === cashflowEditingId);
+    if (index >= 0) {
+      cashflows[index] = { ...cashflows[index], ...flow };
+    }
+  } else {
+    cashflows.unshift(flow);
+  }
+
+  saveCashflows();
+  refreshAll();
+  resetCashflowForm();
+}
+
 function startEdit(bet) {
   editingId = bet.id;
   document.getElementById("bet-date").value = formatDateForInput(bet.date);
@@ -506,6 +638,16 @@ function startEdit(bet) {
   updatePotentialProfit();
   submitButton.textContent = "Atualizar aposta";
   form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function startCashflowEdit(flow) {
+  cashflowEditingId = flow.id;
+  document.getElementById("cashflow-date").value = formatDateForInput(flow.date);
+  document.getElementById("cashflow-type").value = flow.type;
+  document.getElementById("cashflow-amount").value = numberFormatter.format(flow.amount);
+  document.getElementById("cashflow-note").value = flow.note || "";
+  cashflowSubmit.textContent = "Atualizar movimentação";
+  cashflowForm.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function handleTableClick(event) {
@@ -528,8 +670,31 @@ function handleTableClick(event) {
   }
 }
 
+function handleCashflowClick(event) {
+  const button = event.target.closest("button[data-action]");
+  if (!button) {
+    return;
+  }
+
+  const id = button.dataset.id;
+  if (button.dataset.action === "edit") {
+    const flow = cashflows.find((item) => item.id === id);
+    if (flow) {
+      startCashflowEdit(flow);
+    }
+    return;
+  }
+
+  if (button.dataset.action === "delete") {
+    cashflows = cashflows.filter((flow) => flow.id !== id);
+    saveCashflows();
+    refreshAll();
+  }
+}
+
 function init() {
   loadBets();
+  loadCashflows();
   loadBankrollBase();
   updatePotentialProfit();
   refreshAll();
@@ -537,6 +702,8 @@ function init() {
 
 form.addEventListener("submit", handleSubmit);
 resetButton.addEventListener("click", resetForm);
+cashflowForm?.addEventListener("submit", handleCashflowSubmit);
+cashflowReset?.addEventListener("click", resetCashflowForm);
 
 ["bet-stake", "bet-odds"].forEach((id) => {
   const input = document.getElementById(id);
@@ -547,5 +714,6 @@ bankrollInput.addEventListener("input", handleBankrollInput);
 bookFilter.addEventListener("change", refreshAll);
 statusFilter?.addEventListener("change", refreshAll);
 betsBody.addEventListener("click", handleTableClick);
+cashflowBody?.addEventListener("click", handleCashflowClick);
 
 init();
