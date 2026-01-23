@@ -130,6 +130,7 @@ p {
   color: var(--text-muted);
 }
 
+
 .form-grid label.full {
   grid-column: 1 / -1;
 }
@@ -339,6 +340,18 @@ th {
 
 tr:hover td {
   background: rgba(124, 92, 255, 0.08);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  color: var(--accent);
+  background: rgba(45, 212, 191, 0.15);
+  border: 1px solid rgba(45, 212, 191, 0.3);
 }
 
 .muted {

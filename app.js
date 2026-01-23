@@ -65,6 +65,7 @@ function loadBets() {
       status: statusMap[bet.status] || bet.status,
       stake: Number(bet.stake),
       odds: Number(bet.odds),
+      isFreebet: Boolean(bet.isFreebet || bet.freebet),
     };
   });
 }
@@ -121,7 +122,7 @@ function calcProfit(bet) {
     return bet.stake * (bet.odds - 1);
   }
   if (bet.status === "loss") {
-    return -bet.stake;
+    return bet.isFreebet ? 0 : -bet.stake;
   }
   return 0;
 }
@@ -302,6 +303,13 @@ function renderTable() {
     // 4. Stake
     const tdStake = document.createElement("td");
     tdStake.textContent = formatStake(bet.stake);
+    if (bet.isFreebet) {
+      const tag = document.createElement("span");
+      tag.classList.add("tag");
+      tag.textContent = "Grátis";
+      tdStake.appendChild(document.createElement("br"));
+      tdStake.appendChild(tag);
+    }
     row.appendChild(tdStake);
 
     // 5. Status
@@ -417,7 +425,7 @@ function renderKpis() {
 
 function updateBankrollExposure() {
   const pendingStake = bets
-    .filter((bet) => bet.status === "pending")
+    .filter((bet) => bet.status === "pending" && !bet.isFreebet)
     .reduce((sum, bet) => sum + bet.stake, 0);
   const effective = getEffectiveBankroll();
   const bankroll = Number.isFinite(effective) ? effective : parseLocaleNumber(bankrollInput.value);
@@ -573,6 +581,7 @@ function handleSubmit(event) {
     stake: stakeValue,
     book: document.getElementById("bet-book").value.trim(),
     status: document.getElementById("bet-status").value,
+    isFreebet: document.getElementById("bet-stake-type").value === "freebet",
   };
 
   if (!bet.date || !bet.event || !bet.book || !Number.isFinite(bet.odds) || !Number.isFinite(bet.stake)) {
@@ -635,6 +644,7 @@ function startEdit(bet) {
   document.getElementById("bet-stake").value = numberFormatter.format(bet.stake);
   document.getElementById("bet-book").value = bet.book;
   document.getElementById("bet-status").value = bet.status;
+  document.getElementById("bet-stake-type").value = bet.isFreebet ? "freebet" : "regular";
   updatePotentialProfit();
   submitButton.textContent = "Atualizar aposta";
   form.scrollIntoView({ behavior: "smooth", block: "start" });
