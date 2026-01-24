@@ -358,6 +358,230 @@ tr:hover td {
   color: var(--text-muted);
 }
 
+/* Calendar Styles */
+.calendar-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  gap: 24px;
+}
+
+.calendar-navigation strong {
+  font-size: 1.1rem;
+  min-width: 150px;
+  text-align: center;
+}
+
+.calendar-summary {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.calendar-kpi {
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  text-align: center;
+  min-width: 120px;
+}
+
+.calendar-kpi span {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.calendar-kpi strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1rem;
+}
+
+.calendar-kpi strong.positive {
+  color: var(--success);
+}
+
+.calendar-kpi strong.negative {
+  color: var(--danger);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 48px);
+  gap: 4px;
+  justify-content: center;
+}
+
+.calendar-grid.year-view {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.calendar-header {
+  padding: 6px 2px;
+  text-align: center;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.calendar-day {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  font-size: 0.7rem;
+  gap: 1px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  cursor: default;
+  position: relative;
+}
+
+.calendar-day:hover {
+  border-color: var(--border);
+  transform: scale(1.05);
+}
+
+.calendar-day.empty {
+  background: transparent;
+  pointer-events: none;
+}
+
+.calendar-day.today {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(124, 92, 255, 0.3);
+}
+
+.calendar-day.positive {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.calendar-day.negative {
+  background: rgba(255, 107, 107, 0.15);
+  border-color: rgba(255, 107, 107, 0.3);
+}
+
+.calendar-day .day-number {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.calendar-day .day-profit {
+  font-size: 0.65rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.calendar-day .day-profit.positive {
+  color: var(--success);
+  background: transparent;
+  border: none;
+}
+
+.calendar-day .day-profit.negative {
+  color: var(--danger);
+  background: transparent;
+  border: none;
+}
+
+.calendar-month-card {
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  text-align: center;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+}
+
+.calendar-month-card:hover {
+  border-color: var(--primary);
+  transform: scale(1.02);
+}
+
+.calendar-month-card.positive {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.calendar-month-card.negative {
+  background: rgba(255, 107, 107, 0.1);
+  border-color: rgba(255, 107, 107, 0.3);
+}
+
+.calendar-month-card .month-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+
+.calendar-month-card .month-profit {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.calendar-month-card .month-profit.positive {
+  color: var(--success);
+}
+
+.calendar-month-card .month-profit.negative {
+  color: var(--danger);
+}
+
+.calendar-month-card .month-stats {
+  margin-top: 8px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  .calendar-summary {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .calendar-grid {
+    grid-template-columns: repeat(7, 40px);
+    gap: 3px;
+  }
+
+  .calendar-grid.year-view {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .calendar-day {
+    width: 40px;
+    height: 40px;
+    font-size: 0.65rem;
+  }
+
+  .calendar-day .day-profit {
+    font-size: 0.5rem;
+  }
+
+  .calendar-navigation {
+    gap: 12px;
+  }
+
+  .calendar-navigation strong {
+    font-size: 0.95rem;
+    min-width: 120px;
+  }
+}
+
 .app-footer {
   margin-top: 32px;
   text-align: center;

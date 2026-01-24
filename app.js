@@ -702,12 +702,242 @@ function handleCashflowClick(event) {
   }
 }
 
+// Calendar state
+let calendarDate = new Date();
+let calendarView = 'month';
+
+const calendarContainer = document.getElementById('calendar-container');
+const calendarTitle = document.getElementById('calendar-title');
+const calendarViewSelect = document.getElementById('calendar-view');
+const calendarPrev = document.getElementById('calendar-prev');
+const calendarNext = document.getElementById('calendar-next');
+const calendarPeriodProfit = document.getElementById('calendar-period-profit');
+const calendarPositiveDays = document.getElementById('calendar-positive-days');
+const calendarNegativeDays = document.getElementById('calendar-negative-days');
+
+const MONTH_NAMES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+
+const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+function getProfitByDate(dateKey) {
+  return bets
+    .filter((bet) => {
+      if (bet.status !== 'win' && bet.status !== 'loss') return false;
+      const betDate = parseDateForSort(bet.date);
+      if (!betDate) return false;
+      const betKey = `${betDate.getFullYear()}-${String(betDate.getMonth() + 1).padStart(2, '0')}-${String(betDate.getDate()).padStart(2, '0')}`;
+      return betKey === dateKey;
+    })
+    .reduce((sum, bet) => sum + calcProfit(bet), 0);
+}
+
+function getProfitByMonth(year, month) {
+  return bets
+    .filter((bet) => {
+      if (bet.status !== 'win' && bet.status !== 'loss') return false;
+      const betDate = parseDateForSort(bet.date);
+      if (!betDate) return false;
+      return betDate.getFullYear() === year && betDate.getMonth() === month;
+    })
+    .reduce((sum, bet) => sum + calcProfit(bet), 0);
+}
+
+function getProfitByYear(year) {
+  return bets
+    .filter((bet) => {
+      if (bet.status !== 'win' && bet.status !== 'loss') return false;
+      const betDate = parseDateForSort(bet.date);
+      if (!betDate) return false;
+      return betDate.getFullYear() === year;
+    })
+    .reduce((sum, bet) => sum + calcProfit(bet), 0);
+}
+
+function getBetsCountByMonth(year, month) {
+  return bets.filter((bet) => {
+    if (bet.status !== 'win' && bet.status !== 'loss') return false;
+    const betDate = parseDateForSort(bet.date);
+    if (!betDate) return false;
+    return betDate.getFullYear() === year && betDate.getMonth() === month;
+  }).length;
+}
+
+function renderMonthCalendar() {
+  const year = calendarDate.getFullYear();
+  const month = calendarDate.getMonth();
+  const today = new Date();
+  
+  calendarTitle.textContent = `${MONTH_NAMES[month]} ${year}`;
+  calendarContainer.className = 'calendar-grid';
+  calendarContainer.innerHTML = '';
+
+  // Render day headers
+  DAY_NAMES.forEach((day) => {
+    const header = document.createElement('div');
+    header.className = 'calendar-header';
+    header.textContent = day;
+    calendarContainer.appendChild(header);
+  });
+
+  // Get first day of month and total days
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  let periodProfit = 0;
+  let positiveDays = 0;
+  let negativeDays = 0;
+
+  // Empty cells before first day
+  for (let i = 0; i < firstDay; i++) {
+    const empty = document.createElement('div');
+    empty.className = 'calendar-day empty';
+    calendarContainer.appendChild(empty);
+  }
+
+  // Days of month
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const profit = getProfitByDate(dateKey);
+    periodProfit += profit;
+
+    const dayEl = document.createElement('div');
+    dayEl.className = 'calendar-day';
+
+    const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
+    if (isToday) {
+      dayEl.classList.add('today');
+    }
+
+    if (profit > 0) {
+      dayEl.classList.add('positive');
+      positiveDays++;
+    } else if (profit < 0) {
+      dayEl.classList.add('negative');
+      negativeDays++;
+    }
+
+    const dayNumber = document.createElement('span');
+    dayNumber.className = 'day-number';
+    dayNumber.textContent = day;
+    dayEl.appendChild(dayNumber);
+
+    if (profit !== 0) {
+      const dayProfit = document.createElement('span');
+      dayProfit.className = `day-profit ${profit > 0 ? 'positive' : 'negative'}`;
+      dayProfit.textContent = profit > 0 ? `+${currencyFormatter.format(profit).replace('R$', '')}` : currencyFormatter.format(profit).replace('R$', '');
+      dayEl.appendChild(dayProfit);
+    }
+
+    dayEl.title = `${day}/${month + 1}/${year}: ${formatProfit(profit)}`;
+    calendarContainer.appendChild(dayEl);
+  }
+
+  // Update summary
+  calendarPeriodProfit.textContent = formatProfit(periodProfit);
+  calendarPeriodProfit.className = periodProfit >= 0 ? 'positive' : 'negative';
+  calendarPositiveDays.textContent = positiveDays;
+  calendarNegativeDays.textContent = negativeDays;
+}
+
+function renderYearCalendar() {
+  const year = calendarDate.getFullYear();
+  
+  calendarTitle.textContent = `${year}`;
+  calendarContainer.className = 'calendar-grid year-view';
+  calendarContainer.innerHTML = '';
+
+  let periodProfit = 0;
+  let positiveMonths = 0;
+  let negativeMonths = 0;
+
+  for (let month = 0; month < 12; month++) {
+    const profit = getProfitByMonth(year, month);
+    const betsCount = getBetsCountByMonth(year, month);
+    periodProfit += profit;
+
+    const card = document.createElement('div');
+    card.className = 'calendar-month-card';
+
+    if (profit > 0) {
+      card.classList.add('positive');
+      positiveMonths++;
+    } else if (profit < 0) {
+      card.classList.add('negative');
+      negativeMonths++;
+    }
+
+    const monthName = document.createElement('div');
+    monthName.className = 'month-name';
+    monthName.textContent = MONTH_NAMES[month];
+    card.appendChild(monthName);
+
+    const monthProfit = document.createElement('div');
+    monthProfit.className = `month-profit ${profit > 0 ? 'positive' : profit < 0 ? 'negative' : ''}`;
+    monthProfit.textContent = formatProfit(profit);
+    card.appendChild(monthProfit);
+
+    const monthStats = document.createElement('div');
+    monthStats.className = 'month-stats';
+    monthStats.textContent = `${betsCount} aposta${betsCount !== 1 ? 's' : ''}`;
+    card.appendChild(monthStats);
+
+    card.addEventListener('click', () => {
+      calendarDate = new Date(year, month, 1);
+      calendarView = 'month';
+      calendarViewSelect.value = 'month';
+      renderCalendar();
+    });
+
+    calendarContainer.appendChild(card);
+  }
+
+  // Update summary
+  calendarPeriodProfit.textContent = formatProfit(periodProfit);
+  calendarPeriodProfit.className = periodProfit >= 0 ? 'positive' : 'negative';
+  calendarPositiveDays.textContent = positiveMonths;
+  calendarNegativeDays.textContent = negativeMonths;
+
+  // Update labels for year view
+  document.querySelector('.calendar-kpi:nth-child(2) span').textContent = 'Meses Positivos';
+  document.querySelector('.calendar-kpi:nth-child(3) span').textContent = 'Meses Negativos';
+}
+
+function renderCalendar() {
+  if (!calendarContainer) return;
+
+  // Reset labels
+  const kpiLabels = document.querySelectorAll('.calendar-kpi span');
+  if (kpiLabels.length >= 3) {
+    kpiLabels[1].textContent = calendarView === 'year' ? 'Meses Positivos' : 'Dias Positivos';
+    kpiLabels[2].textContent = calendarView === 'year' ? 'Meses Negativos' : 'Dias Negativos';
+  }
+
+  if (calendarView === 'month') {
+    renderMonthCalendar();
+  } else {
+    renderYearCalendar();
+  }
+}
+
+function handleCalendarNavigation(direction) {
+  if (calendarView === 'month') {
+    calendarDate.setMonth(calendarDate.getMonth() + direction);
+  } else {
+    calendarDate.setFullYear(calendarDate.getFullYear() + direction);
+  }
+  renderCalendar();
+}
+
 function init() {
   loadBets();
   loadCashflows();
   loadBankrollBase();
   updatePotentialProfit();
   refreshAll();
+  renderCalendar();
 }
 
 form.addEventListener("submit", handleSubmit);
@@ -725,5 +955,14 @@ bookFilter.addEventListener("change", refreshAll);
 statusFilter?.addEventListener("change", refreshAll);
 betsBody.addEventListener("click", handleTableClick);
 cashflowBody?.addEventListener("click", handleCashflowClick);
+
+// Calendar event listeners
+calendarViewSelect?.addEventListener('change', (e) => {
+  calendarView = e.target.value;
+  renderCalendar();
+});
+
+calendarPrev?.addEventListener('click', () => handleCalendarNavigation(-1));
+calendarNext?.addEventListener('click', () => handleCalendarNavigation(1));
 
 init();

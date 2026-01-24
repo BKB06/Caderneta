@@ -131,6 +131,41 @@
 
       <section class="panel full">
         <div class="panel-header">
+          <h2>Calendário de Resultados</h2>
+          <div class="panel-actions">
+            <label>
+              Período
+              <select id="calendar-view">
+                <option value="month">Mensal</option>
+                <option value="year">Anual</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="calendar-navigation">
+          <button type="button" class="ghost" id="calendar-prev">&larr; Anterior</button>
+          <strong id="calendar-title">Janeiro 2026</strong>
+          <button type="button" class="ghost" id="calendar-next">Próximo &rarr;</button>
+        </div>
+        <div class="calendar-summary">
+          <div class="calendar-kpi">
+            <span>Lucro do Período</span>
+            <strong id="calendar-period-profit">R$ 0,00</strong>
+          </div>
+          <div class="calendar-kpi">
+            <span>Dias Positivos</span>
+            <strong id="calendar-positive-days">0</strong>
+          </div>
+          <div class="calendar-kpi">
+            <span>Dias Negativos</span>
+            <strong id="calendar-negative-days">0</strong>
+          </div>
+        </div>
+        <div id="calendar-container" class="calendar-grid"></div>
+      </section>
+
+      <section class="panel full">
+        <div class="panel-header">
           <h2>Saques e Depósitos</h2>
           <p>Registre entradas e saídas da banca.</p>
         </div>
