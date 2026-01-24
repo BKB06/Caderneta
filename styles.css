@@ -108,12 +108,55 @@ p {
   margin-bottom: 20px;
 }
 
+.panel-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .panel-actions label {
   font-size: 0.8rem;
   color: var(--text-muted);
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.filters-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  background: var(--panel-strong);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.filters-bar label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filters-bar input,
+.filters-bar select {
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  min-width: 140px;
+}
+
+.filters-bar input[type="date"] {
+  min-width: 130px;
+}
+
+button.small {
+  padding: 8px 14px;
+  font-size: 0.8rem;
 }
 
 .form-grid {

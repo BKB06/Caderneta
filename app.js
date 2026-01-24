@@ -22,6 +22,10 @@ const statusFilter = document.getElementById("status-filter");
 const kpiProfit = document.getElementById("kpi-profit");
 const kpiWinrate = document.getElementById("kpi-winrate");
 
+const dateFilterStart = document.getElementById("date-filter-start");
+const dateFilterEnd = document.getElementById("date-filter-end");
+const clearDateFilter = document.getElementById("clear-date-filter");
+
 let bets = [];
 let cashflows = [];
 let editingId = null;
@@ -222,24 +226,38 @@ function updatePotentialProfit() {
 function getFilteredBets() {
   const selected = bookFilter.value;
   const status = statusFilter?.value || "all";
-  if (!selected || selected === "all") {
-    if (status === "pending") {
-      return bets.filter((bet) => bet.status === "pending");
-    }
-    if (status === "settled") {
-      return bets.filter((bet) => bet.status === "win" || bet.status === "loss");
-    }
-    return bets;
-  }
+  const startDate = dateFilterStart?.value ? parseDateForSort(dateFilterStart.value) : null;
+  const endDate = dateFilterEnd?.value ? parseDateForSort(dateFilterEnd.value) : null;
+
   return bets.filter((bet) => {
-    const matchBook = bet.book === selected;
+    // Filtro por casa
+    const matchBook = !selected || selected === "all" || bet.book === selected;
+
+    // Filtro por status
+    let matchStatus = true;
     if (status === "pending") {
-      return matchBook && bet.status === "pending";
+      matchStatus = bet.status === "pending";
+    } else if (status === "settled") {
+      matchStatus = bet.status === "win" || bet.status === "loss";
     }
-    if (status === "settled") {
-      return matchBook && (bet.status === "win" || bet.status === "loss");
+
+    // Filtro por data
+    let matchDate = true;
+    if (startDate || endDate) {
+      const betDate = parseDateForSort(bet.date);
+      if (betDate) {
+        if (startDate && betDate < startDate) {
+          matchDate = false;
+        }
+        if (endDate && betDate > endDate) {
+          matchDate = false;
+        }
+      } else {
+        matchDate = false;
+      }
     }
-    return matchBook;
+
+    return matchBook && matchStatus && matchDate;
   });
 }
 
@@ -953,6 +971,13 @@ cashflowReset?.addEventListener("click", resetCashflowForm);
 bankrollInput.addEventListener("input", handleBankrollInput);
 bookFilter.addEventListener("change", refreshAll);
 statusFilter?.addEventListener("change", refreshAll);
+dateFilterStart?.addEventListener("change", refreshAll);
+dateFilterEnd?.addEventListener("change", refreshAll);
+clearDateFilter?.addEventListener("click", () => {
+  if (dateFilterStart) dateFilterStart.value = "";
+  if (dateFilterEnd) dateFilterEnd.value = "";
+  refreshAll();
+});
 betsBody.addEventListener("click", handleTableClick);
 cashflowBody?.addEventListener("click", handleCashflowClick);
 
