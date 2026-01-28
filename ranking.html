@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ranking - Caderneta de Apostas</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>🏆 Ranking e Estatísticas</h1>
+        <p class="subtitle">Acompanhe seus recordes e desempenho detalhado.</p>
+      </div>
+      <div class="header-right">
+        <div class="profile-selector">
+          <span>👤</span>
+          <select id="profile-switch"></select>
+        </div>
+        <nav class="app-nav">
+          <a href="./index.html" class="nav-link">← Voltar para Caderneta</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="app-grid">
+      <!-- Recordes Gerais -->
+      <section class="panel full">
+        <div class="panel-header">
+          <h2>🏆 Recordes Gerais</h2>
+          <p>Suas melhores e piores apostas.</p>
+        </div>
+        <div class="ranking-grid">
+          <div class="ranking-card positive">
+            <span class="ranking-icon">💰</span>
+            <div class="ranking-info">
+              <span class="ranking-label">Maior Lucro (única aposta)</span>
+              <strong id="ranking-max-profit">R$ 0,00</strong>
+              <span class="ranking-detail" id="ranking-max-profit-detail">-</span>
+            </div>
+          </div>
+          <div class="ranking-card negative">
+            <span class="ranking-icon">📉</span>
+            <div class="ranking-info">
+              <span class="ranking-label">Maior Perda (única aposta)</span>
+              <strong id="ranking-max-loss">R$ 0,00</strong>
+              <span class="ranking-detail" id="ranking-max-loss-detail">-</span>
+            </div>
+          </div>
+          <div class="ranking-card positive">
+            <span class="ranking-icon">🎯</span>
+            <div class="ranking-info">
+              <span class="ranking-label">Maior Odd Acertada</span>
+              <strong id="ranking-max-odd-win">0,00x</strong>
+              <span class="ranking-detail" id="ranking-max-odd-win-detail">-</span>
+            </div>
+          </div>
+          <div class="ranking-card negative">
+            <span class="ranking-icon">❌</span>
+            <div class="ranking-info">
+              <span class="ranking-label">Menor Odd Perdida</span>
+              <strong id="ranking-min-odd-loss">0,00x</strong>
+              <span class="ranking-detail" id="ranking-min-odd-loss-detail">-</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Estatísticas Gerais -->
+      <section class="panel full">
+        <div class="panel-header">
+          <h2>📊 Estatísticas Gerais</h2>
+          <p>Visão geral do seu desempenho.</p>
+        </div>
+        <div class="stats-grid large">
+          <div class="stats-card">
+            <span class="stats-value" id="stats-total-bets">0</span>
+            <span class="stats-label">Total de Apostas</span>
+          </div>
+          <div class="stats-card green">
+            <span class="stats-value" id="stats-total-greens">0</span>
+            <span class="stats-label">Greens</span>
+          </div>
+          <div class="stats-card red">
+            <span class="stats-value" id="stats-total-reds">0</span>
+            <span class="stats-label">Reds</span>
+          </div>
+          <div class="stats-card">
+            <span class="stats-value" id="stats-pending">0</span>
+            <span class="stats-label">Pendentes</span>
+          </div>
+          <div class="stats-card">
+            <span class="stats-value" id="stats-winrate">0%</span>
+            <span class="stats-label">Taxa de Acerto</span>
+          </div>
+          <div class="stats-card">
+            <span class="stats-value" id="stats-total-profit">R$ 0</span>
+            <span class="stats-label">Lucro Total</span>
+          </div>
+          <div class="stats-card">
+            <span class="stats-value" id="stats-avg-odd">0,00x</span>
+            <span class="stats-label">Odd Média</span>
+          </div>
+          <div class="stats-card">
+            <span class="stats-value" id="stats-avg-stake">R$ 0</span>
+            <span class="stats-label">Stake Médio</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Top 5 Maiores Lucros -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>💚 Top 5 Maiores Lucros</h2>
+        </div>
+        <div class="top-list" id="top-profits"></div>
+      </section>
+
+      <!-- Top 5 Maiores Perdas -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>❤️ Top 5 Maiores Perdas</h2>
+        </div>
+        <div class="top-list" id="top-losses"></div>
+      </section>
+
+      <!-- Desempenho por Casa -->
+      <section class="panel full">
+        <div class="panel-header">
+          <h2>🏠 Desempenho por Casa</h2>
+          <p>Comparativo entre casas de apostas.</p>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Casa</th>
+                <th>Apostas</th>
+                <th>Greens</th>
+                <th>Reds</th>
+                <th>Taxa Acerto</th>
+                <th>Lucro</th>
+                <th>ROI</th>
+              </tr>
+            </thead>
+            <tbody id="ranking-by-book"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Gráfico de Pizza - Distribuição por Casa -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>📈 Distribuição por Casa</h2>
+        </div>
+        <div class="chart-container">
+          <canvas id="book-distribution-chart"></canvas>
+        </div>
+      </section>
+
+      <!-- Gráfico de Barras - Lucro por Casa -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>💹 Lucro por Casa</h2>
+        </div>
+        <div class="chart-container">
+          <canvas id="book-profit-chart"></canvas>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>Dados salvos no localStorage. App local, sem envio para terceiros.</p>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="./ranking.js"></script>
+  </body>
+</html>

@@ -1,16 +1,50 @@
-const STORAGE_KEY = "caderneta.bets.v1";
-const BANKROLL_KEY = "caderneta.bankroll.base.v1";
-const CASHFLOW_KEY = "caderneta.cashflow.v1";
+const PROFILES_KEY = "caderneta.profiles.v1";
+const ACTIVE_PROFILE_KEY = "caderneta.activeProfile.v1";
+
+// Funções para obter chaves dinâmicas baseadas no perfil ativo
+function getActiveProfileId() {
+  const profiles = JSON.parse(localStorage.getItem(PROFILES_KEY) || "[]");
+  let activeId = localStorage.getItem(ACTIVE_PROFILE_KEY);
+  
+  // Se não há perfis ainda, usar chaves legadas
+  if (profiles.length === 0) {
+    return null;
+  }
+  
+  // Se não há perfil ativo válido, usar o primeiro
+  if (!activeId || !profiles.find(p => p.id === activeId)) {
+    activeId = profiles[0].id;
+    localStorage.setItem(ACTIVE_PROFILE_KEY, activeId);
+  }
+  
+  return activeId;
+}
+
+function getStorageKey() {
+  const profileId = getActiveProfileId();
+  return profileId ? `caderneta.bets.${profileId}` : "caderneta.bets.v1";
+}
+
+function getCashflowKey() {
+  const profileId = getActiveProfileId();
+  return profileId ? `caderneta.cashflow.${profileId}` : "caderneta.cashflow.v1";
+}
+
+function getBankrollKey() {
+  const profileId = getActiveProfileId();
+  return profileId ? `caderneta.bankroll.${profileId}` : "caderneta.bankroll.base.v1";
+}
+
+function getSettingsKey() {
+  const profileId = getActiveProfileId();
+  return profileId ? `caderneta.settings.${profileId}` : "caderneta.settings.v1";
+}
 
 const form = document.getElementById("bet-form");
 const potentialProfitEl = document.getElementById("potential-profit");
 const betsBody = document.getElementById("bets-body");
 const resetButton = document.getElementById("reset-button");
 const submitButton = document.getElementById("submit-button");
-const cashflowForm = document.getElementById("cashflow-form");
-const cashflowBody = document.getElementById("cashflow-body");
-const cashflowReset = document.getElementById("cashflow-reset");
-const cashflowSubmit = document.getElementById("cashflow-submit");
 
 const bankrollInput = document.getElementById("bankroll-input");
 const bankrollProgress = document.getElementById("bankroll-progress");
@@ -21,17 +55,29 @@ const statusFilter = document.getElementById("status-filter");
 
 const kpiProfit = document.getElementById("kpi-profit");
 const kpiWinrate = document.getElementById("kpi-winrate");
+const kpiRoi = document.getElementById("kpi-roi");
+const kpiAvgOdd = document.getElementById("kpi-avg-odd");
+const kpiAvgStake = document.getElementById("kpi-avg-stake");
+const kpiTotalBets = document.getElementById("kpi-total-bets");
+const kpiStreak = document.getElementById("kpi-streak");
 
 const dateFilterStart = document.getElementById("date-filter-start");
 const dateFilterEnd = document.getElementById("date-filter-end");
 const clearDateFilter = document.getElementById("clear-date-filter");
 
+// Modal elements
+const dayModal = document.getElementById("day-modal");
+const modalTitle = document.getElementById("modal-title");
+const modalSummary = document.getElementById("modal-summary");
+const modalBetsList = document.getElementById("modal-bets-list");
+const modalClose = document.getElementById("modal-close");
+
 let bets = [];
 let cashflows = [];
 let editingId = null;
-let cashflowEditingId = null;
 let balanceChart = null;
 let baseBankroll = null;
+let settings = null;
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -50,7 +96,7 @@ const numberFormatter = new Intl.NumberFormat("pt-BR", {
 });
 
 function loadBets() {
-  const raw = localStorage.getItem(STORAGE_KEY);
+  const raw = localStorage.getItem(getStorageKey());
   bets = raw ? JSON.parse(raw) : [];
   bets = bets.map((bet) => {
     const statusMap = {
@@ -75,7 +121,7 @@ function loadBets() {
 }
 
 function loadCashflows() {
-  const raw = localStorage.getItem(CASHFLOW_KEY);
+  const raw = localStorage.getItem(getCashflowKey());
   cashflows = raw ? JSON.parse(raw) : [];
   cashflows = cashflows.map((flow) => ({
     ...flow,
@@ -83,26 +129,161 @@ function loadCashflows() {
   }));
 }
 
+function loadSettings() {
+  const defaultSettings = {
+    profile: { name: "", goal: null },
+    display: {
+      showCalendar: true,
+      showChart: true,
+      showBankroll: true,
+      showKpis: true,
+      showPotentialProfit: true,
+      showTablePotential: true,
+      showRoi: true,
+      showAvgOdd: true,
+      showAvgStake: true,
+      showTotalBets: true,
+      showStreak: true,
+    },
+    columns: {
+      date: true,
+      event: true,
+      odds: true,
+      stake: true,
+      status: true,
+      profit: true,
+      potential: true,
+      book: true,
+    },
+    favorites: [],
+    defaults: {
+      status: "pending",
+      filter: "pending",
+      stakeType: "regular",
+    },
+  };
+
+  const raw = localStorage.getItem(getSettingsKey());
+  if (raw) {
+    try {
+      const saved = JSON.parse(raw);
+      settings = { ...defaultSettings, ...saved };
+      settings.profile = { ...defaultSettings.profile, ...saved.profile };
+      settings.display = { ...defaultSettings.display, ...saved.display };
+      settings.columns = { ...defaultSettings.columns, ...saved.columns };
+      settings.defaults = { ...defaultSettings.defaults, ...saved.defaults };
+      settings.favorites = saved.favorites || [];
+    } catch (e) {
+      settings = defaultSettings;
+    }
+  } else {
+    settings = defaultSettings;
+  }
+}
+
+function applySettings() {
+  if (!settings) return;
+
+  // Apply display settings
+  const calendarSection = document.querySelector('.panel.full:has(#calendar-container)');
+  const chartGrid = document.querySelector('.chart-grid');
+  const bankManagement = document.querySelector('.bank-management');
+  const kpiGrid = document.querySelector('.kpi-grid');
+  const potentialProfitContainer = potentialProfitEl?.closest('div');
+
+  // KPI containers individuais
+  const kpiRoiContainer = document.getElementById('kpi-roi-container');
+  const kpiAvgOddContainer = document.getElementById('kpi-avg-odd-container');
+  const kpiAvgStakeContainer = document.getElementById('kpi-avg-stake-container');
+  const kpiTotalBetsContainer = document.getElementById('kpi-total-bets-container');
+  const kpiStreakContainer = document.getElementById('kpi-streak-container');
+
+  if (calendarSection) {
+    calendarSection.style.display = settings.display.showCalendar ? '' : 'none';
+  }
+  if (chartGrid) {
+    chartGrid.style.display = settings.display.showChart ? '' : 'none';
+  }
+  if (bankManagement) {
+    bankManagement.style.display = settings.display.showBankroll ? '' : 'none';
+  }
+  if (kpiGrid) {
+    kpiGrid.style.display = settings.display.showKpis ? '' : 'none';
+  }
+  if (potentialProfitContainer) {
+    potentialProfitContainer.style.display = settings.display.showPotentialProfit ? '' : 'none';
+  }
+
+  // Novos KPIs individuais
+  if (kpiRoiContainer) {
+    kpiRoiContainer.style.display = settings.display.showRoi ? '' : 'none';
+  }
+  if (kpiAvgOddContainer) {
+    kpiAvgOddContainer.style.display = settings.display.showAvgOdd ? '' : 'none';
+  }
+  if (kpiAvgStakeContainer) {
+    kpiAvgStakeContainer.style.display = settings.display.showAvgStake ? '' : 'none';
+  }
+  if (kpiTotalBetsContainer) {
+    kpiTotalBetsContainer.style.display = settings.display.showTotalBets ? '' : 'none';
+  }
+  if (kpiStreakContainer) {
+    kpiStreakContainer.style.display = settings.display.showStreak ? '' : 'none';
+  }
+
+  // Apply default status filter
+  if (statusFilter && settings.defaults.filter) {
+    statusFilter.value = settings.defaults.filter;
+  }
+
+  // Apply default status to form
+  const betStatus = document.getElementById("bet-status");
+  if (betStatus && settings.defaults.status) {
+    betStatus.value = settings.defaults.status;
+  }
+
+  // Apply default stake type
+  const betStakeType = document.getElementById("bet-stake-type");
+  if (betStakeType && settings.defaults.stakeType) {
+    betStakeType.value = settings.defaults.stakeType;
+  }
+
+  // Apply favorites to book input (datalist)
+  const bookInput = document.getElementById("bet-book");
+  if (bookInput && settings.favorites.length > 0) {
+    let datalist = document.getElementById("book-datalist");
+    if (!datalist) {
+      datalist = document.createElement("datalist");
+      datalist.id = "book-datalist";
+      document.body.appendChild(datalist);
+      bookInput.setAttribute("list", "book-datalist");
+    }
+    datalist.innerHTML = settings.favorites
+      .map((fav) => `<option value="${fav}">`)
+      .join("");
+  }
+}
+
 function loadBankrollBase() {
-  const raw = localStorage.getItem(BANKROLL_KEY);
+  const raw = localStorage.getItem(getBankrollKey());
   const value = Number(raw);
   baseBankroll = Number.isFinite(value) ? value : null;
 }
 
 function saveBankrollBase() {
   if (Number.isFinite(baseBankroll)) {
-    localStorage.setItem(BANKROLL_KEY, String(baseBankroll));
+    localStorage.setItem(getBankrollKey(), String(baseBankroll));
   } else {
-    localStorage.removeItem(BANKROLL_KEY);
+    localStorage.removeItem(getBankrollKey());
   }
 }
 
 function saveBets() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(bets));
+  localStorage.setItem(getStorageKey(), JSON.stringify(bets));
 }
 
 function saveCashflows() {
-  localStorage.setItem(CASHFLOW_KEY, JSON.stringify(cashflows));
+  localStorage.setItem(getCashflowKey(), JSON.stringify(cashflows));
 }
 
 function parseLocaleNumber(value) {
@@ -362,62 +543,6 @@ function renderTable() {
   });
 }
 
-function cashflowLabel(type) {
-  const map = {
-    deposit: "Depósito",
-    withdraw: "Saque",
-  };
-  return map[type] || type;
-}
-
-function renderCashflowTable() {
-  if (!cashflowBody) {
-    return;
-  }
-
-  cashflowBody.innerHTML = "";
-
-  if (cashflows.length === 0) {
-    const row = document.createElement("tr");
-    const cell = document.createElement("td");
-    cell.colSpan = 5;
-    cell.textContent = "Nenhuma movimentação cadastrada ainda.";
-    row.appendChild(cell);
-    cashflowBody.appendChild(row);
-    return;
-  }
-
-  cashflows.forEach((flow) => {
-    const row = document.createElement("tr");
-
-    const tdDate = document.createElement("td");
-    tdDate.textContent = flow.date;
-    row.appendChild(tdDate);
-
-    const tdType = document.createElement("td");
-    tdType.textContent = cashflowLabel(flow.type);
-    row.appendChild(tdType);
-
-    const tdAmount = document.createElement("td");
-    const signedAmount = flow.type === "withdraw" ? -Math.abs(flow.amount) : flow.amount;
-    tdAmount.textContent = formatProfit(signedAmount);
-    row.appendChild(tdAmount);
-
-    const tdNote = document.createElement("td");
-    tdNote.textContent = flow.note || "-";
-    row.appendChild(tdNote);
-
-    const tdActions = document.createElement("td");
-    tdActions.innerHTML = `
-      <button type="button" class="ghost" data-action="edit" data-id="${flow.id}">Editar</button>
-      <button type="button" class="ghost" data-action="delete" data-id="${flow.id}">Excluir</button>
-    `;
-    row.appendChild(tdActions);
-
-    cashflowBody.appendChild(row);
-  });
-}
-
 function statusLabel(status) {
   const map = {
     pending: "Pendente",
@@ -437,8 +562,67 @@ function renderKpis() {
   const wins = settled.filter((bet) => bet.status === "win").length;
   const winrate = settled.length ? wins / settled.length : 0;
 
+  // ROI = Lucro / Total Apostado
+  const roi = totalStake > 0 ? totalProfit / totalStake : 0;
+
+  // Odd média
+  const avgOdd = settled.length > 0 
+    ? settled.reduce((sum, bet) => sum + bet.odds, 0) / settled.length 
+    : 0;
+
+  // Ticket médio (stake média)
+  const avgStake = settled.length > 0 ? totalStake / settled.length : 0;
+
+  // Sequência atual
+  const currentStreak = calcCurrentStreak(data);
+
   kpiProfit.textContent = formatProfit(totalProfit);
   kpiWinrate.textContent = percentFormatter.format(winrate);
+  
+  if (kpiRoi) kpiRoi.textContent = percentFormatter.format(roi);
+  if (kpiAvgOdd) kpiAvgOdd.textContent = `${numberFormatter.format(avgOdd)}x`;
+  if (kpiAvgStake) kpiAvgStake.textContent = formatStake(avgStake);
+  if (kpiTotalBets) kpiTotalBets.textContent = settled.length;
+  if (kpiStreak) {
+    if (currentStreak.count === 0) {
+      kpiStreak.textContent = "-";
+      kpiStreak.className = "";
+    } else {
+      const streakEmoji = currentStreak.type === "win" ? "🟢" : "🔴";
+      kpiStreak.textContent = `${streakEmoji} ${currentStreak.count}`;
+      kpiStreak.className = currentStreak.type === "win" ? "positive" : "negative";
+    }
+  }
+}
+
+function calcCurrentStreak(data) {
+  // Ordenar por data (mais recente primeiro)
+  const sorted = data
+    .filter((bet) => bet.status === "win" || bet.status === "loss")
+    .slice()
+    .sort((a, b) => {
+      const aDate = parseDateForSort(a.date);
+      const bDate = parseDateForSort(b.date);
+      if (aDate && bDate) return bDate - aDate;
+      if (aDate) return 1;
+      if (bDate) return -1;
+      return 0;
+    });
+
+  if (sorted.length === 0) return { type: null, count: 0 };
+
+  const firstStatus = sorted[0].status;
+  let count = 0;
+
+  for (const bet of sorted) {
+    if (bet.status === firstStatus) {
+      count++;
+    } else {
+      break;
+    }
+  }
+
+  return { type: firstStatus, count };
 }
 
 function updateBankrollExposure() {
@@ -560,7 +744,6 @@ function renderBalanceChart() {
 function refreshAll() {
   renderBookFilter();
   renderTable();
-  renderCashflowTable();
   renderKpis();
   updateBankrollDisplay();
   updateBankrollExposure();
@@ -572,15 +755,6 @@ function resetForm() {
   updatePotentialProfit();
   editingId = null;
   submitButton.textContent = "Salvar aposta";
-}
-
-function resetCashflowForm() {
-  if (!cashflowForm) {
-    return;
-  }
-  cashflowForm.reset();
-  cashflowEditingId = null;
-  cashflowSubmit.textContent = "Salvar movimentação";
 }
 
 function handleSubmit(event) {
@@ -620,40 +794,6 @@ function handleSubmit(event) {
   resetForm();
 }
 
-function handleCashflowSubmit(event) {
-  event.preventDefault();
-
-  const rawDate = document.getElementById("cashflow-date").value.trim();
-  const formattedDate = formatDateDisplay(rawDate);
-  const amountValue = parseLocaleNumber(document.getElementById("cashflow-amount").value);
-
-  const flow = {
-    id: crypto.randomUUID(),
-    date: formattedDate,
-    type: document.getElementById("cashflow-type").value,
-    amount: amountValue,
-    note: document.getElementById("cashflow-note").value.trim(),
-  };
-
-  if (!flow.date || !Number.isFinite(flow.amount)) {
-    alert("Preencha data e valor da movimentação.");
-    return;
-  }
-
-  if (cashflowEditingId) {
-    const index = cashflows.findIndex((item) => item.id === cashflowEditingId);
-    if (index >= 0) {
-      cashflows[index] = { ...cashflows[index], ...flow };
-    }
-  } else {
-    cashflows.unshift(flow);
-  }
-
-  saveCashflows();
-  refreshAll();
-  resetCashflowForm();
-}
-
 function startEdit(bet) {
   editingId = bet.id;
   document.getElementById("bet-date").value = formatDateForInput(bet.date);
@@ -666,16 +806,6 @@ function startEdit(bet) {
   updatePotentialProfit();
   submitButton.textContent = "Atualizar aposta";
   form.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function startCashflowEdit(flow) {
-  cashflowEditingId = flow.id;
-  document.getElementById("cashflow-date").value = formatDateForInput(flow.date);
-  document.getElementById("cashflow-type").value = flow.type;
-  document.getElementById("cashflow-amount").value = numberFormatter.format(flow.amount);
-  document.getElementById("cashflow-note").value = flow.note || "";
-  cashflowSubmit.textContent = "Atualizar movimentação";
-  cashflowForm.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function handleTableClick(event) {
@@ -694,28 +824,6 @@ function handleTableClick(event) {
   if (button.dataset.action === "delete") {
     bets = bets.filter((bet) => bet.id !== id);
     saveBets();
-    refreshAll();
-  }
-}
-
-function handleCashflowClick(event) {
-  const button = event.target.closest("button[data-action]");
-  if (!button) {
-    return;
-  }
-
-  const id = button.dataset.id;
-  if (button.dataset.action === "edit") {
-    const flow = cashflows.find((item) => item.id === id);
-    if (flow) {
-      startCashflowEdit(flow);
-    }
-    return;
-  }
-
-  if (button.dataset.action === "delete") {
-    cashflows = cashflows.filter((flow) => flow.id !== id);
-    saveCashflows();
     refreshAll();
   }
 }
@@ -849,7 +957,16 @@ function renderMonthCalendar() {
       dayEl.appendChild(dayProfit);
     }
 
-    dayEl.title = `${day}/${month + 1}/${year}: ${formatProfit(profit)}`;
+    dayEl.title = `${day}/${month + 1}/${year}: ${formatProfit(profit)} - Clique para ver detalhes`;
+    dayEl.style.cursor = 'pointer';
+    
+    // Add click event to open modal
+    const clickDateKey = dateKey;
+    const clickDisplayDate = `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`;
+    dayEl.addEventListener('click', () => {
+      openDayModal(clickDateKey, clickDisplayDate);
+    });
+
     calendarContainer.appendChild(dayEl);
   }
 
@@ -949,10 +1066,101 @@ function handleCalendarNavigation(direction) {
   renderCalendar();
 }
 
+// Modal functions
+function getBetsByDateKey(dateKey) {
+  return bets.filter((bet) => {
+    const betDate = parseDateForSort(bet.date);
+    if (!betDate) return false;
+    const betKey = `${betDate.getFullYear()}-${String(betDate.getMonth() + 1).padStart(2, '0')}-${String(betDate.getDate()).padStart(2, '0')}`;
+    return betKey === dateKey;
+  });
+}
+
+function openDayModal(dateKey, displayDate) {
+  if (!dayModal) return;
+
+  const dayBets = getBetsByDateKey(dateKey);
+  
+  modalTitle.textContent = `Apostas - ${displayDate}`;
+
+  // Calculate summary
+  const settled = dayBets.filter(b => b.status === 'win' || b.status === 'loss');
+  const wins = dayBets.filter(b => b.status === 'win').length;
+  const losses = dayBets.filter(b => b.status === 'loss').length;
+  const pending = dayBets.filter(b => b.status === 'pending').length;
+  const totalProfit = settled.reduce((sum, bet) => sum + calcProfit(bet), 0);
+
+  modalSummary.innerHTML = `
+    <div class="modal-stat">
+      <span>Apostas</span>
+      <strong>${dayBets.length}</strong>
+    </div>
+    <div class="modal-stat ${wins > 0 ? 'positive' : ''}">
+      <span>Greens</span>
+      <strong>${wins}</strong>
+    </div>
+    <div class="modal-stat ${losses > 0 ? 'negative' : ''}">
+      <span>Reds</span>
+      <strong>${losses}</strong>
+    </div>
+    <div class="modal-stat ${totalProfit >= 0 ? 'positive' : 'negative'}">
+      <span>Lucro</span>
+      <strong>${formatProfit(totalProfit)}</strong>
+    </div>
+  `;
+
+  // Render bets list
+  if (dayBets.length === 0) {
+    modalBetsList.innerHTML = '<div class="modal-empty">Nenhuma aposta neste dia.</div>';
+  } else {
+    modalBetsList.innerHTML = dayBets.map(bet => {
+      const profit = calcProfit(bet);
+      const profitClass = profit > 0 ? 'positive' : profit < 0 ? 'negative' : '';
+      return `
+        <div class="modal-bet-item">
+          <div class="modal-bet-header">
+            <span class="modal-bet-event">${bet.event}</span>
+            <span class="modal-bet-status ${bet.status}">${statusLabel(bet.status)}</span>
+          </div>
+          <div class="modal-bet-details">
+            <span>Odd: <strong>${numberFormatter.format(bet.odds)}x</strong></span>
+            <span>Stake: <strong>${formatStake(bet.stake)}</strong></span>
+            <span>Casa: <strong>${bet.book}</strong></span>
+            <span class="modal-bet-profit ${profitClass}">Lucro: ${formatProfit(profit)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  dayModal.style.display = 'flex';
+}
+
+function closeDayModal() {
+  if (dayModal) {
+    dayModal.style.display = 'none';
+  }
+}
+
+// Modal event listeners
+modalClose?.addEventListener('click', closeDayModal);
+dayModal?.addEventListener('click', (e) => {
+  if (e.target === dayModal) {
+    closeDayModal();
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeDayModal();
+  }
+});
+
 function init() {
   loadBets();
   loadCashflows();
+  loadSettings();
   loadBankrollBase();
+  applySettings();
   updatePotentialProfit();
   refreshAll();
   renderCalendar();
@@ -960,8 +1168,6 @@ function init() {
 
 form.addEventListener("submit", handleSubmit);
 resetButton.addEventListener("click", resetForm);
-cashflowForm?.addEventListener("submit", handleCashflowSubmit);
-cashflowReset?.addEventListener("click", resetCashflowForm);
 
 ["bet-stake", "bet-odds"].forEach((id) => {
   const input = document.getElementById(id);
@@ -979,7 +1185,6 @@ clearDateFilter?.addEventListener("click", () => {
   refreshAll();
 });
 betsBody.addEventListener("click", handleTableClick);
-cashflowBody?.addEventListener("click", handleCashflowClick);
 
 // Calendar event listeners
 calendarViewSelect?.addEventListener('change', (e) => {
@@ -990,4 +1195,41 @@ calendarViewSelect?.addEventListener('change', (e) => {
 calendarPrev?.addEventListener('click', () => handleCalendarNavigation(-1));
 calendarNext?.addEventListener('click', () => handleCalendarNavigation(1));
 
+// Profile Switcher
+const profileSwitch = document.getElementById('profile-switch');
+
+function renderProfileSwitcher() {
+  if (!profileSwitch) return;
+  
+  const profiles = JSON.parse(localStorage.getItem(PROFILES_KEY) || "[]");
+  const activeId = getActiveProfileId();
+  
+  profileSwitch.innerHTML = '';
+  
+  profiles.forEach(profile => {
+    const option = document.createElement('option');
+    option.value = profile.id;
+    option.textContent = profile.name;
+    option.selected = profile.id === activeId;
+    profileSwitch.appendChild(option);
+  });
+  
+  if (profiles.length === 0) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'Perfil Principal';
+    profileSwitch.appendChild(option);
+  }
+}
+
+profileSwitch?.addEventListener('change', (e) => {
+  const newProfileId = e.target.value;
+  if (newProfileId) {
+    localStorage.setItem(ACTIVE_PROFILE_KEY, newProfileId);
+    // Recarregar a página para aplicar o novo perfil
+    window.location.reload();
+  }
+});
+
 init();
+renderProfileSwitcher();

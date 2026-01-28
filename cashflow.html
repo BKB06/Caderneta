@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Saques e Depósitos - Caderneta de Apostas</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>💰 Saques e Depósitos</h1>
+        <p class="subtitle">Controle suas entradas e saídas da banca.</p>
+      </div>
+      <div class="header-right">
+        <div class="profile-selector">
+          <span>👤</span>
+          <select id="profile-switch"></select>
+        </div>
+        <nav class="app-nav">
+          <a href="./index.html" class="nav-link">← Voltar para Caderneta</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="app-grid">
+      <!-- Resumo Financeiro -->
+      <section class="panel full">
+        <div class="panel-header">
+          <h2>📊 Resumo Financeiro</h2>
+        </div>
+        <div class="stats-grid large">
+          <div class="stats-card green">
+            <span class="stats-value" id="total-deposits">R$ 0,00</span>
+            <span class="stats-label">Total Depositado</span>
+          </div>
+          <div class="stats-card red">
+            <span class="stats-value" id="total-withdraws">R$ 0,00</span>
+            <span class="stats-label">Total Sacado</span>
+          </div>
+          <div class="stats-card">
+            <span class="stats-value" id="net-flow">R$ 0,00</span>
+            <span class="stats-label">Saldo Líquido</span>
+          </div>
+          <div class="stats-card">
+            <span class="stats-value" id="total-movements">0</span>
+            <span class="stats-label">Movimentações</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Formulário -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Nova Movimentação</h2>
+          <p>Registre depósitos e saques.</p>
+        </div>
+        <form id="cashflow-form" class="form-grid">
+          <label>
+            Data
+            <div class="input-group">
+              <input type="date" id="cashflow-date" inputmode="numeric" required />
+            </div>
+          </label>
+          <label>
+            Tipo
+            <select id="cashflow-type" required>
+              <option value="deposit">Depósito</option>
+              <option value="withdraw">Saque</option>
+            </select>
+          </label>
+          <label class="full">
+            Valor
+            <div class="input-group">
+              <span class="prefix">R$</span>
+              <input type="text" inputmode="decimal" id="cashflow-amount" placeholder="200" required />
+            </div>
+          </label>
+          <label class="full">
+            Observação
+            <input type="text" id="cashflow-note" placeholder="Opcional - Ex: PIX, Bonus, etc." />
+          </label>
+          <div class="form-footer">
+            <button type="submit" id="cashflow-submit">Salvar movimentação</button>
+            <button type="button" class="ghost" id="cashflow-reset">Limpar</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Gráfico de Evolução -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>📈 Evolução do Fluxo</h2>
+        </div>
+        <div class="chart-container">
+          <canvas id="cashflow-chart"></canvas>
+        </div>
+      </section>
+
+      <!-- Histórico Completo -->
+      <section class="panel full">
+        <div class="panel-header">
+          <div>
+            <h2>📋 Histórico de Movimentações</h2>
+            <p>Todas as entradas e saídas registradas.</p>
+          </div>
+        </div>
+        <div class="filters-bar">
+          <label>
+            Tipo
+            <select id="type-filter">
+              <option value="all">Todos</option>
+              <option value="deposit">Depósitos</option>
+              <option value="withdraw">Saques</option>
+            </select>
+          </label>
+          <label>
+            De
+            <input type="date" id="date-filter-start" />
+          </label>
+          <label>
+            Até
+            <input type="date" id="date-filter-end" />
+          </label>
+          <button type="button" class="ghost small" id="clear-filters">Limpar filtros</button>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Tipo</th>
+                <th>Valor</th>
+                <th>Observação</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="cashflow-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Depósitos por Mês -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>📅 Depósitos por Mês</h2>
+        </div>
+        <div class="monthly-list" id="deposits-by-month"></div>
+      </section>
+
+      <!-- Saques por Mês -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>📅 Saques por Mês</h2>
+        </div>
+        <div class="monthly-list" id="withdraws-by-month"></div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>Dados salvos no localStorage. App local, sem envio para terceiros.</p>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="./cashflow.js"></script>
+  </body>
+</html>

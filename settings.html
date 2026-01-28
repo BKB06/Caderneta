@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Configurações - Caderneta de Apostas</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>⚙️ Configurações e Perfil</h1>
+        <p class="subtitle">Personalize sua experiência na Caderneta.</p>
+      </div>
+      <nav class="app-nav">
+        <a href="./index.html" class="nav-link">← Voltar para Caderneta</a>
+      </nav>
+    </header>
+
+    <main class="app-grid">
+      <!-- Gerenciador de Perfis -->
+      <section class="panel full">
+        <div class="panel-header">
+          <h2>👥 Gerenciar Perfis</h2>
+          <p>Crie e alterne entre diferentes perfis. Cada perfil tem seus próprios dados.</p>
+        </div>
+        <div class="profiles-container">
+          <div class="profiles-list" id="profiles-list"></div>
+          <div class="profile-actions">
+            <div class="new-profile-form">
+              <input type="text" id="new-profile-name" placeholder="Nome do novo perfil" />
+              <button type="button" id="create-profile-btn">+ Criar Perfil</button>
+            </div>
+          </div>
+        </div>
+        <div class="current-profile-info" id="current-profile-info"></div>
+      </section>
+
+      <!-- Perfil do Usuário -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>👤 Perfil Atual</h2>
+        </div>
+        <form id="profile-form" class="form-grid">
+          <label class="full">
+            Nome
+            <input type="text" id="profile-name" placeholder="Seu nome" />
+          </label>
+          <label class="full">
+            Meta de Lucro Mensal
+            <div class="input-group">
+              <span class="prefix">R$</span>
+              <input type="text" inputmode="decimal" id="profile-goal" placeholder="1000" />
+            </div>
+          </label>
+          <div class="form-footer">
+            <button type="submit">Salvar Perfil</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Preferências de Exibição -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>👁️ Preferências de Exibição</h2>
+          <p>Escolha o que aparece na página principal.</p>
+        </div>
+        <div class="settings-list">
+          <label class="setting-item">
+            <input type="checkbox" id="show-calendar" checked />
+            <span class="setting-label">
+              <strong>Calendário de Resultados</strong>
+              <small>Visualização mensal/anual dos resultados</small>
+            </span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="show-chart" checked />
+            <span class="setting-label">
+              <strong>Gráfico de Evolução</strong>
+              <small>Evolução do lucro acumulado</small>
+            </span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="show-bankroll" checked />
+            <span class="setting-label">
+              <strong>Gestão de Banca</strong>
+              <small>Exposição e controle de banca</small>
+            </span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="show-kpis" checked />
+            <span class="setting-label">
+              <strong>KPIs (Lucro Total e Taxa de Acerto)</strong>
+              <small>Indicadores principais</small>
+            </span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="show-potential-profit" checked />
+            <span class="setting-label">
+              <strong>Lucro Potencial no Formulário</strong>
+              <small>Cálculo automático ao criar aposta</small>
+            </span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="show-table-potential" checked />
+            <span class="setting-label">
+              <strong>Coluna Lucro Potencial na Tabela</strong>
+              <small>Exibir lucro potencial no histórico</small>
+            </span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="show-roi" checked />
+            <span class="setting-label">
+              <strong>ROI (Retorno sobre Investimento)</strong>
+              <small>Lucro dividido pelo total apostado</small>
+            </span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="show-avg-odd" checked />
+            <span class="setting-label">
+              <strong>Odd Média</strong>
+              <small>Média das odds das apostas finalizadas</small>
+            </span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="show-avg-stake" checked />
+            <span class="setting-label">
+              <strong>Ticket Médio</strong>
+              <small>Valor médio das apostas</small>
+            </span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="show-total-bets" checked />
+            <span class="setting-label">
+              <strong>Total de Apostas</strong>
+              <small>Quantidade de apostas finalizadas</small>
+            </span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="show-streak" checked />
+            <span class="setting-label">
+              <strong>Sequência Atual</strong>
+              <small>Sequência de greens ou reds consecutivos</small>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Configurações da Tabela -->
+      <section class="panel full">
+        <div class="panel-header">
+          <h2>📋 Colunas da Tabela de Apostas</h2>
+          <p>Escolha quais colunas exibir no histórico.</p>
+        </div>
+        <div class="columns-grid">
+          <label class="setting-item">
+            <input type="checkbox" id="col-date" checked />
+            <span class="setting-label"><strong>Data</strong></span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="col-event" checked disabled />
+            <span class="setting-label"><strong>Evento</strong> <small>(obrigatório)</small></span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="col-odds" checked />
+            <span class="setting-label"><strong>Odd</strong></span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="col-stake" checked />
+            <span class="setting-label"><strong>Stake</strong></span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="col-status" checked />
+            <span class="setting-label"><strong>Status</strong></span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="col-profit" checked />
+            <span class="setting-label"><strong>Lucro</strong></span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="col-potential" checked />
+            <span class="setting-label"><strong>Lucro Potencial</strong></span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="col-book" checked />
+            <span class="setting-label"><strong>Casa</strong></span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Casas de Aposta Favoritas -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>🏠 Casas de Aposta Favoritas</h2>
+          <p>Adicione suas casas para preenchimento rápido.</p>
+        </div>
+        <div class="favorites-list" id="favorites-list"></div>
+        <div class="add-favorite">
+          <input type="text" id="new-favorite" placeholder="Nome da casa" />
+          <button type="button" id="add-favorite-btn" class="ghost">+ Adicionar</button>
+        </div>
+      </section>
+
+      <!-- Status Padrão -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>📊 Comportamento Padrão</h2>
+        </div>
+        <div class="form-grid">
+          <label>
+            Status padrão ao criar aposta
+            <select id="default-status">
+              <option value="pending">Pendente</option>
+              <option value="win">Green / Ganhou</option>
+              <option value="loss">Red / Perdeu</option>
+            </select>
+          </label>
+          <label>
+            Filtro padrão no histórico
+            <select id="default-filter">
+              <option value="pending">Pendentes</option>
+              <option value="settled">Finalizadas</option>
+              <option value="all">Todas</option>
+            </select>
+          </label>
+          <label>
+            Tipo de stake padrão
+            <select id="default-stake-type">
+              <option value="regular">Normal (stake retorna)</option>
+              <option value="freebet">Aposta grátis</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <!-- Exportar/Importar Dados -->
+      <section class="panel full">
+        <div class="panel-header">
+          <h2>💾 Dados</h2>
+          <p>Exporte ou importe seus dados.</p>
+        </div>
+        <div class="data-actions">
+          <button type="button" id="export-data" class="ghost">📥 Exportar Dados (JSON)</button>
+          <button type="button" id="import-data" class="ghost">📤 Importar Dados</button>
+          <input type="file" id="import-file" accept=".json" style="display: none;" />
+          <button type="button" id="clear-data" class="ghost danger">🗑️ Limpar Todos os Dados</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>Dados salvos no localStorage. App local, sem envio para terceiros.</p>
+    </footer>
+
+    <script src="./settings.js"></script>
+  </body>
+</html>

@@ -14,7 +14,21 @@
   </head>
   <body>
     <header class="app-header">
-      <div></div>
+      <div>
+        <h1>Caderneta de Apostas</h1>
+        <p class="subtitle">Gerencie suas apostas de forma inteligente.</p>
+      </div>
+      <div class="header-right">
+        <div class="profile-selector">
+          <span>👤</span>
+          <select id="profile-switch"></select>
+        </div>
+        <nav class="app-nav">
+          <a href="./ranking.html" class="nav-link">🏆 Ranking</a>
+          <a href="./cashflow.html" class="nav-link secondary">💰 Saques/Depósitos</a>
+          <a href="./settings.html" class="nav-link secondary">⚙️ Perfil</a>
+        </nav>
+      </div>
     </header>
 
     <main class="app-grid">
@@ -99,6 +113,26 @@
             <span>Taxa de Acerto</span>
             <strong id="kpi-winrate">0%</strong>
           </div>
+          <div class="kpi" id="kpi-roi-container">
+            <span>ROI</span>
+            <strong id="kpi-roi">0%</strong>
+          </div>
+          <div class="kpi" id="kpi-avg-odd-container">
+            <span>Odd Média</span>
+            <strong id="kpi-avg-odd">0,00x</strong>
+          </div>
+          <div class="kpi" id="kpi-avg-stake-container">
+            <span>Ticket Médio</span>
+            <strong id="kpi-avg-stake">R$ 0,00</strong>
+          </div>
+          <div class="kpi" id="kpi-total-bets-container">
+            <span>Apostas Finalizadas</span>
+            <strong id="kpi-total-bets">0</strong>
+          </div>
+          <div class="kpi" id="kpi-streak-container">
+            <span>Sequência Atual</span>
+            <strong id="kpi-streak">-</strong>
+          </div>
         </div>
 
         <div class="chart-grid">
@@ -166,57 +200,6 @@
 
       <section class="panel full">
         <div class="panel-header">
-          <h2>Saques e Depósitos</h2>
-          <p>Registre entradas e saídas da banca.</p>
-        </div>
-        <form id="cashflow-form" class="form-grid">
-          <label>
-            Data
-            <div class="input-group">
-              <input type="date" id="cashflow-date" inputmode="numeric" required />
-            </div>
-          </label>
-          <label>
-            Tipo
-            <select id="cashflow-type" required>
-              <option value="deposit">Depósito</option>
-              <option value="withdraw">Saque</option>
-            </select>
-          </label>
-          <label>
-            Valor
-            <div class="input-group">
-              <span class="prefix">R$</span>
-              <input type="text" inputmode="decimal" id="cashflow-amount" placeholder="200" required />
-            </div>
-          </label>
-          <label>
-            Observação
-            <input type="text" id="cashflow-note" placeholder="Opcional" />
-          </label>
-          <div class="form-footer">
-            <button type="submit" id="cashflow-submit">Salvar movimentação</button>
-            <button type="button" class="ghost" id="cashflow-reset">Limpar</button>
-          </div>
-        </form>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Tipo</th>
-                <th>Valor</th>
-                <th>Observação</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody id="cashflow-body"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="panel full">
-        <div class="panel-header">
           <div>
             <h2>Histórico de Apostas</h2>
             <p>Edite status, acompanhe lucro e mantenha tudo organizado.</p>
@@ -261,6 +244,20 @@
         </div>
       </section>
     </main>
+
+    <!-- Modal de Apostas do Dia -->
+    <div id="day-modal" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modal-title">Apostas do Dia</h3>
+          <button type="button" class="modal-close" id="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-summary" id="modal-summary"></div>
+          <div class="modal-bets-list" id="modal-bets-list"></div>
+        </div>
+      </div>
+    </div>
 
     <footer class="app-footer">
       <p>Dados salvos no localStorage. App local, sem envio para terceiros.</p>
