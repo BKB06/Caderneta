@@ -50,6 +50,9 @@ const bankrollInput = document.getElementById("bankroll-input");
 const bankrollProgress = document.getElementById("bankroll-progress");
 const bankrollExposure = document.getElementById("bankroll-exposure");
 const bankrollExposureValue = document.getElementById("bankroll-exposure-value");
+const bankrollDeposits = document.getElementById("bankroll-deposits");
+const bankrollWithdraws = document.getElementById("bankroll-withdraws");
+const bankrollProfitIndicator = document.getElementById("bankroll-profit-indicator");
 const bookFilter = document.getElementById("book-filter");
 const statusFilter = document.getElementById("status-filter");
 
@@ -337,6 +340,18 @@ function calcCashflowTotal(list = cashflows) {
   }, 0);
 }
 
+function calcTotalDeposits(list = cashflows) {
+  return list
+    .filter((flow) => flow.type === "deposit")
+    .reduce((sum, flow) => sum + flow.amount, 0);
+}
+
+function calcTotalWithdraws(list = cashflows) {
+  return list
+    .filter((flow) => flow.type === "withdraw")
+    .reduce((sum, flow) => sum + flow.amount, 0);
+}
+
 function getEffectiveBankroll() {
   if (!Number.isFinite(baseBankroll)) {
     return null;
@@ -350,6 +365,23 @@ function updateBankrollDisplay() {
     return;
   }
   bankrollInput.value = numberFormatter.format(effective);
+  
+  // Atualiza indicadores de depósitos, saques e lucro
+  const totalDeposits = calcTotalDeposits();
+  const totalWithdraws = calcTotalWithdraws();
+  const settledProfit = calcSettledProfit();
+  
+  if (bankrollDeposits) {
+    bankrollDeposits.textContent = `+${formatProfit(totalDeposits)} depósitos`;
+  }
+  if (bankrollWithdraws) {
+    bankrollWithdraws.textContent = `-${formatProfit(totalWithdraws)} saques`;
+  }
+  if (bankrollProfitIndicator) {
+    const profitPrefix = settledProfit >= 0 ? '+' : '';
+    bankrollProfitIndicator.textContent = `${profitPrefix}${formatProfit(settledProfit)} lucro`;
+    bankrollProfitIndicator.className = `breakdown-item ${settledProfit >= 0 ? 'positive' : 'negative'}`;
+  }
 }
 
 function formatDateDisplay(value) {

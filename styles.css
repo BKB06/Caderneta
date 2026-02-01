@@ -493,6 +493,30 @@ button.ghost {
   gap: 16px;
 }
 
+.bankroll-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.85rem;
+}
+
+.breakdown-item {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(245, 247, 255, 0.7);
+}
+
+.breakdown-item.positive {
+  color: var(--success);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.breakdown-item.negative {
+  color: var(--error);
+  background: rgba(248, 113, 113, 0.1);
+}
+
 .progress {
   height: 10px;
   background: rgba(255, 255, 255, 0.08);
