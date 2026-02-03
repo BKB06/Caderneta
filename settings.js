@@ -30,6 +30,7 @@ const defaultSettings = {
     showRoi: true,
     showAvgOdd: true,
     showAvgStake: true,
+    showTotalStake: true,
     showTotalBets: true,
     showStreak: true,
   },
@@ -290,6 +291,7 @@ function populateForm() {
   document.getElementById("show-roi").checked = settings.display.showRoi;
   document.getElementById("show-avg-odd").checked = settings.display.showAvgOdd;
   document.getElementById("show-avg-stake").checked = settings.display.showAvgStake;
+  document.getElementById("show-total-stake").checked = settings.display.showTotalStake;
   document.getElementById("show-total-bets").checked = settings.display.showTotalBets;
   document.getElementById("show-streak").checked = settings.display.showStreak;
 
@@ -355,6 +357,7 @@ function collectSettings() {
   settings.display.showRoi = document.getElementById("show-roi").checked;
   settings.display.showAvgOdd = document.getElementById("show-avg-odd").checked;
   settings.display.showAvgStake = document.getElementById("show-avg-stake").checked;
+  settings.display.showTotalStake = document.getElementById("show-total-stake").checked;
   settings.display.showTotalBets = document.getElementById("show-total-bets").checked;
   settings.display.showStreak = document.getElementById("show-streak").checked;
 

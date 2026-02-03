@@ -61,6 +61,7 @@ const kpiWinrate = document.getElementById("kpi-winrate");
 const kpiRoi = document.getElementById("kpi-roi");
 const kpiAvgOdd = document.getElementById("kpi-avg-odd");
 const kpiAvgStake = document.getElementById("kpi-avg-stake");
+const kpiTotalStake = document.getElementById("kpi-total-stake");
 const kpiTotalBets = document.getElementById("kpi-total-bets");
 const kpiStreak = document.getElementById("kpi-streak");
 
@@ -145,6 +146,7 @@ function loadSettings() {
       showRoi: true,
       showAvgOdd: true,
       showAvgStake: true,
+      showTotalStake: true,
       showTotalBets: true,
       showStreak: true,
     },
@@ -198,6 +200,7 @@ function applySettings() {
   const kpiRoiContainer = document.getElementById('kpi-roi-container');
   const kpiAvgOddContainer = document.getElementById('kpi-avg-odd-container');
   const kpiAvgStakeContainer = document.getElementById('kpi-avg-stake-container');
+  const kpiTotalStakeContainer = document.getElementById('kpi-total-stake-container');
   const kpiTotalBetsContainer = document.getElementById('kpi-total-bets-container');
   const kpiStreakContainer = document.getElementById('kpi-streak-container');
 
@@ -226,6 +229,9 @@ function applySettings() {
   }
   if (kpiAvgStakeContainer) {
     kpiAvgStakeContainer.style.display = settings.display.showAvgStake ? '' : 'none';
+  }
+  if (kpiTotalStakeContainer) {
+    kpiTotalStakeContainer.style.display = settings.display.showTotalStake ? '' : 'none';
   }
   if (kpiTotalBetsContainer) {
     kpiTotalBetsContainer.style.display = settings.display.showTotalBets ? '' : 'none';
@@ -614,6 +620,7 @@ function renderKpis() {
   if (kpiRoi) kpiRoi.textContent = percentFormatter.format(roi);
   if (kpiAvgOdd) kpiAvgOdd.textContent = `${numberFormatter.format(avgOdd)}x`;
   if (kpiAvgStake) kpiAvgStake.textContent = formatStake(avgStake);
+  if (kpiTotalStake) kpiTotalStake.textContent = formatStake(totalStake);
   if (kpiTotalBets) kpiTotalBets.textContent = settled.length;
   if (kpiStreak) {
     if (currentStreak.count === 0) {
