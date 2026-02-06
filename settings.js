@@ -575,6 +575,95 @@ function saveNotes() {
   }
 }
 
+// ========================
+// CONFIGURAÇÃO DA API GEMINI
+// ========================
+const GEMINI_API_KEY_STORAGE = "caderneta.gemini.apikey";
+
+function loadGeminiApiKey() {
+  const input = document.getElementById("gemini-api-key");
+  if (!input) return;
+  
+  const savedKey = localStorage.getItem(GEMINI_API_KEY_STORAGE);
+  if (savedKey) {
+    input.value = savedKey;
+  }
+}
+
+function saveGeminiApiKey() {
+  const input = document.getElementById("gemini-api-key");
+  const statusEl = document.getElementById("api-key-status");
+  if (!input) return;
+  
+  const key = input.value.trim();
+  if (key) {
+    localStorage.setItem(GEMINI_API_KEY_STORAGE, key);
+    showApiStatus("✓ Chave API salva com sucesso!", "success");
+  } else {
+    localStorage.removeItem(GEMINI_API_KEY_STORAGE);
+    showApiStatus("Chave API removida.", "info");
+  }
+}
+
+function showApiStatus(message, type) {
+  const statusEl = document.getElementById("api-key-status");
+  if (!statusEl) return;
+  
+  statusEl.textContent = message;
+  statusEl.className = `api-status show ${type}`;
+  
+  setTimeout(() => {
+    statusEl.className = "api-status";
+  }, 4000);
+}
+
+async function testGeminiApiKey() {
+  const input = document.getElementById("gemini-api-key");
+  if (!input) return;
+  
+  const key = input.value.trim();
+  if (!key) {
+    showApiStatus("❌ Insira uma chave API primeiro.", "error");
+    return;
+  }
+  
+  showApiStatus("🔄 Testando conexão...", "info");
+  
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: "Responda apenas: OK" }] }]
+        })
+      }
+    );
+    
+    if (response.ok) {
+      showApiStatus("✅ Conexão bem sucedida! API funcionando.", "success");
+    } else {
+      const error = await response.json();
+      showApiStatus(`❌ Erro: ${error.error?.message || "Chave inválida"}`, "error");
+    }
+  } catch (err) {
+    showApiStatus(`❌ Erro de conexão: ${err.message}`, "error");
+  }
+}
+
+function toggleApiKeyVisibility() {
+  const input = document.getElementById("gemini-api-key");
+  if (!input) return;
+  
+  input.type = input.type === "password" ? "text" : "password";
+}
+
+// Event listeners Gemini API
+document.getElementById("save-api-key")?.addEventListener("click", saveGeminiApiKey);
+document.getElementById("test-api-key")?.addEventListener("click", testGeminiApiKey);
+document.getElementById("toggle-api-key")?.addEventListener("click", toggleApiKeyVisibility);
+
 // Event listeners para anotações
 document.getElementById("save-notes-btn")?.addEventListener("click", saveNotes);
 
@@ -600,3 +689,4 @@ populateForm();
 renderProfiles();
 setupAutoSave();
 loadNotes();
+loadGeminiApiKey();

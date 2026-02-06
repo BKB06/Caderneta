@@ -223,6 +223,29 @@
         </div>
       </section>
 
+      <!-- Configuração da API Gemini -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>🤖 Importação Inteligente (Gemini AI)</h2>
+          <p>Configure sua chave API para importar apostas a partir de prints de cupons.</p>
+        </div>
+        <div class="form-grid">
+          <label class="full">
+            Chave API do Gemini
+            <div class="input-group">
+              <input type="password" id="gemini-api-key" placeholder="AIza..." />
+              <button type="button" id="toggle-api-key" class="ghost small">👁️</button>
+            </div>
+            <small class="help-text">Obtenha sua chave em <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a></small>
+          </label>
+          <div class="form-footer">
+            <button type="button" id="save-api-key" class="ghost">💾 Salvar Chave</button>
+            <button type="button" id="test-api-key" class="ghost">🧪 Testar Conexão</button>
+          </div>
+        </div>
+        <div id="api-key-status" class="api-status"></div>
+      </section>
+
       <!-- Casas de Aposta Favoritas -->
       <section class="panel">
         <div class="panel-header">

@@ -1390,6 +1390,231 @@ calendarViewSelect?.addEventListener('change', (e) => {
 calendarPrev?.addEventListener('click', () => handleCalendarNavigation(-1));
 calendarNext?.addEventListener('click', () => handleCalendarNavigation(1));
 
+// ========================
+// IMPORTAÇÃO DE CUPOM COM GEMINI AI
+// ========================
+const GEMINI_API_KEY_STORAGE = "caderneta.gemini.apikey";
+const importCouponBtn = document.getElementById("import-coupon-btn");
+const couponFileInput = document.getElementById("coupon-file-input");
+const importStatus = document.getElementById("import-status");
+
+function showImportStatus(message, type) {
+  if (!importStatus) return;
+  
+  importStatus.textContent = message;
+  importStatus.className = `import-status show ${type}`;
+  
+  if (type !== "info") {
+    setTimeout(() => {
+      importStatus.className = "import-status";
+    }, 6000);
+  }
+}
+
+function getGeminiApiKey() {
+  return localStorage.getItem(GEMINI_API_KEY_STORAGE);
+}
+
+async function extractBetFromImage(imageBase64, mimeType) {
+  const apiKey = getGeminiApiKey();
+  
+  if (!apiKey) {
+    showImportStatus("❌ Configure sua chave API do Gemini em Configurações primeiro.", "error");
+    return null;
+  }
+  
+  const prompt = `Analise esta imagem de um cupom/comprovante de aposta esportiva e extraia as seguintes informações em formato JSON:
+
+{
+  "evento": "Nome do evento (ex: Flamengo x Palmeiras)",
+  "odd": número decimal da odd (ex: 1.85),
+  "stake": valor apostado em reais sem símbolo (ex: 50.00),
+  "casa": "Nome da casa de apostas (ex: Bet365, Betano, Sportingbet)",
+  "data": "Data da aposta no formato DD/MM/AAAA",
+  "tipo_aposta": "Descrição do tipo de aposta se visível (ex: Resultado Final, Over 2.5 gols, etc.)"
+}
+
+REGRAS IMPORTANTES:
+- Retorne APENAS o JSON, sem explicações ou markdown
+- Se não conseguir identificar algum campo, use null
+- A odd deve ser um número decimal (use ponto como separador)
+- O stake deve ser apenas o número, sem R$ ou símbolos
+- Se houver múltiplas apostas (aposta múltipla/combo), extraia apenas os dados gerais: odd total, stake total
+- Para o evento, se for aposta múltipla, liste os eventos separados por " + "
+- Se a data não estiver visível, use null`;
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: imageBase64
+                }
+              }
+            ]
+          }],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 1024
+          }
+        })
+      }
+    );
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error?.message || "Erro na API do Gemini");
+    }
+    
+    const data = await response.json();
+    const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!textResponse) {
+      throw new Error("Resposta vazia do Gemini");
+    }
+    
+    // Limpar a resposta (remover markdown se houver)
+    let cleanJson = textResponse
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
+    
+    const betData = JSON.parse(cleanJson);
+    return betData;
+    
+  } catch (error) {
+    console.error("Erro ao extrair dados:", error);
+    showImportStatus(`❌ Erro: ${error.message}`, "error");
+    return null;
+  }
+}
+
+function fillFormWithBetData(betData) {
+  if (!betData) return;
+  
+  // Data
+  if (betData.data) {
+    const dateInput = document.getElementById("bet-date");
+    // Converter DD/MM/AAAA para YYYY-MM-DD (formato do input date)
+    const parts = betData.data.split("/");
+    if (parts.length === 3) {
+      dateInput.value = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+    }
+  } else {
+    // Se não tiver data, usar a data de hoje
+    const today = new Date().toISOString().split("T")[0];
+    document.getElementById("bet-date").value = today;
+  }
+  
+  // Evento
+  if (betData.evento) {
+    const eventInput = document.getElementById("bet-event");
+    let eventText = betData.evento;
+    if (betData.tipo_aposta) {
+      eventText += ` - ${betData.tipo_aposta}`;
+    }
+    eventInput.value = eventText;
+  }
+  
+  // Odd
+  if (betData.odd != null) {
+    document.getElementById("bet-odds").value = numberFormatter.format(betData.odd);
+  }
+  
+  // Stake
+  if (betData.stake != null) {
+    document.getElementById("bet-stake").value = numberFormatter.format(betData.stake);
+  }
+  
+  // Casa de Aposta
+  if (betData.casa) {
+    document.getElementById("bet-book").value = betData.casa;
+  }
+  
+  // Status padrão: pendente
+  document.getElementById("bet-status").value = "pending";
+  
+  // Atualizar lucro potencial
+  updatePotentialProfit();
+}
+
+async function handleCouponImport(file) {
+  if (!file) return;
+  
+  // Validar tipo de arquivo
+  if (!file.type.startsWith("image/")) {
+    showImportStatus("❌ Selecione uma imagem válida (PNG, JPG, etc.)", "error");
+    return;
+  }
+  
+  // Verificar tamanho (máx 4MB para API do Gemini)
+  if (file.size > 4 * 1024 * 1024) {
+    showImportStatus("❌ Imagem muito grande. Máximo: 4MB", "error");
+    return;
+  }
+  
+  // Mostrar loading
+  importCouponBtn.disabled = true;
+  importCouponBtn.classList.add("loading");
+  importCouponBtn.textContent = "";
+  showImportStatus("🔍 Analisando cupom com IA...", "info");
+  
+  try {
+    // Converter para base64
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64String = reader.result.split(",")[1];
+        resolve(base64String);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    
+    // Extrair dados com Gemini
+    const betData = await extractBetFromImage(base64, file.type);
+    
+    if (betData) {
+      fillFormWithBetData(betData);
+      showImportStatus("✅ Dados extraídos! Revise e salve a aposta.", "success");
+    }
+    
+  } catch (error) {
+    console.error("Erro no import:", error);
+    showImportStatus(`❌ Erro ao processar imagem: ${error.message}`, "error");
+  } finally {
+    importCouponBtn.disabled = false;
+    importCouponBtn.classList.remove("loading");
+    importCouponBtn.textContent = "📷 Importar do Cupom";
+    couponFileInput.value = "";
+  }
+}
+
+// Event listeners para importação de cupom
+importCouponBtn?.addEventListener("click", () => {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    showImportStatus("⚠️ Configure sua chave API do Gemini em Configurações → Importação Inteligente", "error");
+    return;
+  }
+  couponFileInput?.click();
+});
+
+couponFileInput?.addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  if (file) {
+    handleCouponImport(file);
+  }
+});
+
 // Profile Switcher
 const profileSwitch = document.getElementById('profile-switch');
 
