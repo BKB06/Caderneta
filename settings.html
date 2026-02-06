@@ -65,6 +65,21 @@
         </form>
       </section>
 
+      <!-- Anotações Pessoais -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>📝 Anotações</h2>
+          <p>Suas notas pessoais sobre apostas e estratégias.</p>
+        </div>
+        <div class="notes-container">
+          <textarea id="user-notes" placeholder="Escreva suas anotações aqui...&#10;&#10;• Estratégias que funcionam&#10;• Erros a evitar&#10;• Metas e objetivos&#10;• Observações sobre times/eventos"></textarea>
+          <div class="notes-footer">
+            <span class="notes-status" id="notes-status"></span>
+            <button type="button" id="save-notes-btn" class="ghost small">💾 Salvar</button>
+          </div>
+        </div>
+      </section>
+
       <!-- Preferências de Exibição -->
       <section class="panel">
         <div class="panel-header">
@@ -154,6 +169,13 @@
             <span class="setting-label">
               <strong>Sequência Atual</strong>
               <small>Sequência de greens ou reds consecutivos</small>
+            </span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="show-staked-period" checked />
+            <span class="setting-label">
+              <strong>Total Apostado por Período</strong>
+              <small>Total apostado no dia, semana, mês e ano</small>
             </span>
           </label>
         </div>

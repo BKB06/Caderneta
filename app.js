@@ -40,6 +40,11 @@ function getSettingsKey() {
   return profileId ? `caderneta.settings.${profileId}` : "caderneta.settings.v1";
 }
 
+function getNotesKey() {
+  const profileId = getActiveProfileId();
+  return profileId ? `caderneta.notes.${profileId}` : "caderneta.notes.v1";
+}
+
 const form = document.getElementById("bet-form");
 const potentialProfitEl = document.getElementById("potential-profit");
 const betsBody = document.getElementById("bets-body");
@@ -149,6 +154,7 @@ function loadSettings() {
       showTotalStake: true,
       showTotalBets: true,
       showStreak: true,
+      showStakedPeriod: true,
     },
     columns: {
       date: true,
@@ -238,6 +244,12 @@ function applySettings() {
   }
   if (kpiStreakContainer) {
     kpiStreakContainer.style.display = settings.display.showStreak ? '' : 'none';
+  }
+
+  // Painel de Total Apostado por Período
+  const stakedPeriodContainer = document.getElementById('staked-period-container');
+  if (stakedPeriodContainer) {
+    stakedPeriodContainer.style.display = settings.display.showStakedPeriod !== false ? '' : 'none';
   }
 
   // Apply default status filter
@@ -571,10 +583,28 @@ function renderTable() {
 
     // 9. Botões de Ação
     const tdActions = document.createElement("td");
-    tdActions.innerHTML = `
-      <button type="button" class="ghost" data-action="edit" data-id="${bet.id}">Editar</button>
-      <button type="button" class="ghost" data-action="delete" data-id="${bet.id}">Excluir</button>
-    `; // Botões fixos são seguros usar innerHTML, mas poderíamos criar elemento a elemento também
+    tdActions.className = "actions-cell";
+    
+    // Botões de ação rápida para status (apenas para apostas pendentes)
+    if (bet.status === "pending") {
+      tdActions.innerHTML = `
+        <div class="quick-status-actions">
+          <button type="button" class="action-btn green" data-action="set-win" data-id="${bet.id}" title="Marcar como Green">✓</button>
+          <button type="button" class="action-btn red" data-action="set-loss" data-id="${bet.id}" title="Marcar como Red">✗</button>
+        </div>
+        <div class="main-actions">
+          <button type="button" class="ghost small" data-action="edit" data-id="${bet.id}">Editar</button>
+          <button type="button" class="ghost small" data-action="delete" data-id="${bet.id}">Excluir</button>
+        </div>
+      `;
+    } else {
+      tdActions.innerHTML = `
+        <div class="main-actions">
+          <button type="button" class="ghost small" data-action="edit" data-id="${bet.id}">Editar</button>
+          <button type="button" class="ghost small" data-action="delete" data-id="${bet.id}">Excluir</button>
+        </div>
+      `;
+    }
     row.appendChild(tdActions);
 
     betsBody.appendChild(row);
@@ -632,6 +662,65 @@ function renderKpis() {
       kpiStreak.className = currentStreak.type === "win" ? "positive" : "negative";
     }
   }
+
+  // Renderizar Total Apostado por Período
+  renderStakedPeriod();
+}
+
+function renderStakedPeriod() {
+  const stakedToday = document.getElementById('staked-today');
+  const stakedWeek = document.getElementById('staked-week');
+  const stakedMonth = document.getElementById('staked-month');
+  const stakedYear = document.getElementById('staked-year');
+
+  if (!stakedToday || !stakedWeek || !stakedMonth || !stakedYear) return;
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  
+  // Início da semana (domingo)
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - today.getDay());
+  
+  // Início do mês
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  
+  // Início do ano
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+
+  let totalToday = 0;
+  let totalWeek = 0;
+  let totalMonth = 0;
+  let totalYear = 0;
+
+  bets.forEach((bet) => {
+    const betDate = parseDateForSort(bet.date);
+    if (!betDate) return;
+    
+    const stake = bet.stake || 0;
+
+    // Hoje
+    if (betDate >= today) {
+      totalToday += stake;
+    }
+    // Esta semana
+    if (betDate >= weekStart) {
+      totalWeek += stake;
+    }
+    // Este mês
+    if (betDate >= monthStart) {
+      totalMonth += stake;
+    }
+    // Este ano
+    if (betDate >= yearStart) {
+      totalYear += stake;
+    }
+  });
+
+  stakedToday.textContent = formatStake(totalToday);
+  stakedWeek.textContent = formatStake(totalWeek);
+  stakedMonth.textContent = formatStake(totalMonth);
+  stakedYear.textContent = formatStake(totalYear);
 }
 
 function calcCurrentStreak(data) {
@@ -853,17 +942,42 @@ function handleTableClick(event) {
     return;
   }
   const id = button.dataset.id;
-  if (button.dataset.action === "edit") {
+  const action = button.dataset.action;
+
+  if (action === "edit") {
     const bet = bets.find((item) => item.id === id);
     if (bet) {
       startEdit(bet);
     }
     return;
   }
-  if (button.dataset.action === "delete") {
+
+  if (action === "delete") {
     bets = bets.filter((bet) => bet.id !== id);
     saveBets();
     refreshAll();
+    return;
+  }
+
+  // Ações rápidas de status
+  if (action === "set-win") {
+    const bet = bets.find((item) => item.id === id);
+    if (bet) {
+      bet.status = "win";
+      saveBets();
+      refreshAll();
+    }
+    return;
+  }
+
+  if (action === "set-loss") {
+    const bet = bets.find((item) => item.id === id);
+    if (bet) {
+      bet.status = "loss";
+      saveBets();
+      refreshAll();
+    }
+    return;
   }
 }
 
@@ -1203,7 +1317,49 @@ function init() {
   updatePotentialProfit();
   refreshAll();
   renderCalendar();
+  loadQuickNotes();
 }
+
+// Quick Notes (Anotações Rápidas)
+function loadQuickNotes() {
+  const notesTextarea = document.getElementById("quick-notes");
+  if (!notesTextarea) return;
+  
+  const saved = localStorage.getItem(getNotesKey());
+  notesTextarea.value = saved || "";
+}
+
+function saveQuickNotes() {
+  const notesTextarea = document.getElementById("quick-notes");
+  const notesStatus = document.getElementById("quick-notes-status");
+  if (!notesTextarea) return;
+  
+  localStorage.setItem(getNotesKey(), notesTextarea.value);
+  if (notesStatus) {
+    notesStatus.textContent = "✓ Salvo";
+    notesStatus.className = "notes-status saved";
+    setTimeout(() => {
+      notesStatus.textContent = "";
+      notesStatus.className = "notes-status";
+    }, 2000);
+  }
+}
+
+// Auto-save anotações ao digitar (debounce)
+let quickNotesTimeout = null;
+const quickNotesTextarea = document.getElementById("quick-notes");
+quickNotesTextarea?.addEventListener("input", () => {
+  const notesStatus = document.getElementById("quick-notes-status");
+  if (notesStatus) {
+    notesStatus.textContent = "...";
+    notesStatus.className = "notes-status";
+  }
+  
+  clearTimeout(quickNotesTimeout);
+  quickNotesTimeout = setTimeout(() => {
+    saveQuickNotes();
+  }, 1000);
+});
 
 form.addEventListener("submit", handleSubmit);
 resetButton.addEventListener("click", resetForm);

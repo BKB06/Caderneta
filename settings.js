@@ -14,6 +14,9 @@ function getBankrollKey(profileId) {
 function getSettingsKey(profileId) {
   return `caderneta.settings.${profileId}`;
 }
+function getNotesKey(profileId) {
+  return `caderneta.notes.${profileId}`;
+}
 
 const defaultSettings = {
   profile: {
@@ -33,6 +36,7 @@ const defaultSettings = {
     showTotalStake: true,
     showTotalBets: true,
     showStreak: true,
+    showStakedPeriod: true,
   },
   columns: {
     date: true,
@@ -172,6 +176,7 @@ function switchProfile(profileId) {
   loadSettings();
   populateForm();
   renderProfiles();
+  loadNotes();
   
   showToast(`Trocado para: ${profile.name}`);
   return true;
@@ -294,6 +299,7 @@ function populateForm() {
   document.getElementById("show-total-stake").checked = settings.display.showTotalStake;
   document.getElementById("show-total-bets").checked = settings.display.showTotalBets;
   document.getElementById("show-streak").checked = settings.display.showStreak;
+  document.getElementById("show-staked-period").checked = settings.display.showStakedPeriod !== false;
 
   // Columns
   document.getElementById("col-date").checked = settings.columns.date;
@@ -360,6 +366,7 @@ function collectSettings() {
   settings.display.showTotalStake = document.getElementById("show-total-stake").checked;
   settings.display.showTotalBets = document.getElementById("show-total-bets").checked;
   settings.display.showStreak = document.getElementById("show-streak").checked;
+  settings.display.showStakedPeriod = document.getElementById("show-staked-period").checked;
 
   settings.columns.date = document.getElementById("col-date").checked;
   settings.columns.odds = document.getElementById("col-odds").checked;
@@ -530,13 +537,60 @@ document.getElementById("clear-data").addEventListener("click", () => {
       localStorage.removeItem(getStorageKey(activeProfileId));
       localStorage.removeItem(getCashflowKey(activeProfileId));
       localStorage.removeItem(getBankrollKey(activeProfileId));
+      localStorage.removeItem(getNotesKey(activeProfileId));
       localStorage.setItem(getSettingsKey(activeProfileId), JSON.stringify(defaultSettings));
       settings = { ...defaultSettings };
       populateForm();
       renderProfiles();
+      loadNotes();
       showToast("Dados do perfil foram apagados.");
     }
   }
+});
+
+// Anotações
+function loadNotes() {
+  const notesTextarea = document.getElementById("user-notes");
+  const notesStatus = document.getElementById("notes-status");
+  if (!notesTextarea || !activeProfileId) return;
+  
+  const saved = localStorage.getItem(getNotesKey(activeProfileId));
+  notesTextarea.value = saved || "";
+  if (notesStatus) notesStatus.textContent = "";
+}
+
+function saveNotes() {
+  const notesTextarea = document.getElementById("user-notes");
+  const notesStatus = document.getElementById("notes-status");
+  if (!notesTextarea || !activeProfileId) return;
+  
+  localStorage.setItem(getNotesKey(activeProfileId), notesTextarea.value);
+  if (notesStatus) {
+    notesStatus.textContent = "✓ Salvo";
+    notesStatus.className = "notes-status saved";
+    setTimeout(() => {
+      notesStatus.textContent = "";
+      notesStatus.className = "notes-status";
+    }, 2000);
+  }
+}
+
+// Event listeners para anotações
+document.getElementById("save-notes-btn")?.addEventListener("click", saveNotes);
+
+// Auto-save anotações ao digitar (debounce)
+let notesTimeout = null;
+document.getElementById("user-notes")?.addEventListener("input", () => {
+  const notesStatus = document.getElementById("notes-status");
+  if (notesStatus) {
+    notesStatus.textContent = "Digitando...";
+    notesStatus.className = "notes-status";
+  }
+  
+  clearTimeout(notesTimeout);
+  notesTimeout = setTimeout(() => {
+    saveNotes();
+  }, 1000);
 });
 
 // Init
@@ -545,3 +599,4 @@ loadSettings();
 populateForm();
 renderProfiles();
 setupAutoSave();
+loadNotes();

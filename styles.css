@@ -433,6 +433,52 @@ button.ghost {
   border: 1px solid var(--border);
 }
 
+/* Anotações Rápidas na página principal */
+.quick-notes {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.quick-notes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.quick-notes-header h3 {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.quick-notes textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 14px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.quick-notes textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.15);
+}
+
+.quick-notes textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -464,6 +510,50 @@ button.ghost {
 
 .kpi strong.negative {
   color: var(--danger);
+}
+
+/* Painel de Total Apostado por Período */
+.staked-period-panel {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.15), rgba(45, 212, 191, 0.1));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.staked-period-panel h3 {
+  margin-bottom: 16px;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.staked-period-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.staked-period-item {
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  text-align: center;
+}
+
+.staked-period-item span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.staked-period-item strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 1.1rem;
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .chart-grid {
@@ -581,6 +671,65 @@ tr:hover td {
   color: var(--accent);
   background: rgba(45, 212, 191, 0.15);
   border: 1px solid rgba(45, 212, 191, 0.3);
+}
+
+/* Ações da Tabela */
+.actions-cell {
+  white-space: nowrap;
+}
+
+.quick-status-actions {
+  display: inline-flex;
+  gap: 6px;
+  margin-right: 8px;
+}
+
+.action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-btn:hover {
+  transform: scale(1.1);
+}
+
+.action-btn.green {
+  background: linear-gradient(135deg, var(--success), #16a34a);
+  color: white;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+}
+
+.action-btn.green:hover {
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.5);
+}
+
+.action-btn.red {
+  background: linear-gradient(135deg, var(--danger), #dc2626);
+  color: white;
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+}
+
+.action-btn.red:hover {
+  box-shadow: 0 6px 16px rgba(255, 107, 107, 0.5);
+}
+
+.main-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.main-actions button {
+  padding: 6px 10px;
+  font-size: 0.75rem;
 }
 
 .muted {
@@ -1303,6 +1452,53 @@ tr:hover td {
   flex: 1;
 }
 
+/* Anotações */
+.notes-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notes-container textarea {
+  width: 100%;
+  min-height: 200px;
+  padding: 16px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  resize: vertical;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.notes-container textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.15);
+}
+
+.notes-container textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.notes-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.notes-status {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.notes-status.saved {
+  color: var(--success);
+}
+
 .data-actions {
   display: flex;
   gap: 12px;
@@ -1477,6 +1673,10 @@ button.danger:hover {
   .chart-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .staked-period-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 980px) {
@@ -1526,6 +1726,10 @@ button.danger:hover {
   }
   
   .profiles-list {
+    grid-template-columns: 1fr;
+  }
+
+  .staked-period-grid {
     grid-template-columns: 1fr;
   }
 }

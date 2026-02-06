@@ -92,6 +92,15 @@
             <button type="button" class="ghost" id="reset-button">Limpar</button>
           </div>
         </form>
+
+        <!-- Anotações Rápidas -->
+        <div class="quick-notes" id="quick-notes-container">
+          <div class="quick-notes-header">
+            <h3>📝 Anotações Rápidas</h3>
+            <span class="notes-status" id="quick-notes-status"></span>
+          </div>
+          <textarea id="quick-notes" placeholder="Suas notas rápidas...&#10;• Estratégias&#10;• Observações&#10;• Lembretes"></textarea>
+        </div>
       </section>
 
       <section class="panel">
@@ -136,6 +145,29 @@
           <div class="kpi" id="kpi-streak-container">
             <span>Sequência Atual</span>
             <strong id="kpi-streak">-</strong>
+          </div>
+        </div>
+
+        <!-- Painel de Total Apostado por Período -->
+        <div class="staked-period-panel" id="staked-period-container">
+          <h3>💰 Total Apostado por Período</h3>
+          <div class="staked-period-grid">
+            <div class="staked-period-item">
+              <span>Hoje</span>
+              <strong id="staked-today">R$ 0,00</strong>
+            </div>
+            <div class="staked-period-item">
+              <span>Esta Semana</span>
+              <strong id="staked-week">R$ 0,00</strong>
+            </div>
+            <div class="staked-period-item">
+              <span>Este Mês</span>
+              <strong id="staked-month">R$ 0,00</strong>
+            </div>
+            <div class="staked-period-item">
+              <span>Este Ano</span>
+              <strong id="staked-year">R$ 0,00</strong>
+            </div>
           </div>
         </div>
 
