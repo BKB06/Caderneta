@@ -1391,12 +1391,15 @@ calendarPrev?.addEventListener('click', () => handleCalendarNavigation(-1));
 calendarNext?.addEventListener('click', () => handleCalendarNavigation(1));
 
 // ========================
-// IMPORTAÇÃO DE CUPOM COM GEMINI AI
+// IMPORTAÇÃO DE CUPOM - OCR GRATUITO + GEMINI OPCIONAL
 // ========================
 const GEMINI_API_KEY_STORAGE = "caderneta.gemini.apikey";
 const importCouponBtn = document.getElementById("import-coupon-btn");
 const couponFileInput = document.getElementById("coupon-file-input");
 const importStatus = document.getElementById("import-status");
+const importProgress = document.getElementById("import-progress");
+const importProgressBar = document.getElementById("import-progress-bar");
+const importProgressText = document.getElementById("import-progress-text");
 
 function showImportStatus(message, type) {
   if (!importStatus) return;
@@ -1407,16 +1410,283 @@ function showImportStatus(message, type) {
   if (type !== "info") {
     setTimeout(() => {
       importStatus.className = "import-status";
-    }, 6000);
+    }, 8000);
   }
+}
+
+function showProgress(percent, text) {
+  if (!importProgress) return;
+  importProgress.style.display = "block";
+  if (importProgressBar) importProgressBar.style.width = `${percent}%`;
+  if (importProgressText) importProgressText.textContent = text || `${Math.round(percent)}%`;
+}
+
+function hideProgress() {
+  if (importProgress) importProgress.style.display = "none";
 }
 
 function getGeminiApiKey() {
   return localStorage.getItem(GEMINI_API_KEY_STORAGE);
 }
 
+// ---- PARSER DE TEXTO OCR ----
+function parseBetFromText(text) {
+  const lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  const fullText = lines.join(" ");
+  
+  const result = {
+    evento: null,
+    odd: null,
+    stake: null,
+    casa: null,
+    data: null,
+    tipo_aposta: null,
+  };
+  
+  // Detectar casa de apostas
+  const casas = [
+    { patterns: ["bet365"], name: "Bet365" },
+    { patterns: ["betano"], name: "Betano" },
+    { patterns: ["sportingbet"], name: "Sportingbet" },
+    { patterns: ["betfair"], name: "Betfair" },
+    { patterns: ["pixbet"], name: "PixBet" },
+    { patterns: ["stake"], name: "Stake" },
+    { patterns: ["pinnacle"], name: "Pinnacle" },
+    { patterns: ["1xbet"], name: "1xBet" },
+    { patterns: ["novibet"], name: "Novibet" },
+    { patterns: ["betnacional"], name: "BetNacional" },
+    { patterns: ["estrela ?bet"], name: "EstrelaBet" },
+    { patterns: ["casa ?de ?apostas", "casadeapostas"], name: "Casa de Apostas" },
+    { patterns: ["superbet"], name: "Superbet" },
+    { patterns: ["f12\\.?bet", "f12bet"], name: "F12.bet" },
+    { patterns: ["galera\\.?bet", "galerabet"], name: "Galera.bet" },
+    { patterns: ["mr\\.?jack", "mrjack"], name: "Mr. Jack Bet" },
+    { patterns: ["parimatch"], name: "Parimatch" },
+    { patterns: ["rivalry"], name: "Rivalry" },
+    { patterns: ["luva\\.?bet", "luvabet"], name: "Luva.bet" },
+    { patterns: ["aposta ?ganha"], name: "Aposta Ganha" },
+  ];
+  
+  const lowerText = fullText.toLowerCase();
+  for (const casa of casas) {
+    for (const pattern of casa.patterns) {
+      if (new RegExp(pattern, "i").test(lowerText)) {
+        result.casa = casa.name;
+        break;
+      }
+    }
+    if (result.casa) break;
+  }
+  
+  // Detectar data (DD/MM/AAAA ou DD/MM/AA ou DD.MM.AAAA)
+  const dateMatch = fullText.match(/(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2,4})/);
+  if (dateMatch) {
+    let [, day, month, year] = dateMatch;
+    if (year.length === 2) year = "20" + year;
+    result.data = `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
+  }
+  
+  // --- DETECTAR STAKE (valores com R$) ---
+  const valoresMonetarios = new Set();
+  const monetaryRegex = /R\$\s*(\d+[.,]?\d*)/gi;
+  let mMatch;
+  while ((mMatch = monetaryRegex.exec(fullText)) !== null) {
+    const val = parseFloat(mMatch[1].replace(",", "."));
+    if (val > 0) valoresMonetarios.add(val);
+  }
+  
+  const stakeMatch = fullText.match(/(?:simples|aposta)\s+R?\$?\s*(\d+[.,]?\d*)/i)
+    || fullText.match(/(?:aposta|valor|stake|investido)\s*[:=]?\s*R?\$?\s*(\d+[.,]?\d*)/i)
+    || fullText.match(/R\$\s*(\d+[.,]?\d*)/i);
+  if (stakeMatch) {
+    const val = parseFloat(stakeMatch[1].replace(",", "."));
+    if (val > 0 && val < 100000) result.stake = val;
+  }
+  
+  // --- DETECTAR ODD ---
+  // Coletar TODOS os números decimais do texto inteiro
+  const todosNumeros = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Encontrar todos os números decimais na linha
+    const regex = /(\d{1,3})[.,](\d{1,3})/g;
+    let numMatch;
+    while ((numMatch = regex.exec(line)) !== null) {
+      const raw = numMatch[0];
+      const val = parseFloat(raw.replace(",", "."));
+      // Verificar se NÃO é precedido por R$ na mesma posição
+      const before = line.substring(Math.max(0, numMatch.index - 3), numMatch.index);
+      const isPrecededByRS = /R\$\s*$/.test(before);
+      // Verificar se NÃO faz parte de um ID longo (número com mais de 5 dígitos)
+      const surrounding = line.substring(Math.max(0, numMatch.index - 5), numMatch.index + raw.length + 5);
+      const isPartOfLongNumber = /\d{5,}/.test(surrounding.replace(raw, ""));
+      // Verificar se NÃO faz parte de uma data
+      const isDate = /\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{2,4}/.test(
+        line.substring(Math.max(0, numMatch.index - 6), numMatch.index + raw.length + 6)
+      );
+      // Verificar se NÃO faz parte de horário (HH:MM)
+      const isTime = /\d{1,2}:\d{2}/.test(
+        line.substring(Math.max(0, numMatch.index - 3), numMatch.index + raw.length + 3)
+      );
+      
+      todosNumeros.push({
+        val,
+        raw,
+        line: i,
+        isPrecededByRS,
+        isPartOfLongNumber,
+        isDate,
+        isTime,
+        isMonetary: valoresMonetarios.has(val),
+        lineText: line,
+      });
+    }
+  }
+  
+  // Prioridade 1: número decimal entre 1.01 e 500 que NÃO é monetário, NÃO é data, NÃO é horário, NÃO é ID
+  for (const n of todosNumeros) {
+    if (n.val >= 1.01 && n.val <= 500 && !n.isPrecededByRS && !n.isMonetary && !n.isDate && !n.isTime && !n.isPartOfLongNumber) {
+      result.odd = n.val;
+      break;
+    }
+  }
+  
+  // Prioridade 2: qualquer número decimal entre 1.01 e 500 que não é monetário
+  if (!result.odd) {
+    for (const n of todosNumeros) {
+      if (n.val >= 1.01 && n.val <= 500 && !n.isMonetary && !n.isDate && !n.isTime) {
+        result.odd = n.val;
+        break;
+      }
+    }
+  }
+  
+  // Prioridade 3: OCR frequentemente lê odds sem o ponto decimal (1.18 → 118, 2.50 → 250)
+  // Buscar números inteiros de 2-4 dígitos que NÃO são monetários nem IDs
+  if (!result.odd) {
+    for (const line of lines) {
+      // Ignorar linhas com R$ (monetárias), IDs longos, datas
+      if (/R\$/.test(line) && !/simples/i.test(line)) continue;
+      if (/\bID\b/i.test(line)) continue;
+      
+      // Buscar números inteiros isolados (2-4 dígitos)
+      const intNums = line.match(/(?:^|[\s©@:])(\d{2,4})(?:[\s,.|]|$)/g);
+      if (intNums) {
+        for (const raw of intNums) {
+          const digits = raw.replace(/[^\d]/g, "");
+          const num = parseInt(digits, 10);
+          
+          // Ignorar se for ano (2024-2030), horário ou ID
+          if (num >= 2020 && num <= 2035) continue;
+          if (num > 2400) continue; // Muito grande para ser odd
+          
+          // Tentar inserir ponto decimal após o primeiro dígito: 118 → 1.18, 250 → 2.50
+          let possibleOdd = null;
+          if (digits.length === 3) {
+            possibleOdd = parseFloat(digits[0] + "." + digits.slice(1)); // 118 → 1.18
+          } else if (digits.length === 4) {
+            possibleOdd = parseFloat(digits.slice(0, 2) + "." + digits.slice(2)); // 1250 → 12.50
+          } else if (digits.length === 2) {
+            possibleOdd = parseFloat(digits[0] + "." + digits[1]); // 18 → 1.8
+          }
+          
+          if (possibleOdd && possibleOdd >= 1.01 && possibleOdd <= 500) {
+            // Verificar que esse número não é um valor monetário
+            if (!valoresMonetarios.has(num) && !valoresMonetarios.has(possibleOdd)) {
+              result.odd = possibleOdd;
+              break;
+            }
+          }
+        }
+      }
+      if (result.odd) break;
+    }
+  }
+  
+
+  
+  // Detectar evento - procurar padrão "Time A - Time B" ou "Time A vs Time B" ou "Time A x Time B"
+  const eventPatterns = [
+    /([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú]?[a-zà-ú]+)*)\s*[-xvs\.]+\s*([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú]?[a-zà-ú]+)*)/,
+  ];
+  
+  for (const line of lines) {
+    for (const pattern of eventPatterns) {
+      const match = line.match(pattern);
+      if (match) {
+        const team1 = match[1].trim();
+        const team2 = match[2].trim();
+        // Ignorar se parecer com data ou valor monetário
+        if (team1.length > 2 && team2.length > 2 && !/^\d/.test(team1) && !/^\d/.test(team2)) {
+          result.evento = `${team1} - ${team2}`;
+          break;
+        }
+      }
+    }
+    if (result.evento) break;
+  }
+  
+  // Detectar tipo de aposta / mercado
+  const mercados = [
+    { patterns: ["resultado final", "1x2", "match result"], name: "Resultado Final" },
+    { patterns: ["dupla chance", "double chance"], name: "Dupla Chance" },
+    { patterns: ["over", "acima", "mais de"], name: "Over" },
+    { patterns: ["under", "abaixo", "menos de"], name: "Under" },
+    { patterns: ["ambas marcam", "btts", "both teams"], name: "Ambas Marcam" },
+    { patterns: ["handicap"], name: "Handicap" },
+    { patterns: ["escanteio", "corner"], name: "Escanteios" },
+    { patterns: ["cart.{0,3}o", "card"], name: "Cartões" },
+    { patterns: ["intervalo", "half.?time", "1.{0,2}tempo"], name: "Intervalo" },
+    { patterns: ["gols", "goals", "total de gols"], name: "Gols" },
+    { patterns: ["vencedor", "winner", "moneyline"], name: "Vencedor" },
+  ];
+  
+  for (const mercado of mercados) {
+    for (const pattern of mercado.patterns) {
+      if (new RegExp(pattern, "i").test(fullText)) {
+        result.tipo_aposta = mercado.name;
+        break;
+      }
+    }
+    if (result.tipo_aposta) break;
+  }
+  
+  return result;
+}
+
+// ---- OCR COM TESSERACT.JS (GRATUITO) ----
+async function extractBetWithTesseract(imageUrl) {
+  try {
+    showProgress(10, "Carregando OCR...");
+    
+    const worker = await Tesseract.createWorker("por+eng", 1, {
+      logger: (m) => {
+        if (m.status === "recognizing text") {
+          const pct = Math.round(m.progress * 80) + 10;
+          showProgress(pct, `Lendo texto... ${Math.round(m.progress * 100)}%`);
+        }
+      },
+    });
+    
+    showProgress(20, "Analisando imagem...");
+    const { data } = await worker.recognize(imageUrl);
+    
+    showProgress(90, "Extraindo dados...");
+    await worker.terminate();
+    
+    const betData = parseBetFromText(data.text);
+    
+    showProgress(100, "Concluído!");
+    
+    return betData;
+  } catch (error) {
+    console.error("Erro Tesseract:", error);
+    throw error;
+  }
+}
+
+// ---- OCR COM GEMINI (OPCIONAL, MAIS PRECISO) ----
 async function resolveGeminiModel(apiKey) {
-  // Primeiro tentar usar modelo já salvo do teste
   const saved = localStorage.getItem("caderneta.gemini.model");
   if (saved) return saved;
 
@@ -1425,40 +1695,26 @@ async function resolveGeminiModel(apiKey) {
       `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
       { method: "GET" }
     );
-
     if (!response.ok) return null;
-
     const data = await response.json();
     const models = Array.isArray(data.models) ? data.models : [];
-    
     const generative = models.filter((m) =>
       m.supportedGenerationMethods?.includes("generateContent")
     );
-
-    const preferred = [
-      "gemini-2.0-flash",
-      "gemini-1.5-flash",
-      "gemini-pro",
-    ];
-
+    const preferred = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
     for (const pref of preferred) {
       const match = generative.find((m) => m.name?.includes(pref));
       if (match) return match.name;
     }
-
     return generative[0]?.name || null;
   } catch (err) {
     return null;
   }
 }
 
-async function extractBetFromImage(imageBase64, mimeType) {
+async function extractBetWithGemini(imageBase64, mimeType) {
   const apiKey = getGeminiApiKey();
-  
-  if (!apiKey) {
-    showImportStatus("❌ Configure sua chave API do Gemini em Configurações primeiro.", "error");
-    return null;
-  }
+  if (!apiKey) return null;
   
   const prompt = `Analise esta imagem de um cupom/comprovante de aposta esportiva e extraia as seguintes informações em formato JSON:
 
@@ -1488,160 +1744,140 @@ REGRAS IMPORTANTES:
 - Para o evento em aposta múltipla, liste os eventos separados por " + "
 - Se a data não estiver visível, use null`;
 
-  try {
-    const model = await resolveGeminiModel(apiKey);
-    
-    if (!model) {
-      showImportStatus("❌ Nenhum modelo disponível. Teste a conexão em Configurações.", "error");
-      return null;
-    }
+  const model = await resolveGeminiModel(apiKey);
+  if (!model) return null;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: imageBase64
-                }
-              }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.1,
-            maxOutputTokens: 1024
-          }
-        })
-      }
-    );
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || "Erro na API do Gemini");
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: mimeType, data: imageBase64 } }
+          ]
+        }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
+      })
     }
-    
-    const data = await response.json();
-    const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!textResponse) {
-      throw new Error("Resposta vazia do Gemini");
-    }
-    
-    // Limpar a resposta (remover markdown se houver)
-    let cleanJson = textResponse
-      .replace(/```json\n?/g, "")
-      .replace(/```\n?/g, "")
-      .trim();
-    
-    const betData = JSON.parse(cleanJson);
-    return betData;
-    
-  } catch (error) {
-    console.error("Erro ao extrair dados:", error);
-    showImportStatus(`❌ Erro: ${error.message}`, "error");
-    return null;
-  }
+  );
+  
+  if (!response.ok) return null;
+  
+  const data = await response.json();
+  const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!textResponse) return null;
+  
+  let cleanJson = textResponse.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+  return JSON.parse(cleanJson);
 }
 
+// ---- PREENCHIMENTO DO FORMULÁRIO ----
 function fillFormWithBetData(betData) {
   if (!betData) return;
   
-  // Data
   if (betData.data) {
-    const dateInput = document.getElementById("bet-date");
-    // Converter DD/MM/AAAA para YYYY-MM-DD (formato do input date)
     const parts = betData.data.split("/");
     if (parts.length === 3) {
-      dateInput.value = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+      document.getElementById("bet-date").value = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
     }
   } else {
-    // Se não tiver data, usar a data de hoje
-    const today = new Date().toISOString().split("T")[0];
-    document.getElementById("bet-date").value = today;
+    document.getElementById("bet-date").value = new Date().toISOString().split("T")[0];
   }
   
-  // Evento
   if (betData.evento) {
-    const eventInput = document.getElementById("bet-event");
     let eventText = betData.evento;
-    if (betData.tipo_aposta) {
-      eventText += ` - ${betData.tipo_aposta}`;
-    }
-    eventInput.value = eventText;
+    if (betData.tipo_aposta) eventText += ` - ${betData.tipo_aposta}`;
+    document.getElementById("bet-event").value = eventText;
   }
   
-  // Odd
   if (betData.odd != null) {
     document.getElementById("bet-odds").value = numberFormatter.format(betData.odd);
   }
   
-  // Stake
   if (betData.stake != null) {
     document.getElementById("bet-stake").value = numberFormatter.format(betData.stake);
   }
   
-  // Casa de Aposta
   if (betData.casa) {
     document.getElementById("bet-book").value = betData.casa;
   }
   
-  // Status padrão: pendente
   document.getElementById("bet-status").value = "pending";
-  
-  // Atualizar lucro potencial
   updatePotentialProfit();
 }
 
+// ---- FLUXO PRINCIPAL DE IMPORTAÇÃO ----
 async function handleCouponImport(file) {
   if (!file) return;
   
-  // Validar tipo de arquivo
   if (!file.type.startsWith("image/")) {
     showImportStatus("❌ Selecione uma imagem válida (PNG, JPG, etc.)", "error");
     return;
   }
   
-  // Verificar tamanho (máx 4MB para API do Gemini)
-  if (file.size > 4 * 1024 * 1024) {
-    showImportStatus("❌ Imagem muito grande. Máximo: 4MB", "error");
+  if (file.size > 10 * 1024 * 1024) {
+    showImportStatus("❌ Imagem muito grande. Máximo: 10MB", "error");
     return;
   }
   
-  // Mostrar loading
   importCouponBtn.disabled = true;
   importCouponBtn.classList.add("loading");
   importCouponBtn.textContent = "";
-  showImportStatus("🔍 Analisando cupom com IA...", "info");
+  
+  const apiKey = getGeminiApiKey();
   
   try {
-    // Converter para base64
-    const base64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64String = reader.result.split(",")[1];
-        resolve(base64String);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+    let betData = null;
     
-    // Extrair dados com Gemini
-    const betData = await extractBetFromImage(base64, file.type);
+    if (apiKey) {
+      // Tentar Gemini primeiro (mais preciso)
+      showImportStatus("🤖 Analisando com Gemini AI...", "info");
+      showProgress(50, "Enviando para IA...");
+      
+      const base64 = await fileToBase64(file);
+      betData = await extractBetWithGemini(base64, file.type);
+      
+      if (betData) {
+        showProgress(100, "Concluído!");
+        hideProgress();
+        fillFormWithBetData(betData);
+        showImportStatus("✅ Dados extraídos com Gemini AI! Revise e salve.", "success");
+        return;
+      }
+      
+      // Se Gemini falhou, usar Tesseract como fallback
+      showImportStatus("⚠️ Gemini indisponível, usando OCR local...", "info");
+    } else {
+      showImportStatus("🔍 Analisando cupom (OCR local)...", "info");
+    }
     
-    if (betData) {
+    // OCR Local com Tesseract.js (gratuito)
+    const imageUrl = URL.createObjectURL(file);
+    betData = await extractBetWithTesseract(imageUrl);
+    URL.revokeObjectURL(imageUrl);
+    
+    hideProgress();
+    
+    if (betData && (betData.evento || betData.odd || betData.stake)) {
       fillFormWithBetData(betData);
-      showImportStatus("✅ Dados extraídos! Revise e salve a aposta.", "success");
+      const campos = [];
+      if (betData.evento) campos.push("evento");
+      if (betData.odd) campos.push("odd");
+      if (betData.stake) campos.push("stake");
+      if (betData.casa) campos.push("casa");
+      if (betData.data) campos.push("data");
+      showImportStatus(`✅ Encontrado: ${campos.join(", ")}. Revise os dados e complete o que faltar.`, "success");
+    } else {
+      showImportStatus("⚠️ Não consegui extrair dados. Tente uma foto mais nítida ou preencha manualmente.", "error");
     }
     
   } catch (error) {
     console.error("Erro no import:", error);
-    showImportStatus(`❌ Erro ao processar imagem: ${error.message}`, "error");
+    hideProgress();
+    showImportStatus(`❌ Erro: ${error.message}`, "error");
   } finally {
     importCouponBtn.disabled = false;
     importCouponBtn.classList.remove("loading");
@@ -1650,21 +1886,23 @@ async function handleCouponImport(file) {
   }
 }
 
-// Event listeners para importação de cupom
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// Event listeners
 importCouponBtn?.addEventListener("click", () => {
-  const apiKey = getGeminiApiKey();
-  if (!apiKey) {
-    showImportStatus("⚠️ Configure sua chave API do Gemini em Configurações → Importação Inteligente", "error");
-    return;
-  }
   couponFileInput?.click();
 });
 
 couponFileInput?.addEventListener("change", (e) => {
   const file = e.target.files?.[0];
-  if (file) {
-    handleCouponImport(file);
-  }
+  if (file) handleCouponImport(file);
 });
 
 // Profile Switcher

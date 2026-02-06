@@ -43,7 +43,11 @@
           <button type="button" id="import-coupon-btn" class="import-coupon-btn">
             📷 Importar do Cupom
           </button>
-          <input type="file" id="coupon-file-input" accept="image/*" style="display: none;" />
+          <input type="file" id="coupon-file-input" accept="image/*" capture="environment" style="display: none;" />
+          <div id="import-progress" class="import-progress" style="display:none;">
+            <div class="import-progress-bar" id="import-progress-bar"></div>
+            <span class="import-progress-text" id="import-progress-text">0%</span>
+          </div>
           <div id="import-status" class="import-status"></div>
         </div>
         
@@ -314,6 +318,7 @@
       <p>Dados salvos no localStorage. App local, sem envio para terceiros.</p>
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="module" src="./app.js"></script>
   </body>
