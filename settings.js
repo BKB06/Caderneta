@@ -617,6 +617,42 @@ function showApiStatus(message, type) {
   }, 4000);
 }
 
+async function resolveGeminiModel(apiKey) {
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+      { method: "GET" }
+    );
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const models = Array.isArray(data.models) ? data.models : [];
+    
+    // Filtrar modelos que suportam generateContent
+    const generative = models.filter((m) =>
+      m.supportedGenerationMethods?.includes("generateContent")
+    );
+
+    // Ordem de preferência
+    const preferred = [
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-pro",
+    ];
+
+    for (const pref of preferred) {
+      const match = generative.find((m) => m.name?.includes(pref));
+      if (match) return match.name;
+    }
+
+    // Qualquer modelo que suporte generateContent
+    return generative[0]?.name || null;
+  } catch (err) {
+    return null;
+  }
+}
+
 async function testGeminiApiKey() {
   const input = document.getElementById("gemini-api-key");
   if (!input) return;
@@ -627,11 +663,21 @@ async function testGeminiApiKey() {
     return;
   }
   
-  showApiStatus("🔄 Testando conexão...", "info");
+  showApiStatus("🔄 Buscando modelos disponíveis...", "info");
   
   try {
+    // Primeiro listar modelos disponíveis
+    const model = await resolveGeminiModel(key);
+    
+    if (!model) {
+      showApiStatus("❌ Nenhum modelo disponível. Verifique sua chave API e billing do projeto.", "error");
+      return;
+    }
+    
+    showApiStatus(`🔄 Testando modelo: ${model}...`, "info");
+    
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${key}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -642,7 +688,9 @@ async function testGeminiApiKey() {
     );
     
     if (response.ok) {
-      showApiStatus("✅ Conexão bem sucedida! API funcionando.", "success");
+      // Salvar o modelo que funcionou para usar na importação
+      localStorage.setItem("caderneta.gemini.model", model);
+      showApiStatus(`✅ Conexão bem sucedida! Modelo: ${model}`, "success");
     } else {
       const error = await response.json();
       showApiStatus(`❌ Erro: ${error.error?.message || "Chave inválida"}`, "error");

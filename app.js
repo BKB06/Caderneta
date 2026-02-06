@@ -1415,6 +1415,43 @@ function getGeminiApiKey() {
   return localStorage.getItem(GEMINI_API_KEY_STORAGE);
 }
 
+async function resolveGeminiModel(apiKey) {
+  // Primeiro tentar usar modelo já salvo do teste
+  const saved = localStorage.getItem("caderneta.gemini.model");
+  if (saved) return saved;
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+      { method: "GET" }
+    );
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const models = Array.isArray(data.models) ? data.models : [];
+    
+    const generative = models.filter((m) =>
+      m.supportedGenerationMethods?.includes("generateContent")
+    );
+
+    const preferred = [
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-pro",
+    ];
+
+    for (const pref of preferred) {
+      const match = generative.find((m) => m.name?.includes(pref));
+      if (match) return match.name;
+    }
+
+    return generative[0]?.name || null;
+  } catch (err) {
+    return null;
+  }
+}
+
 async function extractBetFromImage(imageBase64, mimeType) {
   const apiKey = getGeminiApiKey();
   
@@ -1426,12 +1463,12 @@ async function extractBetFromImage(imageBase64, mimeType) {
   const prompt = `Analise esta imagem de um cupom/comprovante de aposta esportiva e extraia as seguintes informações em formato JSON:
 
 {
-  "evento": "Nome do evento (ex: Flamengo x Palmeiras)",
+  "evento": "Time A - Time B",
   "odd": número decimal da odd (ex: 1.85),
   "stake": valor apostado em reais sem símbolo (ex: 50.00),
   "casa": "Nome da casa de apostas (ex: Bet365, Betano, Sportingbet)",
   "data": "Data da aposta no formato DD/MM/AAAA",
-  "tipo_aposta": "Descrição do tipo de aposta se visível (ex: Resultado Final, Over 2.5 gols, etc.)"
+  "tipo_aposta": "Mercado + seleção apostada (ex: Resultado Final Arsenal, Over 2.5 gols, Ambas Marcam Sim)"
 }
 
 REGRAS IMPORTANTES:
@@ -1439,13 +1476,28 @@ REGRAS IMPORTANTES:
 - Se não conseguir identificar algum campo, use null
 - A odd deve ser um número decimal (use ponto como separador)
 - O stake deve ser apenas o número, sem R$ ou símbolos
+- O campo "evento" deve conter APENAS os nomes dos times/jogadores separados por " - " (ex: "Arsenal - Sunderland"). NÃO inclua mercados, seleções ou promoções no evento.
+- O campo "tipo_aposta" deve conter o mercado E a seleção apostada. Exemplos:
+  * Se apostou no Arsenal no resultado final: "Resultado Final Arsenal"
+  * Se apostou em Over 2.5 gols: "Over 2.5 gols"
+  * Se apostou em Ambas Marcam Sim: "Ambas Marcam Sim"
+  * Se apostou no empate: "Resultado Final Empate"
+  * Se apostou em handicap -1.5 Arsenal: "Handicap -1.5 Arsenal"
+  IGNORE nomes de promoções como "SuperOdds", "Odds Turbinadas", "Boost", etc.
 - Se houver múltiplas apostas (aposta múltipla/combo), extraia apenas os dados gerais: odd total, stake total
-- Para o evento, se for aposta múltipla, liste os eventos separados por " + "
+- Para o evento em aposta múltipla, liste os eventos separados por " + "
 - Se a data não estiver visível, use null`;
 
   try {
+    const model = await resolveGeminiModel(apiKey);
+    
+    if (!model) {
+      showImportStatus("❌ Nenhum modelo disponível. Teste a conexão em Configurações.", "error");
+      return null;
+    }
+
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
