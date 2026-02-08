@@ -1518,8 +1518,10 @@ function parseBetFromText(text) {
       const before = line.substring(Math.max(0, numMatch.index - 3), numMatch.index);
       const isPrecededByRS = /R\$\s*$/.test(before);
       // Verificar se NÃO faz parte de um ID longo (número com mais de 5 dígitos)
-      const surrounding = line.substring(Math.max(0, numMatch.index - 5), numMatch.index + raw.length + 5);
-      const isPartOfLongNumber = /\d{5,}/.test(surrounding.replace(raw, ""));
+      // Checar apenas caracteres IMEDIATAMENTE adjacentes (sem espaço)
+      const charBefore = numMatch.index > 0 ? line[numMatch.index - 1] : ' ';
+      const charAfter = numMatch.index + raw.length < line.length ? line[numMatch.index + raw.length] : ' ';
+      const isPartOfLongNumber = /\d/.test(charBefore) || /\d/.test(charAfter);
       // Verificar se NÃO faz parte de uma data
       const isDate = /\d{1,2}[\/\.\-]\d{1,2}[\/\.\-]\d{2,4}/.test(
         line.substring(Math.max(0, numMatch.index - 6), numMatch.index + raw.length + 6)
@@ -1529,6 +1531,10 @@ function parseBetFromText(text) {
         line.substring(Math.max(0, numMatch.index - 3), numMatch.index + raw.length + 3)
       );
       
+      // Verificar se faz parte de um nome de mercado (ex: "Mais de 3.5", "Over 2.5", "Menos de 1.5")
+      const beforeMarket = line.substring(Math.max(0, numMatch.index - 15), numMatch.index);
+      const isMarketNumber = /(?:mais\s+de|menos\s+de|over|under|acima\s+de|abaixo\s+de|[+-])\s*$/i.test(beforeMarket);
+      
       todosNumeros.push({
         val,
         raw,
@@ -1537,24 +1543,45 @@ function parseBetFromText(text) {
         isPartOfLongNumber,
         isDate,
         isTime,
+        isMarketNumber,
         isMonetary: valoresMonetarios.has(val),
         lineText: line,
       });
     }
   }
   
-  // Prioridade 1: número decimal entre 1.01 e 500 que NÃO é monetário, NÃO é data, NÃO é horário, NÃO é ID
-  for (const n of todosNumeros) {
-    if (n.val >= 1.01 && n.val <= 500 && !n.isPrecededByRS && !n.isMonetary && !n.isDate && !n.isTime && !n.isPartOfLongNumber) {
-      result.odd = n.val;
-      break;
+  // Contar frequência de cada valor candidato a odd
+  const oddCandidates = todosNumeros.filter(n => 
+    n.val >= 1.01 && n.val <= 500 && !n.isPrecededByRS && !n.isMonetary && !n.isDate && !n.isTime && !n.isPartOfLongNumber && !n.isMarketNumber
+  );
+  
+  // Prioridade 1: se um valor aparece mais de uma vez, provavelmente é a odd real
+  if (oddCandidates.length > 0) {
+    const freq = {};
+    for (const n of oddCandidates) {
+      freq[n.val] = (freq[n.val] || 0) + 1;
+    }
+    // Encontrar o valor com maior frequência
+    let bestOdd = null;
+    let bestFreq = 0;
+    for (const [val, count] of Object.entries(freq)) {
+      if (count > bestFreq) {
+        bestFreq = count;
+        bestOdd = parseFloat(val);
+      }
+    }
+    // Se algum valor aparece 2+ vezes, usar esse; senão usar o primeiro candidato
+    if (bestFreq >= 2) {
+      result.odd = bestOdd;
+    } else {
+      result.odd = oddCandidates[0].val;
     }
   }
   
-  // Prioridade 2: qualquer número decimal entre 1.01 e 500 que não é monetário
+  // Prioridade 2: qualquer número decimal entre 1.01 e 500 que não é monetário e não é mercado
   if (!result.odd) {
     for (const n of todosNumeros) {
-      if (n.val >= 1.01 && n.val <= 500 && !n.isMonetary && !n.isDate && !n.isTime) {
+      if (n.val >= 1.01 && n.val <= 500 && !n.isMonetary && !n.isDate && !n.isTime && !n.isMarketNumber) {
         result.odd = n.val;
         break;
       }
@@ -1562,32 +1589,31 @@ function parseBetFromText(text) {
   }
   
   // Prioridade 3: OCR frequentemente lê odds sem o ponto decimal (1.18 → 118, 2.50 → 250)
-  // Buscar números inteiros de 2-4 dígitos que NÃO são monetários nem IDs
+  // Buscar APENAS números inteiros de 3-4 dígitos (2 dígitos é ambíguo demais, ex: "12" pode ser qualquer coisa)
   if (!result.odd) {
     for (const line of lines) {
-      // Ignorar linhas com R$ (monetárias), IDs longos, datas
+      // Ignorar linhas com R$ (monetárias), IDs longos, datas, linhas de mercado
       if (/R\$/.test(line) && !/simples/i.test(line)) continue;
       if (/\bID\b/i.test(line)) continue;
+      if (/(?:mais\s+de|menos\s+de|over|under|acima|abaixo)/i.test(line)) continue;
       
-      // Buscar números inteiros isolados (2-4 dígitos)
-      const intNums = line.match(/(?:^|[\s©@:])(\d{2,4})(?:[\s,.|]|$)/g);
+      // Buscar números inteiros isolados (3-4 dígitos apenas)
+      const intNums = line.match(/(?:^|[\s©@:])(\d{3,4})(?:[\s,.|]|$)/g);
       if (intNums) {
         for (const raw of intNums) {
           const digits = raw.replace(/[^\d]/g, "");
           const num = parseInt(digits, 10);
           
-          // Ignorar se for ano (2024-2030), horário ou ID
+          // Ignorar se for ano (2020-2035), horário ou ID
           if (num >= 2020 && num <= 2035) continue;
           if (num > 2400) continue; // Muito grande para ser odd
           
-          // Tentar inserir ponto decimal após o primeiro dígito: 118 → 1.18, 250 → 2.50
+          // Tentar inserir ponto decimal: 118 → 1.18, 172 → 1.72, 250 → 2.50
           let possibleOdd = null;
           if (digits.length === 3) {
-            possibleOdd = parseFloat(digits[0] + "." + digits.slice(1)); // 118 → 1.18
+            possibleOdd = parseFloat(digits[0] + "." + digits.slice(1)); // 172 → 1.72
           } else if (digits.length === 4) {
             possibleOdd = parseFloat(digits.slice(0, 2) + "." + digits.slice(2)); // 1250 → 12.50
-          } else if (digits.length === 2) {
-            possibleOdd = parseFloat(digits[0] + "." + digits[1]); // 18 → 1.8
           }
           
           if (possibleOdd && possibleOdd >= 1.01 && possibleOdd <= 500) {
@@ -1607,17 +1633,30 @@ function parseBetFromText(text) {
   
   // Detectar evento - procurar padrão "Time A - Time B" ou "Time A vs Time B" ou "Time A x Time B"
   const eventPatterns = [
-    /([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú]?[a-zà-ú]+)*)\s*[-xvs\.]+\s*([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú]?[a-zà-ú]+)*)/,
+    // Separador deve ser: " - ", " x ", " vs ", " vs. " (com espaços ao redor)
+    /([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú]?[a-zà-ú]+)*)\s+(?:-|x|vs\.?)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú]?[a-zà-ú]+)*)/,
+    // Também aceitar "Time A-Time B" (sem espaço mas com hífen)
+    /([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú]?[a-zà-ú]+)*)\s*-\s*([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú]?[a-zà-ú]+)*)/,
   ];
   
+  // Frases/linhas comuns em cupons que NÃO são nomes de times
+  const frasesIgnorar = /ganhos?\s*potencia|lucro\s*potencia|mais\s+detalhes|aposta\s+realizada|compartilh|notifica[çc]|manter|fechar|total\s+de\s+cart|resultado\s+final|dupla\s+chance|simples|m[úu]ltipla|ganhos|potenciais|sucesso|cart[õo]es\s+mais|mais.{0,3}menos/i;
+  
+  // Palavras que NÃO são nomes de times
+  const palavrasNaoTimes = /^(ganhos?|potenciais?|lucro|total|mais|menos|simples|resultado|detalhes|aposta|valor|over|under|fechar|manter|compartilhar|notifica)$/i;
+  
   for (const line of lines) {
+    // Ignorar linhas que contêm frases comuns de cupom
+    if (frasesIgnorar.test(line)) continue;
+    
     for (const pattern of eventPatterns) {
       const match = line.match(pattern);
       if (match) {
         const team1 = match[1].trim();
         const team2 = match[2].trim();
-        // Ignorar se parecer com data ou valor monetário
-        if (team1.length > 2 && team2.length > 2 && !/^\d/.test(team1) && !/^\d/.test(team2)) {
+        // Ignorar se parecer com data, valor monetário, ou palavra comum
+        if (team1.length > 2 && team2.length > 2 && !/^\d/.test(team1) && !/^\d/.test(team2)
+            && !palavrasNaoTimes.test(team1) && !palavrasNaoTimes.test(team2)) {
           result.evento = `${team1} - ${team2}`;
           break;
         }
