@@ -455,6 +455,69 @@ function renderCharts() {
   }
 }
 
+function renderAIRankingPage() {
+  const container = document.getElementById('ai-ranking-grid-page');
+  const tableBody = document.getElementById('ai-ranking-table');
+  if (!container && !tableBody) return;
+
+  const aiNames = ['Grok', 'Gemini', 'Opus 4'];
+  const aiStats = aiNames.map(name => {
+    const aiBets = bets.filter(b => b.ai === name && (b.status === 'win' || b.status === 'loss'));
+    const wins = aiBets.filter(b => b.status === 'win').length;
+    const losses = aiBets.filter(b => b.status === 'loss').length;
+    const total = aiBets.length;
+    const winrate = total > 0 ? wins / total : 0;
+    const profit = aiBets.reduce((sum, b) => sum + calcProfit(b), 0);
+    return { name, wins, losses, total, winrate, profit };
+  });
+
+  aiStats.sort((a, b) => {
+    if (b.winrate !== a.winrate) return b.winrate - a.winrate;
+    return b.total - a.total;
+  });
+
+  const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
+
+  if (container) {
+    container.innerHTML = aiStats.map((ai, index) => `
+      <div class="ai-ranking-card ${index === 0 && ai.total > 0 ? 'first' : ''}">
+        <span class="ai-medal">${medals[index] || ''}</span>
+        <span class="ai-name">${ai.name}</span>
+        <div class="ai-stats">
+          <span class="ai-winrate">${ai.total > 0 ? percentFormatter.format(ai.winrate) : '-'}</span>
+          <span>Taxa de acerto</span>
+          <div class="ai-record">
+            <span class="ai-green">${ai.wins}W</span>
+            <span class="ai-red">${ai.losses}L</span>
+          </div>
+          <span>Lucro: <strong style="color: ${ai.profit >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatProfit(ai.profit)}</strong></span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  if (tableBody) {
+    if (aiStats.every(a => a.total === 0)) {
+      tableBody.innerHTML = '<tr><td colspan="7">Nenhuma aposta com IA registrada ainda.</td></tr>';
+    } else {
+      tableBody.innerHTML = aiStats.map((ai, index) => {
+        const medal = index === 0 ? '\ud83e\udd47' : index === 1 ? '\ud83e\udd48' : '\ud83e\udd49';
+        return `
+          <tr>
+            <td>${medal}</td>
+            <td><strong>${ai.name}</strong></td>
+            <td>${ai.total}</td>
+            <td style="color: var(--success)">${ai.wins}</td>
+            <td style="color: var(--danger)">${ai.losses}</td>
+            <td>${ai.total > 0 ? percentFormatter.format(ai.winrate) : '-'}</td>
+            <td style="color: ${ai.profit >= 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: 600">${formatProfit(ai.profit)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  }
+}
+
 function init() {
   loadBets();
   renderRecords();
@@ -462,6 +525,7 @@ function init() {
   renderTopLists();
   renderBookTable();
   renderCharts();
+  renderAIRankingPage();
   renderProfileSwitcher();
 }
 

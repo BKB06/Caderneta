@@ -1903,3 +1903,464 @@ button.danger:hover {
   border-radius: var(--radius-xs);
   object-fit: contain;
 }
+
+/* ========================
+   AI RANKING PANEL
+======================== */
+.ai-ranking-panel {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.12), rgba(245, 158, 11, 0.08));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.ai-ranking-panel h3 {
+  margin-bottom: 4px;
+  font-size: 1rem;
+}
+
+.ai-ranking-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.ai-ranking-card {
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  text-align: center;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  position: relative;
+}
+
+.ai-ranking-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary);
+}
+
+.ai-ranking-card.first {
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(245, 158, 11, 0.05));
+}
+
+.ai-ranking-card .ai-medal {
+  font-size: 1.5rem;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.ai-ranking-card .ai-name {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.ai-ranking-card .ai-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.ai-ranking-card .ai-stats .ai-winrate {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.ai-ranking-card .ai-stats .ai-record {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.ai-ranking-card .ai-stats .ai-green {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.ai-ranking-card .ai-stats .ai-red {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ========================
+   PROFIT GOALS
+======================== */
+.profit-goals-panel {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(45, 212, 191, 0.08));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.profit-goals-panel h3 {
+  margin-bottom: 16px;
+  font-size: 1rem;
+}
+
+.profit-goals-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.profit-goal-item {
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+}
+
+.profit-goal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.profit-goal-header span {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.profit-goal-config {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.goal-input {
+  width: 80px !important;
+  padding: 6px 8px !important;
+  font-size: 0.8rem !important;
+  text-align: right;
+}
+
+.profit-goal-values {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.profit-goal-values strong {
+  font-size: 1.2rem;
+  color: var(--accent);
+}
+
+.profit-goal-values .muted {
+  font-size: 0.75rem;
+}
+
+.goal-progress {
+  margin-bottom: 6px;
+}
+
+.goal-progress .progress-bar {
+  transition: width 0.5s ease, background 0.3s ease;
+}
+
+.goal-progress .progress-bar.exceeded {
+  background: linear-gradient(90deg, var(--success), #16a34a);
+}
+
+.profit-goal-percent {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.profit-goal-percent.reached {
+  color: var(--success);
+}
+
+/* ========================
+   WEEKDAY PERFORMANCE
+======================== */
+.weekday-performance-panel {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(124, 92, 255, 0.08));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.weekday-performance-panel h3 {
+  margin-bottom: 16px;
+  font-size: 1rem;
+}
+
+.weekday-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.weekday-card {
+  padding: 12px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  text-align: center;
+  transition: transform 0.2s ease;
+}
+
+.weekday-card:hover {
+  transform: translateY(-2px);
+}
+
+.weekday-card.best {
+  border-color: var(--success);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.weekday-card.worst {
+  border-color: var(--danger);
+  background: rgba(255, 107, 107, 0.12);
+}
+
+.weekday-card .weekday-name {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  display: block;
+}
+
+.weekday-card .weekday-profit {
+  font-size: 1rem;
+  font-weight: 700;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.weekday-card .weekday-profit.positive {
+  color: var(--success);
+}
+
+.weekday-card .weekday-profit.negative {
+  color: var(--danger);
+}
+
+.weekday-card .weekday-detail {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  display: block;
+}
+
+.weekday-card .weekday-winrate {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent);
+  display: block;
+  margin-top: 4px;
+}
+
+/* ========================
+   FINALIZED BETS LIST
+======================== */
+.finalized-bets-panel {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.finalized-bets-panel h3 {
+  margin-bottom: 16px;
+  font-size: 1rem;
+}
+
+.finalized-bets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.finalized-bet-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: var(--radius-xs);
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  gap: 12px;
+  font-size: 0.82rem;
+  transition: background 0.2s;
+}
+
+.finalized-bet-item:hover {
+  background: rgba(124, 92, 255, 0.08);
+}
+
+.finalized-bet-item .fbet-date {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  min-width: 68px;
+}
+
+.finalized-bet-item .fbet-event {
+  flex: 1;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.finalized-bet-item .fbet-odd {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.finalized-bet-item .fbet-ai {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(124, 92, 255, 0.15);
+  color: var(--primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.finalized-bet-item .fbet-profit {
+  font-weight: 700;
+  min-width: 80px;
+  text-align: right;
+}
+
+.finalized-bet-item .fbet-profit.positive {
+  color: var(--success);
+}
+
+.finalized-bet-item .fbet-profit.negative {
+  color: var(--danger);
+}
+
+.finalized-bet-item .fbet-status-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.finalized-bet-item .fbet-status-badge.win {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+.finalized-bet-item .fbet-status-badge.loss {
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--danger);
+}
+
+/* ========================
+   DELETE CONFIRMATION
+======================== */
+.danger-btn {
+  background: linear-gradient(135deg, var(--danger), #dc2626);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 8px 20px rgba(255, 107, 107, 0.3);
+}
+
+.danger-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(255, 107, 107, 0.4);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .ai-ranking-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .weekday-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .ai-ranking-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .profit-goals-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .weekday-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .finalized-bet-item {
+    flex-wrap: wrap;
+  }
+  
+  .finalized-bet-item .fbet-event {
+    flex-basis: 100%;
+    order: -1;
+  }
+}
+
+/* ========================
+   PDF / SHARE BUTTONS
+======================== */
+button.nav-link {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+#pdf-generate-btn {
+  background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+  color: white;
+  padding: 14px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 8px 20px rgba(92, 72, 255, 0.3);
+}
+
+#pdf-generate-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(92, 72, 255, 0.4);
+}
+
+#pdf-generate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+#share-download-btn {
+  background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+  color: white;
+  box-shadow: 0 8px 20px rgba(92, 72, 255, 0.3);
+}
+
+#share-card-canvas {
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}

@@ -503,15 +503,39 @@ document.getElementById("import-file").addEventListener("change", (e) => {
   reader.onload = (event) => {
     try {
       const data = JSON.parse(event.target.result);
-      
-      if (data.bets) {
-        localStorage.setItem(getStorageKey(activeProfileId), JSON.stringify(data.bets));
+
+      if (!data.bets && !data.cashflows && !data.bankroll && !data.settings) {
+        alert("Arquivo inválido: não contém dados reconhecidos (bets, cashflows, bankroll ou settings).");
+        return;
       }
-      if (data.cashflows) {
+
+      // Se o arquivo veio com profileId diferente, perguntar se quer importar mesmo assim
+      if (data.profileId && data.profileId !== activeProfileId) {
+        const profileName = data.profileName || data.profileId;
+        if (!confirm(`Este arquivo é do perfil "${profileName}". Deseja importar os dados para o perfil atual?`)) {
+          return;
+        }
+      }
+
+      let importCount = 0;
+
+      if (data.bets && Array.isArray(data.bets)) {
+        // Garantir que todas as apostas tenham os campos necessários
+        const normalizedBets = data.bets.map(bet => ({
+          ...bet,
+          odds: Number(bet.odds),
+          stake: Number(bet.stake),
+          isFreebet: bet.isFreebet || false,
+          ai: bet.ai || null,
+        }));
+        localStorage.setItem(getStorageKey(activeProfileId), JSON.stringify(normalizedBets));
+        importCount += normalizedBets.length;
+      }
+      if (data.cashflows && Array.isArray(data.cashflows)) {
         localStorage.setItem(getCashflowKey(activeProfileId), JSON.stringify(data.cashflows));
       }
-      if (data.bankroll) {
-        localStorage.setItem(getBankrollKey(activeProfileId), data.bankroll);
+      if (data.bankroll !== undefined && data.bankroll !== null) {
+        localStorage.setItem(getBankrollKey(activeProfileId), String(data.bankroll));
       }
       if (data.settings) {
         settings = { ...defaultSettings, ...data.settings };
@@ -520,9 +544,22 @@ document.getElementById("import-file").addEventListener("change", (e) => {
       }
 
       renderProfiles();
-      showToast("Dados importados com sucesso!");
+      
+      const msg = `✅ Importação concluída!\n\n` +
+        `• ${data.bets ? data.bets.length : 0} apostas\n` +
+        `• ${data.cashflows ? data.cashflows.length : 0} movimentações\n` +
+        `• Bankroll: ${data.bankroll ? 'Sim' : 'Não'}\n` +
+        `• Configurações: ${data.settings ? 'Sim' : 'Não'}\n\n` +
+        `Deseja ir para a página principal para ver os dados?`;
+      
+      if (confirm(msg)) {
+        window.location.href = 'index.html';
+      } else {
+        showToast("Dados importados com sucesso!");
+      }
     } catch (err) {
-      alert("Erro ao importar arquivo. Verifique se é um JSON válido.");
+      console.error("Erro na importação:", err);
+      alert("Erro ao importar arquivo. Verifique se é um JSON válido.\n\nDetalhes: " + err.message);
     }
   };
   reader.readAsText(file);

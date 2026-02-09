@@ -45,6 +45,11 @@ function getNotesKey() {
   return profileId ? `caderneta.notes.${profileId}` : "caderneta.notes.v1";
 }
 
+function getGoalsKey() {
+  const profileId = getActiveProfileId();
+  return profileId ? `caderneta.goals.${profileId}` : "caderneta.goals.v1";
+}
+
 const form = document.getElementById("bet-form");
 const potentialProfitEl = document.getElementById("potential-profit");
 const betsBody = document.getElementById("bets-body");
@@ -84,6 +89,7 @@ const modalClose = document.getElementById("modal-close");
 let bets = [];
 let cashflows = [];
 let editingId = null;
+let deletePendingId = null;
 let balanceChart = null;
 let baseBankroll = null;
 let settings = null;
@@ -519,7 +525,7 @@ function renderTable() {
   if (data.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 9;
+    cell.colSpan = 10;
     cell.textContent = "Nenhuma aposta cadastrada ainda.";
     row.appendChild(cell);
     betsBody.appendChild(row);
@@ -581,6 +587,18 @@ function renderTable() {
     tdBook.textContent = bet.book;
     row.appendChild(tdBook);
 
+    // 8.5. IA
+    const tdAi = document.createElement("td");
+    if (bet.ai) {
+      const aiTag = document.createElement("span");
+      aiTag.className = "fbet-ai";
+      aiTag.textContent = bet.ai;
+      tdAi.appendChild(aiTag);
+    } else {
+      tdAi.textContent = "-";
+    }
+    row.appendChild(tdAi);
+
     // 9. Botões de Ação
     const tdActions = document.createElement("td");
     tdActions.className = "actions-cell";
@@ -600,6 +618,7 @@ function renderTable() {
     } else {
       tdActions.innerHTML = `
         <div class="main-actions">
+          <button type="button" class="ghost small" data-action="share" data-id="${bet.id}" title="Compartilhar">📱</button>
           <button type="button" class="ghost small" data-action="edit" data-id="${bet.id}">Editar</button>
           <button type="button" class="ghost small" data-action="delete" data-id="${bet.id}">Excluir</button>
         </div>
@@ -623,26 +642,26 @@ function statusLabel(status) {
 }
 
 function renderKpis() {
-  const data = getFilteredBets();
-  const settled = data.filter((bet) => bet.status === "win" || bet.status === "loss");
-  const totalStake = settled.reduce((sum, bet) => sum + bet.stake, 0);
-  const totalProfit = settled.reduce((sum, bet) => sum + calcProfit(bet), 0);
-  const wins = settled.filter((bet) => bet.status === "win").length;
-  const winrate = settled.length ? wins / settled.length : 0;
+  // Painel de Inteligência sempre mostra TODAS as apostas, independente dos filtros do histórico
+  const allSettled = bets.filter((bet) => bet.status === "win" || bet.status === "loss");
+  const totalStake = allSettled.reduce((sum, bet) => sum + bet.stake, 0);
+  const totalProfit = allSettled.reduce((sum, bet) => sum + calcProfit(bet), 0);
+  const wins = allSettled.filter((bet) => bet.status === "win").length;
+  const winrate = allSettled.length ? wins / allSettled.length : 0;
 
   // ROI = Lucro / Total Apostado
   const roi = totalStake > 0 ? totalProfit / totalStake : 0;
 
   // Odd média
-  const avgOdd = settled.length > 0 
-    ? settled.reduce((sum, bet) => sum + bet.odds, 0) / settled.length 
+  const avgOdd = allSettled.length > 0 
+    ? allSettled.reduce((sum, bet) => sum + bet.odds, 0) / allSettled.length 
     : 0;
 
   // Ticket médio (stake média)
-  const avgStake = settled.length > 0 ? totalStake / settled.length : 0;
+  const avgStake = allSettled.length > 0 ? totalStake / allSettled.length : 0;
 
-  // Sequência atual
-  const currentStreak = calcCurrentStreak(data);
+  // Sequência atual (usa todas as apostas)
+  const currentStreak = calcCurrentStreak(bets);
 
   kpiProfit.textContent = formatProfit(totalProfit);
   kpiWinrate.textContent = percentFormatter.format(winrate);
@@ -651,7 +670,7 @@ function renderKpis() {
   if (kpiAvgOdd) kpiAvgOdd.textContent = `${numberFormatter.format(avgOdd)}x`;
   if (kpiAvgStake) kpiAvgStake.textContent = formatStake(avgStake);
   if (kpiTotalStake) kpiTotalStake.textContent = formatStake(totalStake);
-  if (kpiTotalBets) kpiTotalBets.textContent = settled.length;
+  if (kpiTotalBets) kpiTotalBets.textContent = allSettled.length;
   if (kpiStreak) {
     if (currentStreak.count === 0) {
       kpiStreak.textContent = "-";
@@ -786,7 +805,9 @@ function renderBalanceChart() {
     return;
   }
 
-  const data = getFilteredBets()
+  // Gráfico sempre mostra TODAS as apostas finalizadas
+  const data = bets
+    .filter((bet) => bet.status === "win" || bet.status === "loss")
     .slice()
     .sort((a, b) => {
       const aDate = parseDateForSort(a.date);
@@ -876,6 +897,10 @@ function refreshAll() {
   updateBankrollDisplay();
   updateBankrollExposure();
   renderBalanceChart();
+  renderAIRanking();
+  renderWeekdayPerformance();
+  renderProfitGoals();
+  renderFinalizedBets();
 }
 
 function resetForm() {
@@ -902,6 +927,7 @@ function handleSubmit(event) {
     book: document.getElementById("bet-book").value.trim(),
     status: document.getElementById("bet-status").value,
     isFreebet: document.getElementById("bet-stake-type").value === "freebet",
+    ai: document.getElementById("bet-ai").value || null,
   };
 
   if (!bet.date || !bet.event || !bet.book || !Number.isFinite(bet.odds) || !Number.isFinite(bet.stake)) {
@@ -931,6 +957,7 @@ function startEdit(bet) {
   document.getElementById("bet-book").value = bet.book;
   document.getElementById("bet-status").value = bet.status;
   document.getElementById("bet-stake-type").value = bet.isFreebet ? "freebet" : "regular";
+  document.getElementById("bet-ai").value = bet.ai || "";
   updatePotentialProfit();
   submitButton.textContent = "Atualizar aposta";
   form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -953,13 +980,22 @@ function handleTableClick(event) {
   }
 
   if (action === "delete") {
-    bets = bets.filter((bet) => bet.id !== id);
-    saveBets();
-    refreshAll();
+    // Show confirmation modal
+    const bet = bets.find((item) => item.id === id);
+    if (bet) {
+      showDeleteConfirmation(bet);
+    }
     return;
   }
 
   // Ações rápidas de status
+  if (action === "share") {
+    const bet = bets.find((item) => item.id === id);
+    if (bet) {
+      openShareCardModal(bet);
+    }
+    return;
+  }
   if (action === "set-win") {
     const bet = bets.find((item) => item.id === id);
     if (bet) {
@@ -1305,6 +1341,9 @@ dayModal?.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeDayModal();
+    closeDeleteModal();
+    if (typeof closePdfModal === 'function') closePdfModal();
+    if (typeof closeShareModal === 'function') closeShareModal();
   }
 });
 
@@ -1313,11 +1352,302 @@ function init() {
   loadCashflows();
   loadSettings();
   loadBankrollBase();
+  loadGoals();
   applySettings();
   updatePotentialProfit();
   refreshAll();
   renderCalendar();
   loadQuickNotes();
+}
+
+// ========================
+// DELETE CONFIRMATION
+// ========================
+const deleteModal = document.getElementById('delete-modal');
+const deleteModalClose = document.getElementById('delete-modal-close');
+const deleteModalCancel = document.getElementById('delete-modal-cancel');
+const deleteModalConfirm = document.getElementById('delete-modal-confirm');
+const deleteModalBetInfo = document.getElementById('delete-modal-bet-info');
+
+function showDeleteConfirmation(bet) {
+  if (!deleteModal) return;
+  deletePendingId = bet.id;
+  const profit = calcProfit(bet);
+  deleteModalBetInfo.innerHTML = `
+    <div class="modal-bet-header">
+      <span class="modal-bet-event">${bet.event}</span>
+      <span class="modal-bet-status ${bet.status}">${statusLabel(bet.status)}</span>
+    </div>
+    <div class="modal-bet-details">
+      <span>Data: <strong>${bet.date}</strong></span>
+      <span>Odd: <strong>${numberFormatter.format(bet.odds)}x</strong></span>
+      <span>Stake: <strong>${formatStake(bet.stake)}</strong></span>
+      <span>Casa: <strong>${bet.book}</strong></span>
+      ${bet.ai ? `<span>IA: <strong>${bet.ai}</strong></span>` : ''}
+    </div>
+  `;
+  deleteModal.style.display = 'flex';
+}
+
+function closeDeleteModal() {
+  if (deleteModal) {
+    deleteModal.style.display = 'none';
+    deletePendingId = null;
+  }
+}
+
+deleteModalClose?.addEventListener('click', closeDeleteModal);
+deleteModalCancel?.addEventListener('click', closeDeleteModal);
+deleteModal?.addEventListener('click', (e) => {
+  if (e.target === deleteModal) closeDeleteModal();
+});
+
+deleteModalConfirm?.addEventListener('click', () => {
+  if (deletePendingId) {
+    bets = bets.filter((bet) => bet.id !== deletePendingId);
+    saveBets();
+    refreshAll();
+    closeDeleteModal();
+  }
+});
+
+// ========================
+// AI RANKING
+// ========================
+function renderAIRanking() {
+  const container = document.getElementById('ai-ranking-grid');
+  if (!container) return;
+
+  const aiNames = ['Grok', 'Gemini', 'Opus 4'];
+  const aiStats = aiNames.map(name => {
+    const aiBets = bets.filter(b => b.ai === name && (b.status === 'win' || b.status === 'loss'));
+    const wins = aiBets.filter(b => b.status === 'win').length;
+    const losses = aiBets.filter(b => b.status === 'loss').length;
+    const total = aiBets.length;
+    const winrate = total > 0 ? wins / total : 0;
+    const profit = aiBets.reduce((sum, b) => sum + calcProfit(b), 0);
+    return { name, wins, losses, total, winrate, profit };
+  });
+
+  // Sort by winrate, then by total bets
+  aiStats.sort((a, b) => {
+    if (b.winrate !== a.winrate) return b.winrate - a.winrate;
+    return b.total - a.total;
+  });
+
+  const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
+
+  container.innerHTML = aiStats.map((ai, index) => `
+    <div class="ai-ranking-card ${index === 0 && ai.total > 0 ? 'first' : ''}">
+      <span class="ai-medal">${medals[index] || ''}</span>
+      <span class="ai-name">${ai.name}</span>
+      <div class="ai-stats">
+        <span class="ai-winrate">${ai.total > 0 ? percentFormatter.format(ai.winrate) : '-'}</span>
+        <span>Taxa de acerto</span>
+        <div class="ai-record">
+          <span class="ai-green">${ai.wins}W</span>
+          <span class="ai-red">${ai.losses}L</span>
+        </div>
+        <span>Lucro: <strong style="color: ${ai.profit >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatProfit(ai.profit)}</strong></span>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ========================
+// WEEKDAY PERFORMANCE
+// ========================
+function renderWeekdayPerformance() {
+  const container = document.getElementById('weekday-grid');
+  if (!container) return;
+
+  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'S\u00e1b'];
+  const dayFullNames = ['Domingo', 'Segunda', 'Ter\u00e7a', 'Quarta', 'Quinta', 'Sexta', 'S\u00e1bado'];
+
+  const dayStats = dayNames.map((_, index) => {
+    const dayBets = bets.filter(b => {
+      if (b.status !== 'win' && b.status !== 'loss') return false;
+      const betDate = parseDateForSort(b.date);
+      if (!betDate) return false;
+      return betDate.getDay() === index;
+    });
+    const wins = dayBets.filter(b => b.status === 'win').length;
+    const total = dayBets.length;
+    const winrate = total > 0 ? wins / total : 0;
+    const profit = dayBets.reduce((sum, b) => sum + calcProfit(b), 0);
+    return { dayIndex: index, name: dayNames[index], fullName: dayFullNames[index], wins, total, winrate, profit };
+  });
+
+  // Find best and worst days
+  const daysWithBets = dayStats.filter(d => d.total > 0);
+  let bestDay = null;
+  let worstDay = null;
+  if (daysWithBets.length > 0) {
+    bestDay = daysWithBets.reduce((a, b) => a.profit > b.profit ? a : b).dayIndex;
+    worstDay = daysWithBets.reduce((a, b) => a.profit < b.profit ? a : b).dayIndex;
+  }
+
+  container.innerHTML = dayStats.map(day => {
+    const isBest = day.dayIndex === bestDay;
+    const isWorst = day.dayIndex === worstDay && bestDay !== worstDay;
+    const profitClass = day.profit > 0 ? 'positive' : day.profit < 0 ? 'negative' : '';
+    return `
+      <div class="weekday-card ${isBest ? 'best' : ''} ${isWorst ? 'worst' : ''}">
+        <span class="weekday-name">${day.name}</span>
+        <span class="weekday-profit ${profitClass}">${day.total > 0 ? formatProfit(day.profit) : '-'}</span>
+        <span class="weekday-detail">${day.total} aposta${day.total !== 1 ? 's' : ''}</span>
+        <span class="weekday-winrate">${day.total > 0 ? percentFormatter.format(day.winrate) : '-'}</span>
+        ${isBest ? '<span style="font-size:0.65rem;color:var(--success)">\u2b50 Melhor</span>' : ''}
+        ${isWorst ? '<span style="font-size:0.65rem;color:var(--danger)">\u26a0\ufe0f Pior</span>' : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+// ========================
+// PROFIT GOALS
+// ========================
+let profitGoals = { weekly: 0, monthly: 0 };
+
+function loadGoals() {
+  const raw = localStorage.getItem(getGoalsKey());
+  if (raw) {
+    try {
+      profitGoals = JSON.parse(raw);
+    } catch (e) {
+      profitGoals = { weekly: 0, monthly: 0 };
+    }
+  }
+  // Set input values
+  const weeklyInput = document.getElementById('weekly-goal-input');
+  const monthlyInput = document.getElementById('monthly-goal-input');
+  if (weeklyInput && profitGoals.weekly > 0) weeklyInput.value = numberFormatter.format(profitGoals.weekly);
+  if (monthlyInput && profitGoals.monthly > 0) monthlyInput.value = numberFormatter.format(profitGoals.monthly);
+}
+
+function saveGoals() {
+  localStorage.setItem(getGoalsKey(), JSON.stringify(profitGoals));
+}
+
+function renderProfitGoals() {
+  const now = new Date();
+  
+  // Week start (Sunday)
+  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  
+  // Month start
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  // Calculate weekly profit
+  const weeklyProfit = bets
+    .filter(b => {
+      if (b.status !== 'win' && b.status !== 'loss') return false;
+      const d = parseDateForSort(b.date);
+      return d && d >= weekStart;
+    })
+    .reduce((sum, b) => sum + calcProfit(b), 0);
+
+  // Calculate monthly profit
+  const monthlyProfit = bets
+    .filter(b => {
+      if (b.status !== 'win' && b.status !== 'loss') return false;
+      const d = parseDateForSort(b.date);
+      return d && d >= monthStart;
+    })
+    .reduce((sum, b) => sum + calcProfit(b), 0);
+
+  // Update weekly
+  const weeklyGoalCurrent = document.getElementById('weekly-goal-current');
+  const weeklyGoalTarget = document.getElementById('weekly-goal-target');
+  const weeklyGoalBar = document.getElementById('weekly-goal-bar');
+  const weeklyGoalPercent = document.getElementById('weekly-goal-percent');
+
+  if (weeklyGoalCurrent) weeklyGoalCurrent.textContent = formatProfit(weeklyProfit);
+  if (weeklyGoalTarget) weeklyGoalTarget.textContent = `de ${formatProfit(profitGoals.weekly)}`;
+  
+  const weeklyPct = profitGoals.weekly > 0 ? Math.max(0, (weeklyProfit / profitGoals.weekly) * 100) : 0;
+  if (weeklyGoalBar) {
+    weeklyGoalBar.style.width = `${Math.min(weeklyPct, 100)}%`;
+    weeklyGoalBar.className = `progress-bar ${weeklyPct >= 100 ? 'exceeded' : ''}`;
+  }
+  if (weeklyGoalPercent) {
+    weeklyGoalPercent.textContent = `${Math.round(weeklyPct)}%`;
+    weeklyGoalPercent.className = `profit-goal-percent ${weeklyPct >= 100 ? 'reached' : ''}`;
+  }
+
+  // Update monthly
+  const monthlyGoalCurrent = document.getElementById('monthly-goal-current');
+  const monthlyGoalTarget = document.getElementById('monthly-goal-target');
+  const monthlyGoalBar = document.getElementById('monthly-goal-bar');
+  const monthlyGoalPercent = document.getElementById('monthly-goal-percent');
+
+  if (monthlyGoalCurrent) monthlyGoalCurrent.textContent = formatProfit(monthlyProfit);
+  if (monthlyGoalTarget) monthlyGoalTarget.textContent = `de ${formatProfit(profitGoals.monthly)}`;
+  
+  const monthlyPct = profitGoals.monthly > 0 ? Math.max(0, (monthlyProfit / profitGoals.monthly) * 100) : 0;
+  if (monthlyGoalBar) {
+    monthlyGoalBar.style.width = `${Math.min(monthlyPct, 100)}%`;
+    monthlyGoalBar.className = `progress-bar ${monthlyPct >= 100 ? 'exceeded' : ''}`;
+  }
+  if (monthlyGoalPercent) {
+    monthlyGoalPercent.textContent = `${Math.round(monthlyPct)}%`;
+    monthlyGoalPercent.className = `profit-goal-percent ${monthlyPct >= 100 ? 'reached' : ''}`;
+  }
+}
+
+// Goal input listeners
+const weeklyGoalInput = document.getElementById('weekly-goal-input');
+const monthlyGoalInput = document.getElementById('monthly-goal-input');
+
+weeklyGoalInput?.addEventListener('input', () => {
+  profitGoals.weekly = parseLocaleNumber(weeklyGoalInput.value) || 0;
+  saveGoals();
+  renderProfitGoals();
+});
+
+monthlyGoalInput?.addEventListener('input', () => {
+  profitGoals.monthly = parseLocaleNumber(monthlyGoalInput.value) || 0;
+  saveGoals();
+  renderProfitGoals();
+});
+
+// ========================
+// FINALIZED BETS LIST
+// ========================
+function renderFinalizedBets() {
+  const container = document.getElementById('finalized-bets-list');
+  if (!container) return;
+
+  const settled = bets
+    .filter(b => b.status === 'win' || b.status === 'loss')
+    .slice()
+    .sort((a, b) => {
+      const aDate = parseDateForSort(a.date);
+      const bDate = parseDateForSort(b.date);
+      if (aDate && bDate) return bDate - aDate;
+      return 0;
+    });
+
+  if (settled.length === 0) {
+    container.innerHTML = '<p class="empty-message">Nenhuma aposta finalizada ainda.</p>';
+    return;
+  }
+
+  container.innerHTML = settled.map(bet => {
+    const profit = calcProfit(bet);
+    const profitClass = profit > 0 ? 'positive' : profit < 0 ? 'negative' : '';
+    return `
+      <div class="finalized-bet-item">
+        <span class="fbet-date">${bet.date}</span>
+        <span class="fbet-event">${bet.event}</span>
+        <span class="fbet-odd">${numberFormatter.format(bet.odds)}x</span>
+        ${bet.ai ? `<span class="fbet-ai">${bet.ai}</span>` : ''}
+        <span class="fbet-status-badge ${bet.status}">${statusLabel(bet.status)}</span>
+        <span class="fbet-profit ${profitClass}">${formatProfit(profit)}</span>
+      </div>
+    `;
+  }).join('');
 }
 
 // Quick Notes (Anotações Rápidas)
@@ -1980,5 +2310,716 @@ profileSwitch?.addEventListener('change', (e) => {
   }
 });
 
+// ========================
+// BACKUP AUTOMÁTICO SEMANAL
+// ========================
+function getBackupKey() {
+  const profileId = getActiveProfileId();
+  return profileId ? `caderneta.backup.${profileId}` : "caderneta.backup.v1";
+}
+
+function getLastBackupKey() {
+  const profileId = getActiveProfileId();
+  return profileId ? `caderneta.lastBackup.${profileId}` : "caderneta.lastBackup.v1";
+}
+
+function performWeeklyBackup() {
+  const lastBackupStr = localStorage.getItem(getLastBackupKey());
+  const now = Date.now();
+  const oneWeek = 7 * 24 * 60 * 60 * 1000;
+
+  if (lastBackupStr && (now - Number(lastBackupStr)) < oneWeek) {
+    return; // Ainda não passou 1 semana
+  }
+
+  const backupData = {
+    timestamp: new Date().toISOString(),
+    bets: JSON.parse(localStorage.getItem(getStorageKey()) || "[]"),
+    cashflows: JSON.parse(localStorage.getItem(getCashflowKey()) || "[]"),
+    settings: JSON.parse(localStorage.getItem(getSettingsKey()) || "{}"),
+    bankroll: localStorage.getItem(getBankrollKey()),
+    notes: localStorage.getItem(getNotesKey()) || "",
+    goals: JSON.parse(localStorage.getItem(getGoalsKey()) || "{}"),
+  };
+
+  // Rotação: manter apenas os últimos 4 backups (1 mês)
+  const backupKey = getBackupKey();
+  const existingRaw = localStorage.getItem(backupKey);
+  let backups = existingRaw ? JSON.parse(existingRaw) : [];
+  backups.push(backupData);
+  if (backups.length > 4) {
+    backups = backups.slice(-4);
+  }
+
+  try {
+    localStorage.setItem(backupKey, JSON.stringify(backups));
+    localStorage.setItem(getLastBackupKey(), String(now));
+    console.log(`✅ Backup automático realizado em ${backupData.timestamp}`);
+  } catch (e) {
+    console.warn("⚠️ Erro ao salvar backup automático:", e.message);
+  }
+}
+
+function restoreFromBackup(index) {
+  const backupKey = getBackupKey();
+  const existingRaw = localStorage.getItem(backupKey);
+  if (!existingRaw) return false;
+
+  const backups = JSON.parse(existingRaw);
+  const backup = backups[index];
+  if (!backup) return false;
+
+  localStorage.setItem(getStorageKey(), JSON.stringify(backup.bets));
+  localStorage.setItem(getCashflowKey(), JSON.stringify(backup.cashflows));
+  localStorage.setItem(getSettingsKey(), JSON.stringify(backup.settings));
+  if (backup.bankroll) localStorage.setItem(getBankrollKey(), backup.bankroll);
+  if (backup.notes) localStorage.setItem(getNotesKey(), backup.notes);
+  if (backup.goals) localStorage.setItem(getGoalsKey(), JSON.stringify(backup.goals));
+
+  return true;
+}
+
+// ========================
+// EXPORTAR PDF MENSAL
+// ========================
+const MONTH_NAMES_PDF = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+
+const pdfModal = document.getElementById('pdf-modal');
+const pdfModalClose = document.getElementById('pdf-modal-close');
+const pdfMonthSelect = document.getElementById('pdf-month-select');
+const pdfGenerateBtn = document.getElementById('pdf-generate-btn');
+const pdfStatus = document.getElementById('pdf-status');
+const exportPdfBtn = document.getElementById('export-pdf-btn');
+
+function populatePdfMonthSelect() {
+  if (!pdfMonthSelect) return;
+  pdfMonthSelect.innerHTML = '';
+
+  // Encontrar meses com apostas
+  const monthsSet = new Set();
+  bets.forEach(bet => {
+    const d = parseDateForSort(bet.date);
+    if (d) monthsSet.add(`${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`);
+  });
+
+  // Gerar os últimos 12 meses
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = `${MONTH_NAMES_PDF[d.getMonth()]} ${d.getFullYear()}`;
+    if (monthsSet.has(key)) opt.textContent += ' ✓';
+    pdfMonthSelect.appendChild(opt);
+  }
+}
+
+function openPdfModal() {
+  populatePdfMonthSelect();
+  pdfStatus.style.display = 'none';
+  pdfModal.style.display = 'flex';
+}
+
+function closePdfModal() {
+  pdfModal.style.display = 'none';
+}
+
+exportPdfBtn?.addEventListener('click', openPdfModal);
+pdfModalClose?.addEventListener('click', closePdfModal);
+pdfModal?.addEventListener('click', (e) => { if (e.target === pdfModal) closePdfModal(); });
+
+pdfGenerateBtn?.addEventListener('click', async () => {
+  const val = pdfMonthSelect.value;
+  const [yearStr, monthStr] = val.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const monthName = `${MONTH_NAMES_PDF[month]} ${year}`;
+
+  pdfStatus.textContent = 'Gerando relatório... 📊';
+  pdfStatus.style.display = 'block';
+  pdfStatus.style.color = 'var(--primary)';
+  pdfGenerateBtn.disabled = true;
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    let y = 20;
+
+    // Filter bets for month
+    const monthBets = bets.filter(bet => {
+      const d = parseDateForSort(bet.date);
+      return d && d.getFullYear() === year && d.getMonth() === month;
+    });
+    const settled = monthBets.filter(b => b.status === 'win' || b.status === 'loss');
+    const wins = settled.filter(b => b.status === 'win');
+    const losses = settled.filter(b => b.status === 'loss');
+    const totalStake = settled.reduce((s, b) => s + b.stake, 0);
+    const totalProfit = settled.reduce((s, b) => s + calcProfit(b), 0);
+    const winrate = settled.length > 0 ? wins.length / settled.length : 0;
+    const roi = totalStake > 0 ? totalProfit / totalStake : 0;
+
+    // Header
+    doc.setFillColor(11, 16, 32);
+    doc.rect(0, 0, pageW, 40, 'F');
+    doc.setTextColor(245, 247, 255);
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`RELATÓRIO MENSAL - ${monthName.toUpperCase()}`, pageW / 2, 18, { align: 'center' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Gestão de Banca de Apostas', pageW / 2, 28, { align: 'center' });
+    doc.setFontSize(8);
+    doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, pageW / 2, 34, { align: 'center' });
+    y = 50;
+
+    // KPIs
+    const incKpis = document.getElementById('pdf-inc-kpis')?.checked;
+    if (incKpis) {
+      doc.setTextColor(124, 92, 255);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('📊 RESUMO GERAL', margin, y);
+      y += 8;
+      doc.setDrawColor(124, 92, 255);
+      doc.line(margin, y, pageW - margin, y);
+      y += 8;
+
+      doc.setTextColor(60, 60, 60);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+
+      const kpiData = [
+        ['Total apostado:', currencyFormatter.format(totalStake)],
+        ['Lucro líquido:', currencyFormatter.format(totalProfit)],
+        ['ROI:', percentFormatter.format(roi)],
+        ['Winrate:', `${percentFormatter.format(winrate)} (${wins.length} greens / ${settled.length} apostas)`],
+        ['Total de apostas no mês:', `${monthBets.length} (${settled.length} finalizadas, ${monthBets.length - settled.length} pendentes)`],
+        ['Odd média:', settled.length > 0 ? `${numberFormatter.format(settled.reduce((s, b) => s + b.odds, 0) / settled.length)}x` : '-'],
+        ['Ticket médio:', settled.length > 0 ? currencyFormatter.format(totalStake / settled.length) : '-'],
+      ];
+
+      kpiData.forEach(([label, value]) => {
+        doc.setFont('helvetica', 'bold');
+        doc.text(label, margin, y);
+        doc.setFont('helvetica', 'normal');
+        if (label.includes('Lucro')) {
+          doc.setTextColor(totalProfit >= 0 ? 34 : 220, totalProfit >= 0 ? 150 : 50, totalProfit >= 0 ? 80 : 50);
+        }
+        doc.text(value, margin + 50, y);
+        doc.setTextColor(60, 60, 60);
+        y += 6;
+      });
+      y += 6;
+    }
+
+    // Chart
+    const incChart = document.getElementById('pdf-inc-chart')?.checked;
+    if (incChart) {
+      if (y > 230) { doc.addPage(); y = 20; }
+      doc.setTextColor(124, 92, 255);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('📈 GRÁFICO DE EVOLUÇÃO', margin, y);
+      y += 8;
+      doc.setDrawColor(124, 92, 255);
+      doc.line(margin, y, pageW - margin, y);
+      y += 4;
+
+      const chartEl = document.getElementById('balance-chart');
+      if (chartEl) {
+        try {
+          const chartCanvas = await html2canvas(chartEl.closest('.chart-card') || chartEl, { backgroundColor: '#0b1020', scale: 2 });
+          const chartImg = chartCanvas.toDataURL('image/png');
+          const chartW = pageW - margin * 2;
+          const chartH = (chartCanvas.height / chartCanvas.width) * chartW;
+          doc.addImage(chartImg, 'PNG', margin, y, chartW, Math.min(chartH, 70));
+          y += Math.min(chartH, 70) + 8;
+        } catch (e) {
+          doc.setTextColor(150, 150, 150);
+          doc.setFontSize(9);
+          doc.text('(Gráfico não disponível)', margin, y + 10);
+          y += 16;
+        }
+      }
+    }
+
+    // Stats by house
+    const incHouses = document.getElementById('pdf-inc-houses')?.checked;
+    if (incHouses) {
+      if (y > 230) { doc.addPage(); y = 20; }
+      doc.setTextColor(124, 92, 255);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('🏠 ESTATÍSTICAS POR CASA', margin, y);
+      y += 8;
+      doc.setDrawColor(124, 92, 255);
+      doc.line(margin, y, pageW - margin, y);
+      y += 6;
+
+      const books = Array.from(new Set(settled.map(b => b.book))).sort();
+      if (books.length > 0) {
+        // Header
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(100, 100, 100);
+        const cols = [margin, margin+35, margin+55, margin+72, margin+92, margin+115, margin+145];
+        doc.text('Casa', cols[0], y);
+        doc.text('Apostas', cols[1], y);
+        doc.text('Greens', cols[2], y);
+        doc.text('Reds', cols[3], y);
+        doc.text('Winrate', cols[4], y);
+        doc.text('Lucro', cols[5], y);
+        doc.text('ROI', cols[6], y);
+        y += 5;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(60, 60, 60);
+
+        books.forEach(book => {
+          if (y > 275) { doc.addPage(); y = 20; }
+          const hBets = settled.filter(b => b.book === book);
+          const hWins = hBets.filter(b => b.status === 'win').length;
+          const hLosses = hBets.filter(b => b.status === 'loss').length;
+          const hStake = hBets.reduce((s, b) => s + b.stake, 0);
+          const hProfit = hBets.reduce((s, b) => s + calcProfit(b), 0);
+          const hWinrate = hBets.length > 0 ? hWins / hBets.length : 0;
+          const hRoi = hStake > 0 ? hProfit / hStake : 0;
+
+          doc.setFontSize(8);
+          doc.text(book.substring(0, 15), cols[0], y);
+          doc.text(String(hBets.length), cols[1], y);
+          doc.text(String(hWins), cols[2], y);
+          doc.text(String(hLosses), cols[3], y);
+          doc.text(percentFormatter.format(hWinrate), cols[4], y);
+          doc.setTextColor(hProfit >= 0 ? 34 : 220, hProfit >= 0 ? 150 : 50, hProfit >= 0 ? 80 : 50);
+          doc.text(currencyFormatter.format(hProfit), cols[5], y);
+          doc.setTextColor(hRoi >= 0 ? 34 : 220, hRoi >= 0 ? 150 : 50, hRoi >= 0 ? 80 : 50);
+          doc.text(percentFormatter.format(hRoi), cols[6], y);
+          doc.setTextColor(60, 60, 60);
+          y += 5;
+        });
+        y += 6;
+      }
+    }
+
+    // Top 5
+    const incTop5 = document.getElementById('pdf-inc-top5')?.checked;
+    if (incTop5 && wins.length > 0) {
+      if (y > 230) { doc.addPage(); y = 20; }
+      doc.setTextColor(124, 92, 255);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('🏆 TOP 5 MELHORES APOSTAS', margin, y);
+      y += 8;
+      doc.setDrawColor(124, 92, 255);
+      doc.line(margin, y, pageW - margin, y);
+      y += 6;
+
+      const top5 = wins
+        .map(b => ({ ...b, profit: calcProfit(b) }))
+        .sort((a, b) => b.profit - a.profit)
+        .slice(0, 5);
+
+      doc.setFontSize(9);
+      top5.forEach((bet, i) => {
+        if (y > 275) { doc.addPage(); y = 20; }
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(34, 150, 80);
+        doc.text(`${i + 1}.`, margin, y);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(60, 60, 60);
+        doc.text(`${bet.event} (odd ${numberFormatter.format(bet.odds)}x) → +${currencyFormatter.format(bet.profit)}`, margin + 8, y);
+        y += 6;
+      });
+      y += 6;
+    }
+
+    // Full table
+    const incTable = document.getElementById('pdf-inc-table')?.checked;
+    if (incTable && monthBets.length > 0) {
+      if (y > 200) { doc.addPage(); y = 20; }
+      doc.setTextColor(124, 92, 255);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('📋 HISTÓRICO COMPLETO', margin, y);
+      y += 8;
+      doc.setDrawColor(124, 92, 255);
+      doc.line(margin, y, pageW - margin, y);
+      y += 6;
+
+      // Table header
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(100, 100, 100);
+      const tCols = [margin, margin+20, margin+80, margin+95, margin+115, margin+130, margin+155];
+      doc.text('Data', tCols[0], y);
+      doc.text('Evento', tCols[1], y);
+      doc.text('Odd', tCols[2], y);
+      doc.text('Stake', tCols[3], y);
+      doc.text('Status', tCols[4], y);
+      doc.text('Lucro', tCols[5], y);
+      doc.text('Casa', tCols[6], y);
+      y += 1;
+      doc.setDrawColor(200, 200, 200);
+      doc.line(margin, y, pageW - margin, y);
+      y += 4;
+
+      doc.setFont('helvetica', 'normal');
+      const sortedMonthBets = [...monthBets].sort((a, b) => {
+        const ad = parseDateForSort(a.date);
+        const bd = parseDateForSort(b.date);
+        return (bd || 0) - (ad || 0);
+      });
+
+      sortedMonthBets.forEach(bet => {
+        if (y > 275) {
+          doc.addPage();
+          y = 20;
+          // Re-draw header
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(100, 100, 100);
+          doc.text('Data', tCols[0], y);
+          doc.text('Evento', tCols[1], y);
+          doc.text('Odd', tCols[2], y);
+          doc.text('Stake', tCols[3], y);
+          doc.text('Status', tCols[4], y);
+          doc.text('Lucro', tCols[5], y);
+          doc.text('Casa', tCols[6], y);
+          y += 1;
+          doc.line(margin, y, pageW - margin, y);
+          y += 4;
+          doc.setFont('helvetica', 'normal');
+        }
+
+        const profit = calcProfit(bet);
+        doc.setFontSize(7);
+        doc.setTextColor(60, 60, 60);
+        doc.text(bet.date || '-', tCols[0], y);
+        doc.text((bet.event || '-').substring(0, 35), tCols[1], y);
+        doc.text(numberFormatter.format(bet.odds), tCols[2], y);
+        doc.text(currencyFormatter.format(bet.stake), tCols[3], y);
+
+        if (bet.status === 'win') doc.setTextColor(34, 150, 80);
+        else if (bet.status === 'loss') doc.setTextColor(220, 50, 50);
+        else doc.setTextColor(200, 160, 0);
+        doc.text(statusLabel(bet.status), tCols[4], y);
+
+        doc.setTextColor(profit >= 0 ? 34 : 220, profit >= 0 ? 150 : 50, profit >= 0 ? 80 : 50);
+        doc.text(currencyFormatter.format(profit), tCols[5], y);
+        doc.setTextColor(60, 60, 60);
+        doc.text((bet.book || '-').substring(0, 15), tCols[6], y);
+        y += 5;
+      });
+      y += 6;
+    }
+
+    // Notes
+    const incNotes = document.getElementById('pdf-inc-notes')?.checked;
+    if (incNotes) {
+      const notes = localStorage.getItem(getNotesKey()) || '';
+      if (notes.trim()) {
+        if (y > 230) { doc.addPage(); y = 20; }
+        doc.setTextColor(124, 92, 255);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text('📝 NOTAS E OBSERVAÇÕES', margin, y);
+        y += 8;
+        doc.setDrawColor(124, 92, 255);
+        doc.line(margin, y, pageW - margin, y);
+        y += 6;
+        doc.setTextColor(60, 60, 60);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        const noteLines = doc.splitTextToSize(notes, pageW - margin * 2);
+        noteLines.forEach(line => {
+          if (y > 275) { doc.addPage(); y = 20; }
+          doc.text(line, margin, y);
+          y += 5;
+        });
+      }
+    }
+
+    // Footer on last page
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Caderneta de Apostas • Página ${i} de ${pageCount}`, pageW / 2, 290, { align: 'center' });
+    }
+
+    doc.save(`relatorio-${monthName.replace(' ', '-').toLowerCase()}.pdf`);
+
+    pdfStatus.textContent = '✅ PDF gerado com sucesso!';
+    pdfStatus.style.color = 'var(--success)';
+    setTimeout(() => closePdfModal(), 2000);
+
+  } catch (e) {
+    console.error('Erro ao gerar PDF:', e);
+    pdfStatus.textContent = `❌ Erro: ${e.message}`;
+    pdfStatus.style.color = 'var(--danger)';
+  } finally {
+    pdfGenerateBtn.disabled = false;
+  }
+});
+
+// ========================
+// COMPARTILHAR CARD REDES SOCIAIS
+// ========================
+const shareModal = document.getElementById('share-modal');
+const shareModalClose = document.getElementById('share-modal-close');
+const shareCardCanvas = document.getElementById('share-card-canvas');
+const shareDownloadBtn = document.getElementById('share-download-btn');
+const shareCopyBtn = document.getElementById('share-copy-btn');
+const shareNativeBtn = document.getElementById('share-native-btn');
+
+function openShareCardModal(bet) {
+  if (!shareModal || !shareCardCanvas) return;
+  renderShareCard(bet);
+  shareModal.style.display = 'flex';
+
+  // Store current bet for actions
+  shareModal._currentBet = bet;
+}
+
+function closeShareModal() {
+  if (shareModal) shareModal.style.display = 'none';
+}
+
+shareModalClose?.addEventListener('click', closeShareModal);
+shareModal?.addEventListener('click', (e) => { if (e.target === shareModal) closeShareModal(); });
+
+function renderShareCard(bet) {
+  const canvas = shareCardCanvas;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = 1080;
+  const h = 1080;
+  canvas.width = w;
+  canvas.height = h;
+
+  // Background gradient
+  const bgGrad = ctx.createLinearGradient(0, 0, w, h);
+  bgGrad.addColorStop(0, '#0b1020');
+  bgGrad.addColorStop(0.5, '#121830');
+  bgGrad.addColorStop(1, '#0b1020');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, w, h);
+
+  // Decorative circles
+  ctx.beginPath();
+  ctx.arc(100, 100, 300, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(124, 92, 255, 0.12)';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(w - 100, h - 100, 250, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(45, 212, 191, 0.1)';
+  ctx.fill();
+
+  const profit = calcProfit(bet);
+  const isWin = bet.status === 'win';
+  const roiVal = bet.stake > 0 ? (profit / bet.stake) * 100 : 0;
+
+  // Status badge at top
+  const statusColor = isWin ? '#22c55e' : '#ff6b6b';
+  const statusText = isWin ? '✅ GREEN' : '❌ RED';
+  const statusBg = isWin ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255, 107, 107, 0.2)';
+
+  // Top banner
+  ctx.fillStyle = statusBg;
+  roundRect(ctx, 60, 60, w - 120, 120, 24);
+  ctx.fill();
+  ctx.strokeStyle = statusColor;
+  ctx.lineWidth = 2;
+  roundRect(ctx, 60, 60, w - 120, 120, 24);
+  ctx.stroke();
+
+  ctx.fillStyle = statusColor;
+  ctx.font = 'bold 52px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(statusText, w / 2, 138);
+
+  // Event name
+  ctx.fillStyle = '#f5f7ff';
+  ctx.font = 'bold 42px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  const eventLines = wrapText(ctx, bet.event || '-', w - 160, 42);
+  let eventY = 260;
+  eventLines.forEach(line => {
+    ctx.fillText(line, w / 2, eventY);
+    eventY += 52;
+  });
+
+  // Divider
+  let divY = eventY + 20;
+  ctx.strokeStyle = 'rgba(124, 92, 255, 0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(120, divY);
+  ctx.lineTo(w - 120, divY);
+  ctx.stroke();
+
+  // Info cards
+  let cardsY = divY + 40;
+  const cardW = (w - 180) / 2;
+  const cardH = 140;
+
+  // Card: Casa
+  drawInfoCard(ctx, 70, cardsY, cardW, cardH, '🏠', 'Casa', bet.book || '-');
+  // Card: Odd
+  drawInfoCard(ctx, 70 + cardW + 40, cardsY, cardW, cardH, '📊', 'Odd', `${numberFormatter.format(bet.odds)}x`);
+
+  cardsY += cardH + 20;
+
+  // Card: Stake
+  drawInfoCard(ctx, 70, cardsY, cardW, cardH, '💰', 'Stake', currencyFormatter.format(bet.stake));
+  // Card: Lucro
+  const profitColor = profit >= 0 ? '#22c55e' : '#ff6b6b';
+  drawInfoCard(ctx, 70 + cardW + 40, cardsY, cardW, cardH, '💸', 'Lucro', currencyFormatter.format(profit), profitColor);
+
+  cardsY += cardH + 20;
+
+  // ROI big
+  if (bet.status === 'win' || bet.status === 'loss') {
+    const roiColor = roiVal >= 0 ? '#22c55e' : '#ff6b6b';
+    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+    roundRect(ctx, 70, cardsY, w - 140, 100, 16);
+    ctx.fill();
+    ctx.fillStyle = roiColor;
+    ctx.font = 'bold 48px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${roiVal >= 0 ? '+' : ''}${roiVal.toFixed(0)}% ROI`, w / 2, cardsY + 65);
+    cardsY += 120;
+  }
+
+  // AI badge
+  if (bet.ai) {
+    ctx.fillStyle = 'rgba(124, 92, 255, 0.15)';
+    roundRect(ctx, 70, cardsY, w - 140, 70, 16);
+    ctx.fill();
+    ctx.fillStyle = '#7c5cff';
+    ctx.font = '600 30px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`🤖 Sugestão: ${bet.ai}`, w / 2, cardsY + 45);
+    cardsY += 90;
+  }
+
+  // Date
+  ctx.fillStyle = 'rgba(245, 247, 255, 0.5)';
+  ctx.font = '400 26px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`📅 ${bet.date || '-'}`, w / 2, h - 110);
+
+  // Footer
+  ctx.fillStyle = 'rgba(245, 247, 255, 0.3)';
+  ctx.font = '400 22px Inter, sans-serif';
+  ctx.fillText('Caderneta de Apostas', w / 2, h - 50);
+}
+
+function drawInfoCard(ctx, x, y, w, h, emoji, label, value, valueColor) {
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+  roundRect(ctx, x, y, w, h, 16);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+  ctx.lineWidth = 1;
+  roundRect(ctx, x, y, w, h, 16);
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(245, 247, 255, 0.5)';
+  ctx.font = '400 24px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${emoji} ${label}`, x + w / 2, y + 40);
+
+  ctx.fillStyle = valueColor || '#f5f7ff';
+  ctx.font = 'bold 36px Inter, sans-serif';
+  ctx.fillText(value, x + w / 2, y + 95);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function wrapText(ctx, text, maxWidth, fontSize) {
+  const words = text.split(' ');
+  const lines = [];
+  let currentLine = '';
+
+  words.forEach(word => {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  });
+  if (currentLine) lines.push(currentLine);
+  return lines.slice(0, 3); // max 3 lines
+}
+
+// Share actions
+shareDownloadBtn?.addEventListener('click', () => {
+  if (!shareCardCanvas) return;
+  const link = document.createElement('a');
+  link.download = `aposta-card-${Date.now()}.png`;
+  link.href = shareCardCanvas.toDataURL('image/png');
+  link.click();
+});
+
+shareCopyBtn?.addEventListener('click', async () => {
+  if (!shareCardCanvas) return;
+  try {
+    const blob = await new Promise(resolve => shareCardCanvas.toBlob(resolve, 'image/png'));
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    shareCopyBtn.textContent = '✅ Copiado!';
+    setTimeout(() => { shareCopyBtn.textContent = '📋 Copiar'; }, 2000);
+  } catch (e) {
+    // Fallback: download
+    shareDownloadBtn?.click();
+  }
+});
+
+shareNativeBtn?.addEventListener('click', async () => {
+  if (!shareCardCanvas) return;
+  try {
+    const blob = await new Promise(resolve => shareCardCanvas.toBlob(resolve, 'image/png'));
+    const file = new File([blob], 'aposta.png', { type: 'image/png' });
+    if (navigator.share) {
+      await navigator.share({
+        title: 'Minha Aposta',
+        text: shareModal?._currentBet ? `${shareModal._currentBet.event} - ${statusLabel(shareModal._currentBet.status)}` : 'Confira minha aposta!',
+        files: [file],
+      });
+    } else {
+      // Fallback
+      shareDownloadBtn?.click();
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      shareDownloadBtn?.click();
+    }
+  }
+});
+
 init();
+performWeeklyBackup();
 renderProfileSwitcher();

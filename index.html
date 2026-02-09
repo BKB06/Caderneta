@@ -25,6 +25,7 @@
         </div>
         <nav class="app-nav">
           <a href="./ranking.html" class="nav-link">🏆 Ranking</a>
+          <button type="button" class="nav-link secondary" id="export-pdf-btn">📄 PDF Mensal</button>
           <a href="./cashflow.html" class="nav-link secondary">💰 Saques/Depósitos</a>
           <a href="./settings.html" class="nav-link secondary">⚙️ Perfil</a>
         </nav>
@@ -86,6 +87,15 @@
           <label>
             Casa de Aposta
             <input type="text" id="bet-book" placeholder="Bet365" required />
+          </label>
+          <label>
+            IA que sugeriu
+            <select id="bet-ai">
+              <option value="">Nenhuma</option>
+              <option value="Grok">Grok</option>
+              <option value="Gemini">Gemini</option>
+              <option value="Opus 4">Opus 4</option>
+            </select>
           </label>
           <label>
             Status
@@ -160,6 +170,66 @@
             <span>Sequência Atual</span>
             <strong id="kpi-streak">-</strong>
           </div>
+        </div>
+
+        <!-- Ranking de IAs -->
+        <div class="ai-ranking-panel" id="ai-ranking-container">
+          <h3>🤖 Ranking de IAs</h3>
+          <p class="muted" style="margin-bottom: 12px; font-size: 0.8rem;">Qual IA mais acerta as sugestões de apostas?</p>
+          <div class="ai-ranking-grid" id="ai-ranking-grid"></div>
+        </div>
+
+        <!-- Meta de Lucro -->
+        <div class="profit-goals-panel" id="profit-goals-container">
+          <h3>🎯 Meta de Lucro</h3>
+          <div class="profit-goals-grid">
+            <div class="profit-goal-item">
+              <div class="profit-goal-header">
+                <span>Meta Semanal</span>
+                <div class="profit-goal-config">
+                  <span class="prefix">R$</span>
+                  <input type="text" inputmode="decimal" id="weekly-goal-input" placeholder="500" class="goal-input" />
+                </div>
+              </div>
+              <div class="profit-goal-values">
+                <strong id="weekly-goal-current">R$ 0,00</strong>
+                <span class="muted" id="weekly-goal-target">de R$ 0,00</span>
+              </div>
+              <div class="progress goal-progress">
+                <div class="progress-bar" id="weekly-goal-bar"></div>
+              </div>
+              <span class="profit-goal-percent" id="weekly-goal-percent">0%</span>
+            </div>
+            <div class="profit-goal-item">
+              <div class="profit-goal-header">
+                <span>Meta Mensal</span>
+                <div class="profit-goal-config">
+                  <span class="prefix">R$</span>
+                  <input type="text" inputmode="decimal" id="monthly-goal-input" placeholder="2000" class="goal-input" />
+                </div>
+              </div>
+              <div class="profit-goal-values">
+                <strong id="monthly-goal-current">R$ 0,00</strong>
+                <span class="muted" id="monthly-goal-target">de R$ 0,00</span>
+              </div>
+              <div class="progress goal-progress">
+                <div class="progress-bar" id="monthly-goal-bar"></div>
+              </div>
+              <span class="profit-goal-percent" id="monthly-goal-percent">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Performance por Dia da Semana -->
+        <div class="weekday-performance-panel" id="weekday-performance-container">
+          <h3>📅 Performance por Dia da Semana</h3>
+          <div class="weekday-grid" id="weekday-grid"></div>
+        </div>
+
+        <!-- Apostas Finalizadas -->
+        <div class="finalized-bets-panel" id="finalized-bets-container">
+          <h3>📋 Todas as Apostas Finalizadas</h3>
+          <div class="finalized-bets-list" id="finalized-bets-list"></div>
         </div>
 
         <!-- Painel de Total Apostado por Período -->
@@ -291,6 +361,7 @@
                 <th>Lucro</th>
                 <th>Lucro potencial</th>
                 <th>Casa</th>
+                <th>IA</th>
                 <th>Ações</th>
               </tr>
             </thead>
@@ -314,12 +385,79 @@
       </div>
     </div>
 
+    <!-- Modal de Confirmação de Exclusão -->
+    <div id="delete-modal" class="modal-overlay" style="display: none;">
+      <div class="modal-content" style="max-width: 420px;">
+        <div class="modal-header">
+          <h3>⚠️ Confirmar Exclusão</h3>
+          <button type="button" class="modal-close" id="delete-modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin-bottom: 16px; color: var(--text-muted);">Tem certeza que deseja excluir esta aposta?</p>
+          <div id="delete-modal-bet-info" class="modal-bet-item" style="margin-bottom: 20px;"></div>
+          <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <button type="button" class="ghost" id="delete-modal-cancel">Cancelar</button>
+            <button type="button" class="danger-btn" id="delete-modal-confirm">Excluir</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Relatório PDF -->
+    <div id="pdf-modal" class="modal-overlay" style="display: none;">
+      <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+          <h3>📄 Gerar Relatório PDF</h3>
+          <button type="button" class="modal-close" id="pdf-modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <label style="margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; color: var(--text-muted);">
+            Selecione o mês:
+            <select id="pdf-month-select" style="padding: 10px; font-size: 0.95rem;"></select>
+          </label>
+          <div style="margin-bottom: 16px;">
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">Incluir no relatório:</p>
+            <div class="settings-list">
+              <label class="setting-item"><input type="checkbox" id="pdf-inc-kpis" checked /><span class="setting-label"><strong>Resumo geral (KPIs)</strong></span></label>
+              <label class="setting-item"><input type="checkbox" id="pdf-inc-chart" checked /><span class="setting-label"><strong>Gráfico de evolução</strong></span></label>
+              <label class="setting-item"><input type="checkbox" id="pdf-inc-houses" checked /><span class="setting-label"><strong>Estatísticas por casa</strong></span></label>
+              <label class="setting-item"><input type="checkbox" id="pdf-inc-top5" checked /><span class="setting-label"><strong>Top 5 melhores apostas</strong></span></label>
+              <label class="setting-item"><input type="checkbox" id="pdf-inc-table" checked /><span class="setting-label"><strong>Tabela completa de apostas</strong></span></label>
+              <label class="setting-item"><input type="checkbox" id="pdf-inc-notes" /><span class="setting-label"><strong>Notas/observações</strong></span></label>
+            </div>
+          </div>
+          <button type="button" id="pdf-generate-btn" style="width: 100%;">📄 Gerar PDF</button>
+          <p id="pdf-status" style="text-align: center; margin-top: 12px; font-size: 0.85rem; display: none;"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Card para Compartilhar -->
+    <div id="share-modal" class="modal-overlay" style="display: none;">
+      <div class="modal-content" style="max-width: 480px;">
+        <div class="modal-header">
+          <h3>📱 Compartilhar Card</h3>
+          <button type="button" class="modal-close" id="share-modal-close">&times;</button>
+        </div>
+        <div class="modal-body" style="text-align: center;">
+          <canvas id="share-card-canvas" width="1080" height="1080" style="width: 100%; max-width: 400px; border-radius: 12px;"></canvas>
+          <div style="display: flex; gap: 12px; justify-content: center; margin-top: 16px; flex-wrap: wrap;">
+            <button type="button" id="share-download-btn">💾 Baixar Imagem</button>
+            <button type="button" class="ghost" id="share-copy-btn">📋 Copiar</button>
+            <button type="button" class="ghost" id="share-native-btn">🚀 Compartilhar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <footer class="app-footer">
       <p>Dados salvos no localStorage. App local, sem envio para terceiros.</p>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script type="module" src="./app.js"></script>
   </body>
 </html>
