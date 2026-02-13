@@ -2478,13 +2478,14 @@ pdfGenerateBtn?.addEventListener('click', async () => {
     doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, pageW / 2, 34, { align: 'center' });
     y = 50;
 
-    // KPIs
+    /// KPIs
     const incKpis = document.getElementById('pdf-inc-kpis')?.checked;
     if (incKpis) {
       doc.setTextColor(124, 92, 255);
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
-      doc.text('📊 RESUMO GERAL', margin, y);
+      // CORREÇÃO: Removido o emoji 📊 que causava erro
+      doc.text('RESUMO GERAL', margin, y); 
       y += 8;
       doc.setDrawColor(124, 92, 255);
       doc.line(margin, y, pageW - margin, y);
@@ -2493,6 +2494,8 @@ pdfGenerateBtn?.addEventListener('click', async () => {
       doc.setTextColor(60, 60, 60);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
+      
+      
 
       const kpiData = [
         ['Total apostado:', currencyFormatter.format(totalStake)],
@@ -2525,7 +2528,8 @@ pdfGenerateBtn?.addEventListener('click', async () => {
       doc.setTextColor(124, 92, 255);
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
-      doc.text('📈 GRÁFICO DE EVOLUÇÃO', margin, y);
+      // CORREÇÃO: Removido o emoji 📈
+      doc.text('GRÁFICO DE EVOLUÇÃO', margin, y);
       y += 8;
       doc.setDrawColor(124, 92, 255);
       doc.line(margin, y, pageW - margin, y);
@@ -2556,7 +2560,8 @@ pdfGenerateBtn?.addEventListener('click', async () => {
       doc.setTextColor(124, 92, 255);
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
-      doc.text('🏠 ESTATÍSTICAS POR CASA', margin, y);
+      // CORREÇÃO: Removido o emoji 🏠
+      doc.text('ESTATÍSTICAS POR CASA', margin, y);
       y += 8;
       doc.setDrawColor(124, 92, 255);
       doc.line(margin, y, pageW - margin, y);
@@ -2612,10 +2617,12 @@ pdfGenerateBtn?.addEventListener('click', async () => {
     const incTop5 = document.getElementById('pdf-inc-top5')?.checked;
     if (incTop5 && wins.length > 0) {
       if (y > 230) { doc.addPage(); y = 20; }
+      
       doc.setTextColor(124, 92, 255);
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
-      doc.text('🏆 TOP 5 MELHORES APOSTAS', margin, y);
+      // Título sem emoji
+      doc.text('TOP 5 MELHORES APOSTAS', margin, y);
       y += 8;
       doc.setDrawColor(124, 92, 255);
       doc.line(margin, y, pageW - margin, y);
@@ -2627,44 +2634,77 @@ pdfGenerateBtn?.addEventListener('click', async () => {
         .slice(0, 5);
 
       doc.setFontSize(9);
+      
       top5.forEach((bet, i) => {
         if (y > 275) { doc.addPage(); y = 20; }
+        
+        // 1. Número do Ranking (Verde)
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(34, 150, 80);
+        doc.setTextColor(34, 150, 80); 
         doc.text(`${i + 1}.`, margin, y);
+
+        // 2. Lucro (Alinhado à DIREITA para ficar organizado)
+        // Mantemos a cor verde para destacar o ganho
+        doc.text(`+${currencyFormatter.format(bet.profit)}`, pageW - margin, y, { align: 'right' });
+
+        // 3. Evento + Odd (Alinhado à ESQUERDA)
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(60, 60, 60);
-        doc.text(`${bet.event} (odd ${numberFormatter.format(bet.odds)}x) → +${currencyFormatter.format(bet.profit)}`, margin + 8, y);
+        
+        const oddText = `(${numberFormatter.format(bet.odds)}x)`;
+        let eventText = bet.event || '-';
+        
+        // Truncar o nome do evento para não bater no valor do lucro
+        // 60 caracteres é um bom limite seguro para esta linha
+        if (eventText.length > 55) {
+          eventText = eventText.substring(0, 55) + '...';
+        }
+
+        // Escreve: "Nome do Evento... (2.00x)"
+        doc.text(`${eventText} ${oddText}`, margin + 8, y);
+        
         y += 6;
       });
       y += 6;
     }
 
-    // Full table
+    /// Full table
     const incTable = document.getElementById('pdf-inc-table')?.checked;
     if (incTable && monthBets.length > 0) {
       if (y > 200) { doc.addPage(); y = 20; }
+      
       doc.setTextColor(124, 92, 255);
       doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
-      doc.text('📋 HISTÓRICO COMPLETO', margin, y);
+      // CORREÇÃO: Removido o emoji 📋
+      doc.text('HISTÓRICO COMPLETO', margin, y);
       y += 8;
       doc.setDrawColor(124, 92, 255);
       doc.line(margin, y, pageW - margin, y);
       y += 6;
 
-      // Table header
+      // --- CONFIGURAÇÃO DAS COLUNAS (FIX) ---
+      const colX = {
+        date: margin,
+        event: margin + 18,
+        odd: margin + 95,      // DIREITA
+        stake: margin + 115,   // DIREITA
+        status: margin + 120,
+        profit: margin + 155,  // DIREITA
+        book: margin + 160
+      };
+
+      // Header
       doc.setFontSize(7);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(100, 100, 100);
-      const tCols = [margin, margin+20, margin+80, margin+95, margin+115, margin+130, margin+155];
-      doc.text('Data', tCols[0], y);
-      doc.text('Evento', tCols[1], y);
-      doc.text('Odd', tCols[2], y);
-      doc.text('Stake', tCols[3], y);
-      doc.text('Status', tCols[4], y);
-      doc.text('Lucro', tCols[5], y);
-      doc.text('Casa', tCols[6], y);
+      doc.text('Data', colX.date, y);
+      doc.text('Evento', colX.event, y);
+      doc.text('Odd', colX.odd, y, { align: 'right' });   
+      doc.text('Stake', colX.stake, y, { align: 'right' }); 
+      doc.text('Status', colX.status, y);
+      doc.text('Lucro', colX.profit, y, { align: 'right' }); 
+      doc.text('Casa', colX.book, y);
       y += 1;
       doc.setDrawColor(200, 200, 200);
       doc.line(margin, y, pageW - margin, y);
@@ -2681,17 +2721,16 @@ pdfGenerateBtn?.addEventListener('click', async () => {
         if (y > 275) {
           doc.addPage();
           y = 20;
-          // Re-draw header
           doc.setFontSize(7);
           doc.setFont('helvetica', 'bold');
           doc.setTextColor(100, 100, 100);
-          doc.text('Data', tCols[0], y);
-          doc.text('Evento', tCols[1], y);
-          doc.text('Odd', tCols[2], y);
-          doc.text('Stake', tCols[3], y);
-          doc.text('Status', tCols[4], y);
-          doc.text('Lucro', tCols[5], y);
-          doc.text('Casa', tCols[6], y);
+          doc.text('Data', colX.date, y);
+          doc.text('Evento', colX.event, y);
+          doc.text('Odd', colX.odd, y, { align: 'right' });
+          doc.text('Stake', colX.stake, y, { align: 'right' });
+          doc.text('Status', colX.status, y);
+          doc.text('Lucro', colX.profit, y, { align: 'right' });
+          doc.text('Casa', colX.book, y);
           y += 1;
           doc.line(margin, y, pageW - margin, y);
           y += 4;
@@ -2701,20 +2740,21 @@ pdfGenerateBtn?.addEventListener('click', async () => {
         const profit = calcProfit(bet);
         doc.setFontSize(7);
         doc.setTextColor(60, 60, 60);
-        doc.text(bet.date || '-', tCols[0], y);
-        doc.text((bet.event || '-').substring(0, 35), tCols[1], y);
-        doc.text(numberFormatter.format(bet.odds), tCols[2], y);
-        doc.text(currencyFormatter.format(bet.stake), tCols[3], y);
+        doc.text(bet.date || '-', colX.date, y);
+        const eventText = (bet.event || '-');
+        doc.text(eventText.length > 35 ? eventText.substring(0, 35) + '...' : eventText, colX.event, y);
+        doc.text(numberFormatter.format(bet.odds), colX.odd, y, { align: 'right' });
+        doc.text(currencyFormatter.format(bet.stake), colX.stake, y, { align: 'right' });
 
         if (bet.status === 'win') doc.setTextColor(34, 150, 80);
         else if (bet.status === 'loss') doc.setTextColor(220, 50, 50);
         else doc.setTextColor(200, 160, 0);
-        doc.text(statusLabel(bet.status), tCols[4], y);
+        doc.text(statusLabel(bet.status).substring(0, 10), colX.status, y);
 
         doc.setTextColor(profit >= 0 ? 34 : 220, profit >= 0 ? 150 : 50, profit >= 0 ? 80 : 50);
-        doc.text(currencyFormatter.format(profit), tCols[5], y);
+        doc.text(currencyFormatter.format(profit), colX.profit, y, { align: 'right' });
         doc.setTextColor(60, 60, 60);
-        doc.text((bet.book || '-').substring(0, 15), tCols[6], y);
+        doc.text((bet.book || '-').substring(0, 12), colX.book, y);
         y += 5;
       });
       y += 6;
@@ -2729,7 +2769,8 @@ pdfGenerateBtn?.addEventListener('click', async () => {
         doc.setTextColor(124, 92, 255);
         doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
-        doc.text('📝 NOTAS E OBSERVAÇÕES', margin, y);
+        // CORREÇÃO: Removido o emoji 📝
+        doc.text('NOTAS E OBSERVAÇÕES', margin, y);
         y += 8;
         doc.setDrawColor(124, 92, 255);
         doc.line(margin, y, pageW - margin, y);
