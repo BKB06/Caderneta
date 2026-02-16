@@ -1266,17 +1266,43 @@ function getBetsByDateKey(dateKey) {
 }
 
 function openDayModal(dateKey, displayDate) {
-  if (!dayModal) return;
+ if (!dayModal) return;
 
   const dayBets = getBetsByDateKey(dateKey);
   
-  modalTitle.textContent = `Apostas - ${displayDate}`;
+  // Guardar dados para o compartilhamento
+  dayModal._currentDateKey = dateKey;
+  dayModal._currentDisplayDate = displayDate;
+  dayModal._currentBets = dayBets;
+
+  // Atualizar Título e adicionar botão de compartilhar
+  const headerContainer = dayModal.querySelector('.modal-header');
+  // Limpa o header atual e recria para garantir que não duplique botões
+  headerContainer.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <h3 id="modal-title">Apostas - ${displayDate}</h3>
+      <button type="button" class="ghost small" id="share-day-btn" title="Compartilhar Resumo do Dia">
+        📱 Compartilhar
+      </button>
+    </div>
+    <button type="button" class="modal-close" id="modal-close">&times;</button>
+  `;
+
+  // Reconectar o evento de fechar (pois recriamos o botão close)
+  document.getElementById('modal-close').addEventListener('click', closeDayModal);
+  
+  // Conectar o evento do novo botão de compartilhar
+  document.getElementById('share-day-btn').addEventListener('click', () => {
+    openShareDayModal(displayDate, dayBets);
+  });
+
+  const modalSummary = document.getElementById("modal-summary");
+  const modalBetsList = document.getElementById("modal-bets-list");
 
   // Calculate summary
   const settled = dayBets.filter(b => b.status === 'win' || b.status === 'loss');
   const wins = dayBets.filter(b => b.status === 'win').length;
   const losses = dayBets.filter(b => b.status === 'loss').length;
-  const pending = dayBets.filter(b => b.status === 'pending').length;
   const totalProfit = settled.reduce((sum, bet) => sum + calcProfit(bet), 0);
 
   modalSummary.innerHTML = `
@@ -1324,7 +1350,7 @@ function openDayModal(dateKey, displayDate) {
 
   dayModal.style.display = 'flex';
 }
-
+//termina aqui a func
 function closeDayModal() {
   if (dayModal) {
     dayModal.style.display = 'none';
@@ -1346,7 +1372,204 @@ document.addEventListener('keydown', (e) => {
     if (typeof closeShareModal === 'function') closeShareModal();
   }
 });
+function openShareDayModal(date, betsList) {
+  if (!shareModal || !shareCardCanvas) return;
+  
+  // Renderiza o card específico do dia
+  renderDayShareCard(date, betsList);
+  
+  // Limpa a referência de aposta única para evitar conflitos no botão nativo
+  shareModal._currentBet = null; 
+  shareModal.style.display = 'flex';
+}
 
+function renderDayShareCard(dateString, betsList) {
+  const canvas = shareCardCanvas;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  
+  // Aumentamos a altura para caber a lista (formato Story/Portrait: 1080x1350)
+  const w = 1080;
+  const h = 1350; 
+  canvas.width = w;
+  canvas.height = h;
+
+  // 1. Fundo (Gradiente Dark)
+  const bgGrad = ctx.createLinearGradient(0, 0, w, h);
+  bgGrad.addColorStop(0, '#0b1020');
+  bgGrad.addColorStop(0.5, '#161b33');
+  bgGrad.addColorStop(1, '#0b1020');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, w, h);
+
+  // Decoração de fundo (Círculos)
+  ctx.beginPath();
+  ctx.arc(0, 0, 400, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(124, 92, 255, 0.08)';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(w, h, 350, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(45, 212, 191, 0.08)';
+  ctx.fill();
+
+  // Cálculos do Dia
+  const settled = betsList.filter(b => b.status === 'win' || b.status === 'loss');
+  const wins = settled.filter(b => b.status === 'win').length;
+  const losses = settled.filter(b => b.status === 'loss').length;
+  const totalProfit = settled.reduce((sum, b) => sum + calcProfit(b), 0);
+  const totalStake = settled.reduce((sum, b) => sum + b.stake, 0);
+  const roi = totalStake > 0 ? (totalProfit / totalStake) * 100 : 0;
+  const isPositive = totalProfit >= 0;
+
+  let y = 80;
+
+  // 2. Cabeçalho: Data
+  ctx.fillStyle = 'rgba(245, 247, 255, 0.6)';
+  ctx.font = '600 32px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`RESUMO DO DIA • ${dateString}`, w / 2, y);
+  
+  y += 100;
+
+  // 3. Lucro Total em Destaque
+  const profitColor = isPositive ? '#22c55e' : '#ff6b6b';
+  const profitBg = isPositive ? 'rgba(34, 197, 94, 0.1)' : 'rgba(255, 107, 107, 0.1)';
+  
+  // Card do Lucro
+  ctx.fillStyle = profitBg;
+  roundRect(ctx, 140, y - 60, w - 280, 140, 24);
+  ctx.fill();
+  ctx.strokeStyle = profitColor;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = profitColor;
+  ctx.font = 'bold 80px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  // Centralizar verticalmente no box
+  ctx.fillText(`${totalProfit >= 0 ? '+' : ''}${currencyFormatter.format(totalProfit)}`, w / 2, y + 40);
+
+  y += 140;
+
+  // 4. Grid de Estatísticas (Wins, Reds, ROI)
+  const cardsY = y + 40;
+  const cardW = 240;
+  const cardH = 120;
+  const gap = 40;
+  const startX = (w - (cardW * 3 + gap * 2)) / 2;
+
+  // Card Wins
+  drawMiniStatCard(ctx, startX, cardsY, cardW, cardH, '✅ Greens', wins.toString(), '#22c55e');
+  // Card Reds
+  drawMiniStatCard(ctx, startX + cardW + gap, cardsY, cardW, cardH, '❌ Reds', losses.toString(), '#ff6b6b');
+  // Card ROI
+  const roiColor = roi >= 0 ? '#22c55e' : '#ff6b6b';
+  drawMiniStatCard(ctx, startX + (cardW + gap) * 2, cardsY, cardW, cardH, '📈 ROI', `${roi.toFixed(1)}%`, roiColor);
+
+  y = cardsY + cardH + 60;
+
+  // 5. Lista de Apostas (Top lista)
+  ctx.fillStyle = '#f5f7ff';
+  ctx.font = 'bold 36px Inter, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('📋 Histórico do Dia', 80, y);
+  
+  // Linha divisória
+  y += 20;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(80, y);
+  ctx.lineTo(w - 80, y);
+  ctx.stroke();
+  
+  y += 40;
+
+  // Ordenar: Wins primeiro, depois losses (ou cronológico se preferir)
+  // Vamos priorizar os maiores lucros/perdas para mostrar o que importa
+  const sortedBets = [...settled].sort((a, b) => Math.abs(calcProfit(b)) - Math.abs(calcProfit(a)));
+  
+  // Mostrar no máximo 6 apostas para caber
+  const maxBetsToShow = 6;
+  const betsToShow = sortedBets.slice(0, maxBetsToShow);
+
+  betsToShow.forEach(bet => {
+    const bProfit = calcProfit(bet);
+    const bColor = bProfit >= 0 ? '#22c55e' : '#ff6b6b';
+    const bIcon = bProfit >= 0 ? '✅' : '❌';
+    
+    // Fundo da linha
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+    roundRect(ctx, 80, y, w - 160, 90, 12);
+    ctx.fill();
+
+    // Icone
+    ctx.font = '30px Inter, sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'left';
+    ctx.fillText(bIcon, 100, y + 55);
+
+    // Evento (Truncado)
+    ctx.font = '600 28px Inter, sans-serif';
+    ctx.fillStyle = '#f5f7ff';
+    let eventName = bet.event;
+    if (ctx.measureText(eventName).width > 550) {
+      while (ctx.measureText(eventName + '...').width > 550) {
+        eventName = eventName.slice(0, -1);
+      }
+      eventName += '...';
+    }
+    ctx.fillText(eventName, 160, y + 55);
+
+    // Odd
+    ctx.font = '400 24px Inter, sans-serif';
+    ctx.fillStyle = 'rgba(245, 247, 255, 0.6)';
+    ctx.fillText(`@${numberFormatter.format(bet.odds)}`, 740, y + 55);
+
+    // Valor Lucro
+    ctx.font = 'bold 28px Inter, sans-serif';
+    ctx.fillStyle = bColor;
+    ctx.textAlign = 'right';
+    ctx.fillText(formatProfit(bProfit), w - 100, y + 55);
+
+    y += 105;
+  });
+
+  // Se houver mais apostas que não couberam
+  if (sortedBets.length > maxBetsToShow) {
+    ctx.fillStyle = 'rgba(245, 247, 255, 0.5)';
+    ctx.font = 'italic 24px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`... e mais ${sortedBets.length - maxBetsToShow} apostas`, w / 2, y + 20);
+  } else if (sortedBets.length === 0) {
+    ctx.fillStyle = 'rgba(245, 247, 255, 0.5)';
+    ctx.font = 'italic 24px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Nenhuma aposta finalizada neste dia`, w / 2, y + 40);
+  }
+
+  // Footer
+  ctx.fillStyle = 'rgba(245, 247, 255, 0.3)';
+  ctx.font = '400 24px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Caderneta de Apostas', w / 2, h - 50);
+}
+
+function drawMiniStatCard(ctx, x, y, w, h, label, value, color) {
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+  roundRect(ctx, x, y, w, h, 16);
+  ctx.fill();
+  
+  ctx.fillStyle = 'rgba(245, 247, 255, 0.6)';
+  ctx.font = '400 24px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(label, x + w / 2, y + 40);
+
+  ctx.fillStyle = color;
+  ctx.font = 'bold 36px Inter, sans-serif';
+  ctx.fillText(value, x + w / 2, y + 90);
+}
 function init() {
   loadBets();
   loadCashflows();
@@ -3041,26 +3264,55 @@ shareCopyBtn?.addEventListener('click', async () => {
 
 shareNativeBtn?.addEventListener('click', async () => {
   if (!shareCardCanvas) return;
+  
+  // Muda o texto do botão para indicar processamento
+  const originalText = shareNativeBtn.innerHTML;
+  shareNativeBtn.innerHTML = '🔄 Processando...';
+  
   try {
+    // 1. Converter o Canvas em um Arquivo de imagem real (Blob -> File)
     const blob = await new Promise(resolve => shareCardCanvas.toBlob(resolve, 'image/png'));
-    const file = new File([blob], 'aposta.png', { type: 'image/png' });
-    if (navigator.share) {
-      await navigator.share({
-        title: 'Minha Aposta',
-        text: shareModal?._currentBet ? `${shareModal._currentBet.event} - ${statusLabel(shareModal._currentBet.status)}` : 'Confira minha aposta!',
-        files: [file],
-      });
+    const file = new File([blob], 'resumo-apostas.png', { type: 'image/png' });
+
+    // 2. Preparar os dados para compartilhamento
+    const shareData = {
+      title: 'Caderneta de Apostas',
+      text: shareModal?._currentBet 
+        ? `Minha aposta: ${shareModal._currentBet.event}` 
+        : 'Confira meu resumo do dia na Caderneta!',
+      files: [file],
+    };
+
+    // 3. Verificar se o navegador suporta compartilhamento nativo de ARQUIVOS
+    // (Geralmente funciona no Mobile, mas falha no Desktop)
+    if (navigator.canShare && navigator.canShare(shareData)) {
+      await navigator.share(shareData);
+      // Se der certo, volta o texto normal
+      shareNativeBtn.innerHTML = originalText;
     } else {
-      // Fallback
-      shareDownloadBtn?.click();
+      throw new Error("Sharing not supported");
     }
+
   } catch (e) {
+    // Se der erro (ou se for Desktop e não suportar), cai aqui
+    
+    // Ignora erro se o usuário cancelou o menu de compartilhar
     if (e.name !== 'AbortError') {
+      // Se não for cancelamento, é porque não suporta.
+      // Mostramos um aviso (se a função showToast existir, senão usa alert ou console)
+      if (typeof showToast === 'function') {
+        showToast("Compartilhamento nativo indisponível no PC. Baixando imagem...");
+      } else {
+        alert("Neste dispositivo, a imagem será baixada para você enviar manualmente.");
+      }
+      
+      // Fallback: Clica no botão de download automaticamente
       shareDownloadBtn?.click();
     }
+    shareNativeBtn.innerHTML = originalText;
   }
 });
-
+//fim da func sharenativebtn
 init();
 performWeeklyBackup();
 renderProfileSwitcher();
