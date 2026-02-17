@@ -2166,31 +2166,56 @@ button.danger:hover {
   margin-top: 4px;
 }
 
-/* ========================
-   FINALIZED BETS LIST
-======================== */
+
 .finalized-bets-panel {
-  margin-bottom: 24px;
-  padding: 20px;
-  background: var(--panel);
+  /* Faz o painel ocupar todo o espaço restante na tela */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  
+  /* Ajuste de margens */
+  margin-top: 24px; 
+  margin-bottom: 0;
+  
+  background: var(--bg-soft);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  
+  /* Importante: permite que o conteúdo interno tenha rolagem independente */
+  min-height: 0; 
+  height: 100%;
 }
 
 .finalized-bets-panel h3 {
-  margin-bottom: 16px;
-  font-size: 1rem;
+ margin-bottom: 12px;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  flex-shrink: 0; /* Garante que o título não suma */
 }
 
 .finalized-bets-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 400px;
-  overflow-y: auto;
+  /* AQUI ESTÁ O SEGREDO: */
+  flex: 1;        /* Manda a lista crescer para ocupar o espaço vazio */
+  height: 100%;   /* Força a altura total */
+  max-height: 750px; /* Remove qualquer limite de altura anterior */
+  overflow-y: auto; /* A barra de rolagem aparece apenas se necessário */
+  padding-right: 4px;
 }
-
+/* Estilo da barra de rolagem para ficar mais elegante */
+.finalized-bets-list::-webkit-scrollbar {
+  width: 4px;
+}
+.finalized-bets-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
 .finalized-bet-item {
+  /* Garante que o item não encolha demais */
+  flex-shrink: 0; 
   display: flex;
   align-items: center;
   justify-content: space-between;
