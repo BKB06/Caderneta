@@ -460,7 +460,7 @@ function renderAIRankingPage() {
   const tableBody = document.getElementById('ai-ranking-table');
   if (!container && !tableBody) return;
 
-  const aiNames = ['Grok', 'Gemini', 'Opus 4'];
+  const aiNames = ['Grok', 'Gemini', 'Claude'];
   const aiStats = aiNames.map(name => {
     const aiBets = bets.filter(b => b.ai === name && (b.status === 'win' || b.status === 'loss'));
     const wins = aiBets.filter(b => b.status === 'win').length;

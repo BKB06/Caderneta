@@ -113,6 +113,7 @@ const numberFormatter = new Intl.NumberFormat("pt-BR", {
 function loadBets() {
   const raw = localStorage.getItem(getStorageKey());
   bets = raw ? JSON.parse(raw) : [];
+  let migrationNeeded = false;
   bets = bets.map((bet) => {
     const statusMap = {
       Pendente: "pending",
@@ -124,7 +125,11 @@ function loadBets() {
       "Devolvida / Void": "void",
       Cashout: "cashout",
     };
-
+    let aiValue = bet.ai;
+    if (aiValue === "Opus 4") {
+        aiValue = "Claude";
+        migrationNeeded = true;
+    }
     return {
       ...bet,
       status: statusMap[bet.status] || bet.status,
@@ -132,7 +137,12 @@ function loadBets() {
       odds: Number(bet.odds),
       isFreebet: Boolean(bet.isFreebet || bet.freebet),
     };
+    
   });
+  if (migrationNeeded) {
+      saveBets();
+      console.log("Dados migrados de Opus 4 para Claude com sucesso.");
+  }
 }
 
 function loadCashflows() {
@@ -1637,22 +1647,37 @@ deleteModalConfirm?.addEventListener('click', () => {
 // ========================
 // AI RANKING
 // ========================
-function renderAIRanking() {
+  function renderAIRanking() {
   const container = document.getElementById('ai-ranking-grid');
   if (!container) return;
 
-  const aiNames = ['Grok', 'Gemini', 'Opus 4'];
+  // 1. MUDANÇA VISUAL: Aqui colocamos 'Claude' para aparecer escrito na tela
+  const aiNames = ['Grok', 'Gemini', 'Claude']; 
+  
   const aiStats = aiNames.map(name => {
-    const aiBets = bets.filter(b => b.ai === name && (b.status === 'win' || b.status === 'loss'));
+    
+    // 2. O TRUQUE: Buscamos apostas que tenham o nome atual OU o nome antigo
+    const aiBets = bets.filter(b => {
+        // Verifica se a aposta já está salva como 'Claude' (novas)
+        const isNewName = b.ai === name;
+        
+        // Verifica se estamos buscando o 'Claude', mas a aposta é antiga ('Opus 4')
+        const isLegacyName = (name === 'Claude' && b.ai === 'Opus 4'); 
+        
+        // Aceita se for uma ou outra, desde que a aposta esteja finalizada (win/loss)
+        return (isNewName || isLegacyName) && (b.status === 'win' || b.status === 'loss');
+    });
+
     const wins = aiBets.filter(b => b.status === 'win').length;
     const losses = aiBets.filter(b => b.status === 'loss').length;
     const total = aiBets.length;
     const winrate = total > 0 ? wins / total : 0;
     const profit = aiBets.reduce((sum, b) => sum + calcProfit(b), 0);
+    
     return { name, wins, losses, total, winrate, profit };
   });
 
-  // Sort by winrate, then by total bets
+  // Ordenação (quem tem mais taxa de acerto fica em primeiro)
   aiStats.sort((a, b) => {
     if (b.winrate !== a.winrate) return b.winrate - a.winrate;
     return b.total - a.total;
@@ -1676,6 +1701,7 @@ function renderAIRanking() {
     </div>
   `).join('');
 }
+ 
 
 // ========================
 // WEEKDAY PERFORMANCE
