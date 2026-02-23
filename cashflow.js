@@ -52,13 +52,44 @@ const dateFilterStart = document.getElementById("date-filter-start");
 const dateFilterEnd = document.getElementById("date-filter-end");
 const clearFiltersBtn = document.getElementById("clear-filters");
 
-function loadCashflows() {
-  const raw = localStorage.getItem(getCashflowKey());
-  cashflows = raw ? JSON.parse(raw) : [];
-  cashflows = cashflows.map((flow) => ({
-    ...flow,
-    amount: Number(flow.amount),
-  }));
+async function loadCashflows() {
+  try {
+    const profileId = getActiveProfileId();
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_fluxo', profile_id: profileId })
+    });
+    const dados = await resposta.json();
+    cashflows = dados.map((flow) => ({
+      ...flow,
+      amount: Number(flow.amount),
+    }));
+  } catch (erro) {
+    console.error("Erro ao carregar fluxo:", erro);
+    cashflows = [];
+  }
+}
+
+// Novas funções para falar com a API
+async function salvarFluxoBD(flow) {
+  try {
+    await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'salvar_fluxo', profile_id: getActiveProfileId(), fluxo: flow })
+    });
+  } catch (erro) { console.error("Erro:", erro); }
+}
+
+async function excluirFluxoBD(id) {
+  try {
+    await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'excluir_fluxo', id: id })
+    });
+  } catch (erro) { console.error("Erro:", erro); }
 }
 
 function saveCashflows() {
@@ -413,7 +444,7 @@ function resetForm() {
   submitButton.textContent = "Salvar movimentação";
 }
 
-function handleSubmit(event) {
+async function handleSubmit(event) {
   event.preventDefault();
 
   const rawDate = document.getElementById("cashflow-date").value.trim();
@@ -441,7 +472,7 @@ function handleSubmit(event) {
   } else {
     cashflows.unshift(flow);
   }
-
+  await salvarFluxoBD(flow);
   saveCashflows();
   refreshAll();
   resetForm();
@@ -457,7 +488,7 @@ function startEdit(flow) {
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function handleTableClick(event) {
+async function handleTableClick(event) {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
 
@@ -472,6 +503,9 @@ function handleTableClick(event) {
   if (button.dataset.action === "delete") {
     if (confirm("Tem certeza que deseja excluir esta movimentação?")) {
       cashflows = cashflows.filter((flow) => flow.id !== id);
+      
+      await excluirFluxoBD(id); 
+      
       saveCashflows();
       refreshAll();
     }
@@ -529,7 +563,9 @@ profileSwitch?.addEventListener('change', (e) => {
   }
 });
 
-// Init
-loadCashflows();
-refreshAll();
-renderProfileSwitcher();
+async function iniciarCashflow() {
+  await loadCashflows();
+  refreshAll();
+  renderProfileSwitcher();
+}
+iniciarCashflow();

@@ -243,28 +243,51 @@ function renderProfiles() {
   }
 }
 
-function loadSettings() {
-  const raw = localStorage.getItem(getSettingsKey(activeProfileId));
-  if (raw) {
-    try {
-      const saved = JSON.parse(raw);
+async function loadSettings() {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_dados_extras', profile_id: activeProfileId })
+    });
+    
+    const json = await resposta.json();
+
+    if (json.sucesso && json.dados && json.dados.settings_json) {
+      const saved = JSON.parse(json.dados.settings_json);
       settings = { ...defaultSettings, ...saved };
-      // Merge nested objects
       settings.profile = { ...defaultSettings.profile, ...saved.profile };
       settings.display = { ...defaultSettings.display, ...saved.display };
       settings.columns = { ...defaultSettings.columns, ...saved.columns };
       settings.defaults = { ...defaultSettings.defaults, ...saved.defaults };
       settings.favorites = saved.favorites || [];
-    } catch (e) {
-      settings = { ...defaultSettings };
+    } else {
+      settings = { ...defaultSettings }; // Usa o padrão se não houver nada no BD
     }
-  } else {
+  } catch (e) {
+    console.error("Erro ao carregar configurações da API:", e);
     settings = { ...defaultSettings };
   }
 }
 
-function saveSettings() {
-  localStorage.setItem(getSettingsKey(activeProfileId), JSON.stringify(settings));
+async function saveSettings() {
+  try {
+    await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        acao: 'salvar_dados_extras', 
+        profile_id: activeProfileId,
+        tipo: 'settings', // Avisa o PHP que estamos a guardar configurações
+        valor: JSON.stringify(settings) // Transforma as configurações em texto para o BD
+      })
+    });
+    
+    // Mantemos o backup local por enquanto
+    localStorage.setItem(getSettingsKey(activeProfileId), JSON.stringify(settings));
+  } catch (e) {
+    console.error("Erro ao salvar configurações na API:", e);
+  }
 }
 
 function parseLocaleNumber(value) {
@@ -767,11 +790,15 @@ document.getElementById("user-notes")?.addEventListener("input", () => {
   }, 1000);
 });
 
-// Init
-loadProfiles();
-loadSettings();
-populateForm();
-renderProfiles();
-setupAutoSave();
-loadNotes();
-loadGeminiApiKey();
+// Init Async
+async function inicializarPaginaConfiguracoes() {
+  loadProfiles();
+  await loadSettings(); // Agora espera o BD responder!
+  populateForm();
+  renderProfiles();
+  setupAutoSave();
+  loadNotes();
+  loadGeminiApiKey();
+}
+
+inicializarPaginaConfiguracoes();

@@ -42,29 +42,35 @@ const numberFormatter = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 2,
 });
 
-function loadBets() {
-  const raw = localStorage.getItem(getStorageKey());
-  bets = raw ? JSON.parse(raw) : [];
-  bets = bets.map((bet) => {
-    const statusMap = {
-      Pendente: "pending",
-      Green: "win",
-      "Green / Ganhou": "win",
-      Red: "loss",
-      "Red / Perdeu": "loss",
-      Void: "void",
-      "Devolvida / Void": "void",
-      Cashout: "cashout",
-    };
+async function loadBets() {
+  try {
+    const profileId = getActiveProfileId();
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_apostas', profile_id: profileId })
+    });
 
-    return {
-      ...bet,
-      status: statusMap[bet.status] || bet.status,
-      stake: Number(bet.stake),
-      odds: Number(bet.odds),
-      isFreebet: Boolean(bet.isFreebet || bet.freebet),
-    };
-  });
+    const dados = await resposta.json();
+
+    bets = dados.map((bet) => {
+      const statusMap = {
+        Pendente: "pending",Aberta: "pending", Green: "win", "Green / Ganhou": "win",
+        Red: "loss", "Red / Perdeu": "loss", Void: "void",
+        "Devolvida / Void": "void", Cashout: "cashout",
+      };
+      return {
+        ...bet,
+        status: statusMap[bet.status] || bet.status,
+        stake: Number(bet.stake),
+        odds: Number(bet.odds),
+        isFreebet: Boolean(bet.isFreebet || bet.freebet),
+      };
+    });
+  } catch (erro) {
+    console.error("Erro ao carregar apostas no ranking:", erro);
+    bets = [];
+  }
 }
 
 function formatProfit(value) {
@@ -518,8 +524,8 @@ function renderAIRankingPage() {
   }
 }
 
-function init() {
-  loadBets();
+async function init() {
+  await loadBets(); // Agora espera que as apostas cheguem do BD
   renderRecords();
   renderStats();
   renderTopLists();

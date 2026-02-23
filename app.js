@@ -109,49 +109,61 @@ const numberFormatter = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
-
-function loadBets() {
-  const raw = localStorage.getItem(getStorageKey());
-  bets = raw ? JSON.parse(raw) : [];
-  let migrationNeeded = false;
-  bets = bets.map((bet) => {
-    const statusMap = {
-      Pendente: "pending",
-      Green: "win",
-      "Green / Ganhou": "win",
-      Red: "loss",
-      "Red / Perdeu": "loss",
-      Void: "void",
-      "Devolvida / Void": "void",
-      Cashout: "cashout",
-    };
-    let aiValue = bet.ai;
-    if (aiValue === "Opus 4") {
-        aiValue = "Claude";
-        migrationNeeded = true;
-    }
-    return {
-      ...bet,
-      status: statusMap[bet.status] || bet.status,
-      stake: Number(bet.stake),
-      odds: Number(bet.odds),
-      isFreebet: Boolean(bet.isFreebet || bet.freebet),
-    };
+//calma
+async function loadBets() {
+  try {
+    const profileId = getActiveProfileId();
     
-  });
-  if (migrationNeeded) {
-      saveBets();
-      console.log("Dados migrados de Opus 4 para Claude com sucesso.");
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_apostas', profile_id: profileId })
+    });
+
+    // Em vez de transformar logo em JSON, lemos como texto bruto
+    const textoBruto = await resposta.text();
+    
+    try {
+      // Tentamos converter para JSON
+      const dados = JSON.parse(textoBruto);
+      
+      bets = dados.map((bet) => ({
+        ...bet,
+        stake: Number(bet.stake),
+        odds: Number(bet.odds),
+        isFreebet: Boolean(bet.isFreebet || bet.freebet)
+      }));
+      
+    } catch (erroJson) {
+      // Se falhar, mostramos exatamente o que o PHP nos enviou!
+      console.error("🚨 O PHP não devolveu JSON. Ele respondeu exatamente isto:", textoBruto);
+      bets = []; 
+    }
+
+  } catch (erro) {
+    console.error("Erro de comunicação com a API:", erro);
+    bets = []; 
   }
 }
 
-function loadCashflows() {
-  const raw = localStorage.getItem(getCashflowKey());
-  cashflows = raw ? JSON.parse(raw) : [];
-  cashflows = cashflows.map((flow) => ({
-    ...flow,
-    amount: Number(flow.amount),
-  }));
+//calma
+async function loadCashflows() {
+  try {
+    const profileId = getActiveProfileId();
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_fluxo', profile_id: profileId })
+    });
+    const dados = await resposta.json();
+    cashflows = dados.map((flow) => ({
+      ...flow,
+      amount: Number(flow.amount),
+    }));
+  } catch (erro) {
+    console.error("Erro ao carregar fluxo na página principal:", erro);
+    cashflows = [];
+  }
 }
 
 function loadSettings() {
@@ -301,17 +313,25 @@ function applySettings() {
   }
 }
 
-function loadBankrollBase() {
-  const raw = localStorage.getItem(getBankrollKey());
-  const value = Number(raw);
-  baseBankroll = Number.isFinite(value) ? value : null;
+async function loadBankrollBase() {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_dados_extras', profile_id: getActiveProfileId() })
+    });
+    const json = await resposta.json();
+    baseBankroll = (json.sucesso && json.dados && json.dados.bankroll !== null) ? Number(json.dados.bankroll) : null;
+  } catch (e) { baseBankroll = null; }
 }
 
-function saveBankrollBase() {
+async function saveBankrollBase() {
   if (Number.isFinite(baseBankroll)) {
-    localStorage.setItem(getBankrollKey(), String(baseBankroll));
-  } else {
-    localStorage.removeItem(getBankrollKey());
+    await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'salvar_dados_extras', profile_id: getActiveProfileId(), tipo: 'bankroll', valor: String(baseBankroll) })
+    });
   }
 }
 
@@ -642,7 +662,7 @@ function renderTable() {
 
 function statusLabel(status) {
   const map = {
-    pending: "Pendente",
+    pending: "Aberta",
     win: "Green",
     loss: "Red",
     void: "Void",
@@ -920,7 +940,7 @@ function resetForm() {
   submitButton.textContent = "Salvar aposta";
 }
 
-function handleSubmit(event) {
+async function handleSubmit(event) {
   event.preventDefault();
 
   const rawDate = document.getElementById("bet-date").value.trim();
@@ -953,6 +973,7 @@ function handleSubmit(event) {
   } else {
     bets.unshift(bet);
   }
+  await salvarApostaBD(bet);
   saveBets();
   refreshAll();
   resetForm();
@@ -1580,19 +1601,52 @@ function drawMiniStatCard(ctx, x, y, w, h, label, value, color) {
   ctx.font = 'bold 36px Inter, sans-serif';
   ctx.fillText(value, x + w / 2, y + 90);
 }
-function init() {
-  loadBets();
-  loadCashflows();
-  loadSettings();
-  loadBankrollBase();
-  loadGoals();
+async function init() {
+  await loadBets();
+  await loadCashflows();
+  loadSettings(); // Podes deixar este normal para já
+  await loadBankrollBase(); // <-- Adiciona o await
+  await loadGoals();        // <-- Adiciona o await
   applySettings();
   updatePotentialProfit();
   refreshAll();
   renderCalendar();
-  loadQuickNotes();
+  await loadQuickNotes();   // <-- Adiciona o await
 }
-
+async function salvarApostaBD(aposta) {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        acao: 'salvar_aposta',
+        profile_id: getActiveProfileId(),
+        aposta: aposta
+      })
+    });
+    
+    // Em vez de forçar o JSON, lemos o texto puro que o PHP enviou
+    const textoBruto = await resposta.text();
+    
+    try {
+      // Agora sim, tentamos converter para JSON
+      const resultado = JSON.parse(textoBruto);
+      
+      if (resultado.sucesso) {
+        console.log("✅ Servidor diz:", resultado.mensagem);
+      } else {
+        console.error("❌ Erro no Banco de Dados:", resultado.erro);
+      }
+      
+    } catch (erroJson) {
+      // Se falhar a conversão, mostramos a MENSAGEM REAL do PHP com a sirene!
+      console.error("🚨 O PHP não devolveu JSON ao salvar. Ele respondeu exatamente isto:", textoBruto);
+    }
+    
+  } catch (erro) {
+    console.error("❌ Erro geral de comunicação:", erro);
+  }
+}
 // ========================
 // DELETE CONFIRMATION
 // ========================
@@ -1758,24 +1812,29 @@ function renderWeekdayPerformance() {
 // ========================
 let profitGoals = { weekly: 0, monthly: 0 };
 
-function loadGoals() {
-  const raw = localStorage.getItem(getGoalsKey());
-  if (raw) {
-    try {
-      profitGoals = JSON.parse(raw);
-    } catch (e) {
-      profitGoals = { weekly: 0, monthly: 0 };
-    }
-  }
-  // Set input values
+async function loadGoals() {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_dados_extras', profile_id: getActiveProfileId() })
+    });
+    const json = await resposta.json();
+    profitGoals = (json.sucesso && json.dados && json.dados.goals_json) ? JSON.parse(json.dados.goals_json) : { weekly: 0, monthly: 0 };
+  } catch (e) { profitGoals = { weekly: 0, monthly: 0 }; }
+  
   const weeklyInput = document.getElementById('weekly-goal-input');
   const monthlyInput = document.getElementById('monthly-goal-input');
   if (weeklyInput && profitGoals.weekly > 0) weeklyInput.value = numberFormatter.format(profitGoals.weekly);
   if (monthlyInput && profitGoals.monthly > 0) monthlyInput.value = numberFormatter.format(profitGoals.monthly);
 }
 
-function saveGoals() {
-  localStorage.setItem(getGoalsKey(), JSON.stringify(profitGoals));
+async function saveGoals() {
+  await fetch('api.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ acao: 'salvar_dados_extras', profile_id: getActiveProfileId(), tipo: 'goals', valor: JSON.stringify(profitGoals) })
+  });
 }
 
 function renderProfitGoals() {
@@ -1900,27 +1959,34 @@ function renderFinalizedBets() {
 }
 
 // Quick Notes (Anotações Rápidas)
-function loadQuickNotes() {
+async function loadQuickNotes() {
   const notesTextarea = document.getElementById("quick-notes");
   if (!notesTextarea) return;
-  
-  const saved = localStorage.getItem(getNotesKey());
-  notesTextarea.value = saved || "";
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_dados_extras', profile_id: getActiveProfileId() })
+    });
+    const json = await resposta.json();
+    notesTextarea.value = (json.sucesso && json.dados && json.dados.notes) ? json.dados.notes : "";
+  } catch (e) { notesTextarea.value = ""; }
 }
-
-function saveQuickNotes() {
+async function saveQuickNotes() {
   const notesTextarea = document.getElementById("quick-notes");
   const notesStatus = document.getElementById("quick-notes-status");
   if (!notesTextarea) return;
   
-  localStorage.setItem(getNotesKey(), notesTextarea.value);
+  await fetch('api.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ acao: 'salvar_dados_extras', profile_id: getActiveProfileId(), tipo: 'notes', valor: notesTextarea.value })
+  });
+  
   if (notesStatus) {
     notesStatus.textContent = "✓ Salvo";
     notesStatus.className = "notes-status saved";
-    setTimeout(() => {
-      notesStatus.textContent = "";
-      notesStatus.className = "notes-status";
-    }, 2000);
+    setTimeout(() => { notesStatus.textContent = ""; notesStatus.className = "notes-status"; }, 2000);
   }
 }
 
