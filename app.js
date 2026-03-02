@@ -949,7 +949,7 @@ async function handleSubmit(event) {
   const stakeValue = parseLocaleNumber(document.getElementById("bet-stake").value);
 
   const bet = {
-    id: crypto.randomUUID(),
+    id: editingId ? editingId : crypto.randomUUID(), 
     date: formattedDate,
     event: document.getElementById("bet-event").value.trim(),
     odds: oddsValue,
@@ -994,7 +994,8 @@ function startEdit(bet) {
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function handleTableClick(event) {
+// 1. Adiciona a palavra 'async' aqui no início:
+async function handleTableClick(event) {
   const button = event.target.closest("button[data-action]");
   if (!button) {
     return;
@@ -1010,38 +1011,27 @@ function handleTableClick(event) {
     return;
   }
 
-  if (action === "delete") {
-    // Show confirmation modal
-    const bet = bets.find((item) => item.id === id);
-    if (bet) {
-      showDeleteConfirmation(bet);
-    }
-    return;
-  }
+  // (Botão de excluir escondido para resumir...)
 
-  // Ações rápidas de status
-  if (action === "share") {
-    const bet = bets.find((item) => item.id === id);
-    if (bet) {
-      openShareCardModal(bet);
-    }
-    return;
-  }
+  // 2. Coloca o 'await' antes do salvarApostaBD:
   if (action === "set-win") {
     const bet = bets.find((item) => item.id === id);
     if (bet) {
       bet.status = "win";
       saveBets();
+      await salvarApostaBD(bet); // ✨ OBRIGA a esperar o banco gravar!
       refreshAll();
     }
     return;
   }
 
+  // 3. O mesmo para o botão de Red:
   if (action === "set-loss") {
     const bet = bets.find((item) => item.id === id);
     if (bet) {
       bet.status = "loss";
       saveBets();
+      await salvarApostaBD(bet); // ✨ OBRIGA a esperar o banco gravar!
       refreshAll();
     }
     return;

@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Testes da API - Caderneta</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: #0f1117; color: #e1e1e6; padding: 24px; }
+    h1 { margin-bottom: 8px; }
+    p.sub { color: #888; margin-bottom: 24px; }
+    .test-card {
+      background: #1a1b23; border: 1px solid #2a2b35; border-radius: 12px;
+      padding: 20px; margin-bottom: 16px;
+    }
+    .test-card h3 { margin-bottom: 4px; }
+    .test-card .desc { color: #888; font-size: 14px; margin-bottom: 12px; }
+    .test-card button {
+      background: #6c63ff; color: white; border: none; padding: 10px 20px;
+      border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;
+    }
+    .test-card button:hover { background: #5a52d5; }
+    .test-card button:disabled { background: #444; cursor: not-allowed; }
+    .result {
+      margin-top: 12px; padding: 12px; border-radius: 8px;
+      font-family: monospace; font-size: 13px; white-space: pre-wrap;
+      display: none;
+    }
+    .result.success { display: block; background: #0d2818; border: 1px solid #1a5c2e; color: #4ade80; }
+    .result.error { display: block; background: #2d0a0a; border: 1px solid #5c1a1a; color: #f87171; }
+    .result.info { display: block; background: #0a1a2d; border: 1px solid #1a3a5c; color: #60a5fa; }
+    .run-all { background: #22c55e; color: #000; border: none; padding: 14px 28px;
+      border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 700; margin-bottom: 24px; }
+    .run-all:hover { background: #16a34a; }
+    .summary { background: #1a1b23; border: 1px solid #2a2b35; border-radius: 12px;
+      padding: 20px; margin-bottom: 24px; display: none; }
+    .summary.visible { display: block; }
+    .summary .pass { color: #4ade80; font-weight: 700; }
+    .summary .fail { color: #f87171; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Testes da API — Caderneta de Apostas</h1>
+  <p class="sub">Clique nos botões para testar cada funcionalidade. Nenhum dado real será afetado.</p>
+
+  <button class="run-all" onclick="runAllTests()">▶ Executar Todos os Testes</button>
+
+  <div id="summary" class="summary">
+    <h2>📊 Resumo</h2>
+    <p id="summary-text"></p>
+  </div>
+
+  <div id="tests-container"></div>
+
+  <script>
+    const API_URL = 'api.php';
+    const TEST_PROFILE = 'teste_api_' + Date.now();
+    let testResults = {};
+
+    // Helper para chamar a API
+    async function apiCall(payload) {
+      const resp = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const text = await resp.text();
+      try { return JSON.parse(text); }
+      catch { return { raw: text }; }
+    }
+
+    // Lista de testes
+    const tests = [
+      {
+        id: 'salvar_aposta',
+        title: '1. Salvar Aposta',
+        desc: 'Cria uma aposta de teste no banco de dados.',
+        expected: 'Deve retornar sucesso: true',
+        run: async () => {
+          const res = await apiCall({
+            acao: 'salvar_aposta',
+            profile_id: TEST_PROFILE,
+            aposta: {
+              id: 'bet_test_001',
+              date: '02/03/2026',
+              event: 'Palmeiras x Santos',
+              odds: 1.85,
+              stake: 30,
+              book: 'Betano',
+              ai: null,
+              status: 'pending',
+              isFreebet: false
+            }
+          });
+          if (res.sucesso) return { ok: true, msg: '✅ Aposta salva!\n' + JSON.stringify(res, null, 2) };
+          return { ok: false, msg: '❌ Falhou: ' + JSON.stringify(res, null, 2) };
+        }
+      },
+      {
+        id: 'carregar_apostas',
+        title: '2. Carregar Apostas',
+        desc: 'Carrega as apostas do perfil de teste.',
+        expected: 'Deve retornar array com pelo menos 1 aposta',
+        run: async () => {
+          const res = await apiCall({ acao: 'carregar_apostas', profile_id: TEST_PROFILE });
+          if (Array.isArray(res) && res.length > 0) {
+            return { ok: true, msg: '✅ ' + res.length + ' aposta(s) encontrada(s)!\n' + JSON.stringify(res[0], null, 2) };
+          }
+          return { ok: false, msg: '❌ Nenhuma aposta retornada: ' + JSON.stringify(res, null, 2) };
+        }
+      },
+      {
+        id: 'validacao_odd',
+        title: '3. Validação: Odd Inválida (< 1.0)',
+        desc: 'Tenta salvar aposta com odd 0.50 — o servidor deve rejeitar.',
+        expected: 'Deve retornar sucesso: false com mensagem de erro',
+        run: async () => {
+          const res = await apiCall({
+            acao: 'salvar_aposta',
+            profile_id: TEST_PROFILE,
+            aposta: {
+              id: 'bet_bad_odd',
+              date: '02/03/2026',
+              event: 'Teste Odd Invalida',
+              odds: 0.50,
+              stake: 10,
+              book: 'Bet365',
+              ai: null,
+              status: 'pending',
+              isFreebet: false
+            }
+          });
+          if (res.sucesso === false) return { ok: true, msg: '✅ Rejeitado corretamente!\n' + JSON.stringify(res, null, 2) };
+          return { ok: false, msg: '❌ Deveria ter rejeitado, mas aceitou: ' + JSON.stringify(res, null, 2) };
+        }
+      },
+      {
+        id: 'validacao_stake',
+        title: '4. Validação: Stake Zero',
+        desc: 'Tenta salvar aposta com stake 0 — o servidor deve rejeitar.',
+        expected: 'Deve retornar sucesso: false',
+        run: async () => {
+          const res = await apiCall({
+            acao: 'salvar_aposta',
+            profile_id: TEST_PROFILE,
+            aposta: {
+              id: 'bet_bad_stake',
+              date: '02/03/2026',
+              event: 'Teste Stake Zero',
+              odds: 2.0,
+              stake: 0,
+              book: 'Bet365',
+              ai: null,
+              status: 'pending',
+              isFreebet: false
+            }
+          });
+          if (res.sucesso === false) return { ok: true, msg: '✅ Rejeitado corretamente!\n' + JSON.stringify(res, null, 2) };
+          return { ok: false, msg: '❌ Deveria ter rejeitado: ' + JSON.stringify(res, null, 2) };
+        }
+      },
+      {
+        id: 'sql_injection',
+        title: '5. 🔒 SQL Injection',
+        desc: 'Envia profile_id malicioso: \' OR \'1\'=\'1\' -- . Deve retornar array vazio.',
+        expected: 'Deve retornar [] sem vazar dados de outros perfis',
+        run: async () => {
+          const res = await apiCall({ acao: 'carregar_apostas', profile_id: "' OR '1'='1' --" });
+          if (Array.isArray(res) && res.length === 0) {
+            return { ok: true, msg: '✅ SQL Injection bloqueado! Retornou array vazio.\nNenhum dado vazou.' };
+          }
+          if (Array.isArray(res) && res.length > 0) {
+            return { ok: false, msg: '❌ VULNERÁVEL! Retornou ' + res.length + ' registro(s) de outros perfis!' };
+          }
+          return { ok: false, msg: '⚠️ Resposta inesperada: ' + JSON.stringify(res, null, 2) };
+        }
+      },
+      {
+        id: 'salvar_fluxo',
+        title: '6. Salvar Fluxo de Caixa',
+        desc: 'Cria um depósito de teste.',
+        expected: 'Deve retornar sucesso: true',
+        run: async () => {
+          const res = await apiCall({
+            acao: 'salvar_fluxo',
+            profile_id: TEST_PROFILE,
+            fluxo: {
+              id: 'fluxo_test_001',
+              date: '02/03/2026',
+              type: 'deposit',
+              amount: 100,
+              note: 'Teste automatizado'
+            }
+          });
+          if (res.sucesso) return { ok: true, msg: '✅ Fluxo salvo!\n' + JSON.stringify(res, null, 2) };
+          return { ok: false, msg: '❌ Falhou: ' + JSON.stringify(res, null, 2) };
+        }
+      },
+      {
+        id: 'carregar_fluxo',
+        title: '7. Carregar Fluxo de Caixa',
+        desc: 'Carrega os fluxos do perfil de teste.',
+        expected: 'Deve retornar array com pelo menos 1 fluxo',
+        run: async () => {
+          const res = await apiCall({ acao: 'carregar_fluxo', profile_id: TEST_PROFILE });
+          if (Array.isArray(res) && res.length > 0) {
+            return { ok: true, msg: '✅ ' + res.length + ' fluxo(s) encontrado(s)!\n' + JSON.stringify(res[0], null, 2) };
+          }
+          return { ok: false, msg: '❌ Nenhum fluxo retornado: ' + JSON.stringify(res, null, 2) };
+        }
+      },
+      {
+        id: 'validacao_tipo_fluxo',
+        title: '8. Validação: Tipo de Fluxo Inválido',
+        desc: 'Tenta salvar fluxo com type "hacked" — deve rejeitar.',
+        expected: 'Deve retornar sucesso: false',
+        run: async () => {
+          const res = await apiCall({
+            acao: 'salvar_fluxo',
+            profile_id: TEST_PROFILE,
+            fluxo: {
+              id: 'fluxo_bad',
+              date: '02/03/2026',
+              type: 'hacked',
+              amount: 9999,
+              note: 'Tentativa de tipo inválido'
+            }
+          });
+          if (res.sucesso === false) return { ok: true, msg: '✅ Rejeitado corretamente!\n' + JSON.stringify(res, null, 2) };
+          return { ok: false, msg: '❌ Deveria ter rejeitado: ' + JSON.stringify(res, null, 2) };
+        }
+      },
+      {
+        id: 'dados_extras_salvar',
+        title: '9. Salvar Dados Extras (notes)',
+        desc: 'Salva uma anotação no perfil de teste.',
+        expected: 'Deve retornar sucesso: true',
+        run: async () => {
+          const res = await apiCall({
+            acao: 'salvar_dados_extras',
+            profile_id: TEST_PROFILE,
+            tipo: 'notes',
+            valor: 'Nota de teste automatizado'
+          });
+          if (res.sucesso) return { ok: true, msg: '✅ Nota salva!\n' + JSON.stringify(res, null, 2) };
+          return { ok: false, msg: '❌ Falhou: ' + JSON.stringify(res, null, 2) };
+        }
+      },
+      {
+        id: 'dados_extras_tipo_invalido',
+        title: '10. Validação: Tipo de Dados Extras Inválido',
+        desc: 'Tenta salvar dados_extras com tipo "hacked" — deve rejeitar (antes crashava).',
+        expected: 'Deve retornar sucesso: false sem crash',
+        run: async () => {
+          const res = await apiCall({
+            acao: 'salvar_dados_extras',
+            profile_id: TEST_PROFILE,
+            tipo: 'hacked',
+            valor: 'DROP TABLE perfis;'
+          });
+          if (res.sucesso === false) return { ok: true, msg: '✅ Rejeitado corretamente!\n' + JSON.stringify(res, null, 2) };
+          if (res.raw) return { ok: false, msg: '❌ PHP crashou e devolveu HTML/texto:\n' + res.raw.substring(0, 300) };
+          return { ok: false, msg: '❌ Deveria ter rejeitado: ' + JSON.stringify(res, null, 2) };
+        }
+      },
+      {
+        id: 'acao_invalida',
+        title: '11. Ação Não Reconhecida',
+        desc: 'Envia uma ação inexistente — deve retornar erro controlado.',
+        expected: 'Deve retornar sucesso: false',
+        run: async () => {
+          const res = await apiCall({ acao: 'hackear_sistema' });
+          if (res.sucesso === false) return { ok: true, msg: '✅ Rejeitado corretamente!\n' + JSON.stringify(res, null, 2) };
+          return { ok: false, msg: '❌ Resposta inesperada: ' + JSON.stringify(res, null, 2) };
+        }
+      },
+      {
+        id: 'excluir_fluxo',
+        title: '12. Excluir Fluxo de Caixa',
+        desc: 'Exclui o fluxo de teste criado anteriormente.',
+        expected: 'Deve retornar sucesso: true',
+        run: async () => {
+          const res = await apiCall({ acao: 'excluir_fluxo', id: 'fluxo_test_001' });
+          if (res.sucesso) return { ok: true, msg: '✅ Fluxo excluído!\n' + JSON.stringify(res, null, 2) };
+          return { ok: false, msg: '❌ Falhou: ' + JSON.stringify(res, null, 2) };
+        }
+      },
+    ];
+
+    // Renderizar cards
+    function renderTests() {
+      const container = document.getElementById('tests-container');
+      container.innerHTML = tests.map(t => `
+        <div class="test-card" id="card-${t.id}">
+          <h3>${t.title}</h3>
+          <p class="desc">${t.desc}</p>
+          <p class="desc"><strong>Esperado:</strong> ${t.expected}</p>
+          <button id="btn-${t.id}" onclick="runTest('${t.id}')">▶ Executar</button>
+          <div class="result" id="result-${t.id}"></div>
+        </div>
+      `).join('');
+    }
+
+    // Executar teste individual
+    async function runTest(id) {
+      const test = tests.find(t => t.id === id);
+      const btn = document.getElementById('btn-' + id);
+      const resultEl = document.getElementById('result-' + id);
+
+      btn.disabled = true;
+      btn.textContent = '⏳ Executando...';
+      resultEl.className = 'result info';
+      resultEl.style.display = 'block';
+      resultEl.textContent = 'Aguardando resposta da API...';
+
+      try {
+        const res = await test.run();
+        testResults[id] = res.ok;
+        resultEl.className = res.ok ? 'result success' : 'result error';
+        resultEl.textContent = res.msg;
+      } catch (err) {
+        testResults[id] = false;
+        resultEl.className = 'result error';
+        resultEl.textContent = '❌ Erro de conexão: ' + err.message;
+      }
+
+      btn.disabled = false;
+      btn.textContent = '🔄 Re-executar';
+      updateSummary();
+    }
+
+    // Executar todos
+    async function runAllTests() {
+      for (const test of tests) {
+        await runTest(test.id);
+      }
+    }
+
+    // Atualizar resumo
+    function updateSummary() {
+      const summaryEl = document.getElementById('summary');
+      const summaryText = document.getElementById('summary-text');
+      summaryEl.classList.add('visible');
+
+      const total = Object.keys(testResults).length;
+      const passed = Object.values(testResults).filter(v => v).length;
+      const failed = total - passed;
+
+      summaryText.innerHTML = `
+        <span class="pass">✅ ${passed} passou</span> &nbsp;|&nbsp;
+        <span class="fail">❌ ${failed} falhou</span> &nbsp;|&nbsp;
+        Total: ${total}/${tests.length}
+      `;
+    }
+
+    renderTests();
+  </script>
+</body>
+</html>
