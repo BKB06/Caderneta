@@ -66,9 +66,10 @@ $acao = $dados['acao'] ?? '';
 
 // Lista de ações permitidas (whitelist)
 $acoes_permitidas = [
-    'salvar_aposta', 'carregar_apostas',
+    'salvar_aposta', 'carregar_apostas', 'excluir_aposta',
     'salvar_fluxo', 'carregar_fluxo', 'excluir_fluxo',
-    'salvar_dados_extras', 'carregar_dados_extras'
+    'salvar_dados_extras', 'carregar_dados_extras',
+    'salvar_categoria', 'carregar_categorias', 'excluir_categoria'
 ];
 
 if (!in_array($acao, $acoes_permitidas, true)) {
@@ -96,6 +97,7 @@ if ($acao === 'salvar_aposta') {
     $ai     = !empty($aposta['ai']) ? trim($aposta['ai']) : null;
     $status = $aposta['status'] ?? 'pending';
     $isFreebet = !empty($aposta['isFreebet']) ? 1 : 0;
+    $category = !empty($aposta['category']) ? trim($aposta['category']) : null;
 
     // Validação de campos obrigatórios
     if ($id === '' || $date === '' || $event === '' || $book === '') {
@@ -119,8 +121,8 @@ if ($acao === 'salvar_aposta') {
 
     // INSERT ... ON DUPLICATE KEY UPDATE (em vez de REPLACE INTO)
     $stmt = $conn->prepare("
-        INSERT INTO apostas (id, profile_id, date, event, odds, stake, book, ai, status, is_freebet)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO apostas (id, profile_id, date, event, odds, stake, book, ai, status, is_freebet, category)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             date = VALUES(date),
             event = VALUES(event),
@@ -129,13 +131,14 @@ if ($acao === 'salvar_aposta') {
             book = VALUES(book),
             ai = VALUES(ai),
             status = VALUES(status),
-            is_freebet = VALUES(is_freebet)
+            is_freebet = VALUES(is_freebet),
+            category = VALUES(category)
     ");
 
-    $stmt->bind_param("ssssddsssi",
+    $stmt->bind_param("ssssddsssis",
         $id, $profile_id, $date, $event,
         $odds, $stake, $book,
-        $ai, $status, $isFreebet
+        $ai, $status, $isFreebet, $category
     );
 
     if ($stmt->execute()) {
@@ -165,6 +168,7 @@ elseif ($acao === 'carregar_apostas') {
             unset($row['is_freebet']);
             $row['odds']  = (float)$row['odds'];
             $row['stake'] = (float)$row['stake'];
+            $row['category'] = $row['category'] ?? null;
             $apostas[] = $row;
         }
     }
@@ -249,6 +253,24 @@ elseif ($acao === 'carregar_fluxo') {
 }
 
 // ---------------------------------------------------------
+// 4B. AÇÃO: EXCLUIR APOSTA
+// ---------------------------------------------------------
+elseif ($acao === 'excluir_aposta') {
+    $id = trim($dados['id'] ?? '');
+    $profile_id = getProfileId($dados);
+    if ($id === '') {
+        responder(["sucesso" => false, "erro" => "ID da aposta ausente."]);
+    }
+
+    $stmt = $conn->prepare("DELETE FROM apostas WHERE id = ? AND profile_id = ?");
+    $stmt->bind_param("ss", $id, $profile_id);
+    $stmt->execute();
+    $stmt->close();
+
+    responder(["sucesso" => true, "mensagem" => "Aposta excluída com sucesso."]);
+}
+
+// ---------------------------------------------------------
 // 5. AÇÃO: EXCLUIR FLUXO DE CAIXA
 // ---------------------------------------------------------
 elseif ($acao === 'excluir_fluxo') {
@@ -318,6 +340,105 @@ elseif ($acao === 'carregar_dados_extras') {
     } else {
         responder(["sucesso" => false, "erro" => "Nenhum dado encontrado"]);
     }
+}
+
+// ---------------------------------------------------------
+// 8. AÇÃO: SALVAR CATEGORIA
+// ---------------------------------------------------------
+elseif ($acao === 'salvar_categoria') {
+    $profile_id = getProfileId($dados);
+    $cat = $dados['categoria'] ?? null;
+    if (!is_array($cat)) {
+        responder(["sucesso" => false, "erro" => "Dados da categoria ausentes."]);
+    }
+
+    $id   = trim($cat['id'] ?? '');
+    $name = trim($cat['name'] ?? '');
+    $icon = trim($cat['icon'] ?? '🏅');
+    $sort_order = intval($cat['sort_order'] ?? 0);
+
+    if ($id === '' || $name === '') {
+        responder(["sucesso" => false, "erro" => "Campos obrigatórios em falta (id, name)."]);
+    }
+
+    ensureProfileExists($conn, $profile_id);
+
+    $stmt = $conn->prepare("
+        INSERT INTO categorias (id, profile_id, name, icon, sort_order)
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            name = VALUES(name),
+            icon = VALUES(icon),
+            sort_order = VALUES(sort_order)
+    ");
+
+    $stmt->bind_param("ssssi", $id, $profile_id, $name, $icon, $sort_order);
+
+    if ($stmt->execute()) {
+        responder(["sucesso" => true, "mensagem" => "Categoria salva!"]);
+    } else {
+        responder(["sucesso" => false, "erro" => "Erro ao salvar categoria."]);
+    }
+}
+
+// ---------------------------------------------------------
+// 9. AÇÃO: CARREGAR CATEGORIAS
+// ---------------------------------------------------------
+elseif ($acao === 'carregar_categorias') {
+    $profile_id = getProfileId($dados);
+
+    $stmt = $conn->prepare("SELECT * FROM categorias WHERE profile_id = ? ORDER BY sort_order ASC, name ASC");
+    $stmt->bind_param("s", $profile_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    $categorias = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $categorias[] = $row;
+        }
+    }
+    $stmt->close();
+
+    echo json_encode($categorias, JSON_UNESCAPED_UNICODE);
+}
+
+// ---------------------------------------------------------
+// 10. AÇÃO: EXCLUIR CATEGORIA
+// ---------------------------------------------------------
+elseif ($acao === 'excluir_categoria') {
+    $id = trim($dados['id'] ?? '');
+    $profile_id = getProfileId($dados);
+    if ($id === '') {
+        responder(["sucesso" => false, "erro" => "ID da categoria ausente."]);
+    }
+
+    // Buscar nome da categoria antes de excluir
+    $stmt = $conn->prepare("SELECT name FROM categorias WHERE id = ? AND profile_id = ?");
+    $stmt->bind_param("ss", $id, $profile_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $catName = null;
+    if ($result && $row = $result->fetch_assoc()) {
+        $catName = $row['name'];
+    }
+    $stmt->close();
+
+    // Limpar categoria das apostas que a usavam
+    if ($catName) {
+        $stmt = $conn->prepare("UPDATE apostas SET category = NULL WHERE profile_id = ? AND category = ?");
+        $stmt->bind_param("ss", $profile_id, $catName);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    // Excluir categoria
+    $stmt = $conn->prepare("DELETE FROM categorias WHERE id = ? AND profile_id = ?");
+    $stmt->bind_param("ss", $id, $profile_id);
+    $stmt->execute();
+    $stmt->close();
+
+    responder(["sucesso" => true, "mensagem" => "Categoria excluída com sucesso."]);
 }
 
 $conn->close();

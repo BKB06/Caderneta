@@ -1429,6 +1429,13 @@ tr:hover td {
   margin-bottom: 16px;
 }
 
+.categories-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
 .favorite-item {
   display: flex;
   align-items: center;

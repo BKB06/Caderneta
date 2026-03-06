@@ -93,6 +93,7 @@ let deletePendingId = null;
 let balanceChart = null;
 let baseBankroll = null;
 let settings = null;
+let categories = [];
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -163,6 +164,56 @@ async function loadCashflows() {
   } catch (erro) {
     console.error("Erro ao carregar fluxo na página principal:", erro);
     cashflows = [];
+  }
+}
+
+async function loadCategories() {
+  try {
+    const profileId = getActiveProfileId();
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_categorias', profile_id: profileId })
+    });
+    const dados = await resposta.json();
+    categories = Array.isArray(dados) ? dados : [];
+  } catch (erro) {
+    console.error("Erro ao carregar categorias:", erro);
+    categories = [];
+  }
+}
+
+function renderCategorySelects() {
+  const formSelect = document.getElementById("bet-category");
+  const filterSelect = document.getElementById("category-filter");
+
+  if (formSelect) {
+    const currentVal = formSelect.value;
+    formSelect.innerHTML = '<option value="">Sem categoria</option>';
+    categories.forEach((cat) => {
+      const opt = document.createElement("option");
+      opt.value = cat.name;
+      opt.textContent = `${cat.icon || '🏅'} ${cat.name}`;
+      formSelect.appendChild(opt);
+    });
+    if (currentVal) formSelect.value = currentVal;
+  }
+
+  if (filterSelect) {
+    const currentVal = filterSelect.value || "all";
+    filterSelect.innerHTML = '<option value="all">Todas</option>';
+    categories.forEach((cat) => {
+      const opt = document.createElement("option");
+      opt.value = cat.name;
+      opt.textContent = `${cat.icon || '🏅'} ${cat.name}`;
+      filterSelect.appendChild(opt);
+    });
+    // Add "Sem categoria" option for filter
+    const noCatOpt = document.createElement("option");
+    noCatOpt.value = "__none__";
+    noCatOpt.textContent = "Sem categoria";
+    filterSelect.appendChild(noCatOpt);
+    filterSelect.value = currentVal;
   }
 }
 
@@ -495,6 +546,7 @@ function getFilteredBets() {
   const status = statusFilter?.value || "all";
   const startDate = dateFilterStart?.value ? parseDateForSort(dateFilterStart.value) : null;
   const endDate = dateFilterEnd?.value ? parseDateForSort(dateFilterEnd.value) : null;
+  const categoryFilter = document.getElementById("category-filter")?.value || "all";
 
   return bets.filter((bet) => {
     // Filtro por casa
@@ -524,7 +576,17 @@ function getFilteredBets() {
       }
     }
 
-    return matchBook && matchStatus && matchDate;
+    // Filtro por categoria
+    let matchCategory = true;
+    if (categoryFilter !== "all") {
+      if (categoryFilter === "__none__") {
+        matchCategory = !bet.category;
+      } else {
+        matchCategory = bet.category === categoryFilter;
+      }
+    }
+
+    return matchBook && matchStatus && matchDate && matchCategory;
   });
 }
 
@@ -555,7 +617,7 @@ function renderTable() {
   if (data.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 10;
+    cell.colSpan = 11;
     cell.textContent = "Nenhuma aposta cadastrada ainda.";
     row.appendChild(cell);
     betsBody.appendChild(row);
@@ -617,7 +679,17 @@ function renderTable() {
     tdBook.textContent = bet.book;
     row.appendChild(tdBook);
 
-    // 8.5. IA
+    // 8.5. Categoria
+    const tdCategory = document.createElement("td");
+    if (bet.category) {
+      const cat = categories.find(c => c.name === bet.category);
+      tdCategory.textContent = cat ? `${cat.icon || '🏅'} ${cat.name}` : bet.category;
+    } else {
+      tdCategory.textContent = "-";
+    }
+    row.appendChild(tdCategory);
+
+    // 8.6. IA
     const tdAi = document.createElement("td");
     if (bet.ai) {
       const aiTag = document.createElement("span");
@@ -922,6 +994,7 @@ function renderBalanceChart() {
 
 function refreshAll() {
   renderBookFilter();
+  renderCategorySelects();
   renderTable();
   renderKpis();
   updateBankrollDisplay();
@@ -958,6 +1031,7 @@ async function handleSubmit(event) {
     status: document.getElementById("bet-status").value,
     isFreebet: document.getElementById("bet-stake-type").value === "freebet",
     ai: document.getElementById("bet-ai").value || null,
+    category: document.getElementById("bet-category").value || null,
   };
 
   if (!bet.date || !bet.event || !bet.book || !Number.isFinite(bet.odds) || !Number.isFinite(bet.stake)) {
@@ -989,6 +1063,7 @@ function startEdit(bet) {
   document.getElementById("bet-status").value = bet.status;
   document.getElementById("bet-stake-type").value = bet.isFreebet ? "freebet" : "regular";
   document.getElementById("bet-ai").value = bet.ai || "";
+  document.getElementById("bet-category").value = bet.category || "";
   updatePotentialProfit();
   submitButton.textContent = "Atualizar aposta";
   form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1011,7 +1086,13 @@ async function handleTableClick(event) {
     return;
   }
 
-  // (Botão de excluir escondido para resumir...)
+  if (action === "delete") {
+    const bet = bets.find((item) => item.id === id);
+    if (bet) {
+      showDeleteConfirmation(bet);
+    }
+    return;
+  }
 
   // 2. Coloca o 'await' antes do salvarApostaBD:
   if (action === "set-win") {
@@ -1594,6 +1675,7 @@ function drawMiniStatCard(ctx, x, y, w, h, label, value, color) {
 async function init() {
   await loadBets();
   await loadCashflows();
+  await loadCategories();
   loadSettings(); // Podes deixar este normal para já
   await loadBankrollBase(); // <-- Adiciona o await
   await loadGoals();        // <-- Adiciona o await
@@ -1638,6 +1720,36 @@ async function salvarApostaBD(aposta) {
   }
 }
 // ========================
+// DELETE - API
+// ========================
+async function excluirApostaBD(id) {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        acao: 'excluir_aposta',
+        profile_id: getActiveProfileId(),
+        id: id
+      })
+    });
+    const textoBruto = await resposta.text();
+    try {
+      const resultado = JSON.parse(textoBruto);
+      if (resultado.sucesso) {
+        console.log("✅ Aposta excluída do banco:", resultado.mensagem);
+      } else {
+        console.error("❌ Erro ao excluir no banco:", resultado.erro);
+      }
+    } catch (erroJson) {
+      console.error("🚨 O PHP não devolveu JSON ao excluir. Resposta:", textoBruto);
+    }
+  } catch (erro) {
+    console.error("❌ Erro de comunicação ao excluir:", erro);
+  }
+}
+
+// ========================
 // DELETE CONFIRMATION
 // ========================
 const deleteModal = document.getElementById('delete-modal');
@@ -1679,10 +1791,12 @@ deleteModal?.addEventListener('click', (e) => {
   if (e.target === deleteModal) closeDeleteModal();
 });
 
-deleteModalConfirm?.addEventListener('click', () => {
+deleteModalConfirm?.addEventListener('click', async () => {
   if (deletePendingId) {
-    bets = bets.filter((bet) => bet.id !== deletePendingId);
+    const idToDelete = deletePendingId;
+    bets = bets.filter((bet) => bet.id !== idToDelete);
     saveBets();
+    await excluirApostaBD(idToDelete);
     refreshAll();
     closeDeleteModal();
   }
@@ -2007,6 +2121,7 @@ resetButton.addEventListener("click", resetForm);
 bankrollInput.addEventListener("input", handleBankrollInput);
 bookFilter.addEventListener("change", refreshAll);
 statusFilter?.addEventListener("change", refreshAll);
+document.getElementById("category-filter")?.addEventListener("change", refreshAll);
 dateFilterStart?.addEventListener("change", refreshAll);
 dateFilterEnd?.addEventListener("change", refreshAll);
 clearDateFilter?.addEventListener("click", () => {

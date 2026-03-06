@@ -89,6 +89,12 @@
             <input type="text" id="bet-book" placeholder="Bet365" required />
           </label>
           <label>
+            Categoria
+            <select id="bet-category">
+              <option value="">Sem categoria</option>
+            </select>
+          </label>
+          <label>
             IA que sugeriu
             <select id="bet-ai">
               <option value="">Nenhuma</option>
@@ -351,6 +357,12 @@
               <option value="all">Todas</option>
             </select>
           </label>
+          <label>
+            Categoria
+            <select id="category-filter">
+              <option value="all">Todas</option>
+            </select>
+          </label>
           <button type="button" class="ghost small" id="clear-date-filter">Limpar</button>
         </div>
         <div class="table-wrapper">
@@ -365,6 +377,7 @@
                 <th>Lucro</th>
                 <th>Lucro potencial</th>
                 <th>Casa</th>
+                <th>Categoria</th>
                 <th>IA</th>
                 <th>Ações</th>
               </tr>
@@ -471,6 +484,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="./app.js?v=20260306"></script>
   </body>
 </html>

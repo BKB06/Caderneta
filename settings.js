@@ -59,6 +59,7 @@ const defaultSettings = {
 let settings = { ...defaultSettings };
 let profiles = [];
 let activeProfileId = null;
+let categories = [];
 
 // Gerenciamento de Perfis
 function loadProfiles() {
@@ -772,6 +773,152 @@ document.getElementById("save-api-key")?.addEventListener("click", saveGeminiApi
 document.getElementById("test-api-key")?.addEventListener("click", testGeminiApiKey);
 document.getElementById("toggle-api-key")?.addEventListener("click", toggleApiKeyVisibility);
 
+// ========================
+// CATEGORIAS DE ESPORTES
+// ========================
+async function loadCategories() {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_categorias', profile_id: activeProfileId })
+    });
+    const dados = await resposta.json();
+    categories = Array.isArray(dados) ? dados : [];
+  } catch (e) {
+    console.error("Erro ao carregar categorias:", e);
+    categories = [];
+  }
+}
+
+async function saveCategory(cat) {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        acao: 'salvar_categoria',
+        profile_id: activeProfileId,
+        categoria: cat
+      })
+    });
+    const resultado = await resposta.json();
+    return resultado.sucesso;
+  } catch (e) {
+    console.error("Erro ao salvar categoria:", e);
+    return false;
+  }
+}
+
+async function deleteCategory(id) {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        acao: 'excluir_categoria',
+        profile_id: activeProfileId,
+        id: id
+      })
+    });
+    const resultado = await resposta.json();
+    return resultado.sucesso;
+  } catch (e) {
+    console.error("Erro ao excluir categoria:", e);
+    return false;
+  }
+}
+
+async function createDefaultCategories() {
+  const defaults = [
+    { id: crypto.randomUUID(), name: 'Futebol', icon: '⚽', sort_order: 0 },
+    { id: crypto.randomUUID(), name: 'Basquete', icon: '🏀', sort_order: 1 },
+    { id: crypto.randomUUID(), name: 'Outros', icon: '🏅', sort_order: 2 },
+  ];
+  for (const cat of defaults) {
+    await saveCategory(cat);
+  }
+  await loadCategories();
+}
+
+function renderCategories() {
+  const container = document.getElementById("categories-list");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  if (categories.length === 0) {
+    container.innerHTML = '<p class="empty-message">Nenhuma categoria cadastrada. As padrão serão criadas automaticamente.</p>';
+    return;
+  }
+
+  categories.forEach((cat) => {
+    const item = document.createElement("div");
+    item.className = "favorite-item";
+    item.innerHTML = `
+      <span>${cat.icon || '🏅'} ${cat.name}</span>
+      <button type="button" class="ghost small" data-cat-id="${cat.id}" title="Excluir categoria">✕</button>
+    `;
+    container.appendChild(item);
+  });
+
+  // Event listeners para remover
+  container.querySelectorAll("button[data-cat-id]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      const id = e.target.dataset.catId;
+      const cat = categories.find(c => c.id === id);
+      if (cat && confirm(`Excluir categoria "${cat.name}"? Apostas com esta categoria ficarão sem categoria.`)) {
+        if (await deleteCategory(id)) {
+          await loadCategories();
+          renderCategories();
+          showToast("Categoria excluída!");
+        }
+      }
+    });
+  });
+}
+
+// Add category
+document.getElementById("add-category-btn")?.addEventListener("click", async () => {
+  const nameInput = document.getElementById("new-category-name");
+  const iconInput = document.getElementById("new-category-icon");
+  const name = nameInput.value.trim();
+  const icon = iconInput.value.trim() || '🏅';
+
+  if (!name) {
+    alert("Digite um nome para a categoria.");
+    return;
+  }
+
+  // Verificar duplicatas
+  if (categories.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+    alert("Já existe uma categoria com este nome.");
+    return;
+  }
+
+  const cat = {
+    id: crypto.randomUUID(),
+    name: name,
+    icon: icon,
+    sort_order: categories.length,
+  };
+
+  if (await saveCategory(cat)) {
+    await loadCategories();
+    renderCategories();
+    nameInput.value = "";
+    iconInput.value = "";
+    showToast(`Categoria "${name}" adicionada!`);
+  }
+});
+
+document.getElementById("new-category-name")?.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    document.getElementById("add-category-btn")?.click();
+  }
+});
+
 // Event listeners para anotações
 document.getElementById("save-notes-btn")?.addEventListener("click", saveNotes);
 
@@ -799,6 +946,11 @@ async function inicializarPaginaConfiguracoes() {
   setupAutoSave();
   loadNotes();
   loadGeminiApiKey();
+  await loadCategories();
+  if (categories.length === 0) {
+    await createDefaultCategories();
+  }
+  renderCategories();
 }
 
 inicializarPaginaConfiguracoes();
