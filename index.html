@@ -27,6 +27,7 @@
           <a href="./ranking.html" class="nav-link">🏆 Ranking</a>
           <button type="button" class="nav-link secondary" id="export-pdf-btn">📄 PDF Mensal</button>
           <a href="./cashflow.html" class="nav-link secondary">💰 Saques/Depósitos</a>
+          <a href="./casino.html" class="nav-link secondary">🎰 Cassino</a>
           <a href="./settings.html" class="nav-link secondary">⚙️ Perfil</a>
         </nav>
       </div>
@@ -95,13 +96,12 @@
             </select>
           </label>
           <label>
-            IA que sugeriu
-            <select id="bet-ai">
-              <option value="">Nenhuma</option>
-              <option value="Grok">Grok</option>
-              <option value="Gemini">Gemini</option>
-              <option value="Claude">Claude</option>
-            </select>
+            IAs que sugeriram
+            <div class="multi-ai-selector" id="bet-ai-selector">
+              <label class="ai-checkbox"><input type="checkbox" value="Grok" /> Grok</label>
+              <label class="ai-checkbox"><input type="checkbox" value="Gemini" /> Gemini</label>
+              <label class="ai-checkbox"><input type="checkbox" value="Claude" /> Claude</label>
+            </div>
           </label>
           <label>
             Status
@@ -112,6 +112,13 @@
               <option value="void">Devolvida / Void</option>
               <option value="cashout">Cashout</option>
             </select>
+          </label>
+          <label id="cashout-value-label" style="display: none;">
+            Valor do Cashout
+            <div class="input-group">
+              <span class="prefix">R$</span>
+              <input type="text" inputmode="decimal" id="bet-cashout-value" placeholder="0,00" />
+            </div>
           </label>
           <div class="form-footer">
             <div>
@@ -484,6 +491,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script type="module" src="./app.js?v=20260306"></script>
+    <script type="module" src="./app.js?v=20260310"></script>
   </body>
 </html>

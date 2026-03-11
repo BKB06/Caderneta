@@ -69,7 +69,8 @@ $acoes_permitidas = [
     'salvar_aposta', 'carregar_apostas', 'excluir_aposta',
     'salvar_fluxo', 'carregar_fluxo', 'excluir_fluxo',
     'salvar_dados_extras', 'carregar_dados_extras',
-    'salvar_categoria', 'carregar_categorias', 'excluir_categoria'
+    'salvar_categoria', 'carregar_categorias', 'excluir_categoria',
+    'salvar_casino', 'carregar_casino', 'excluir_casino'
 ];
 
 if (!in_array($acao, $acoes_permitidas, true)) {
@@ -111,18 +112,20 @@ if ($acao === 'salvar_aposta') {
     }
 
     // Validar status contra whitelist
-    $status_permitidos = ['pending', 'win', 'loss'];
+    $status_permitidos = ['pending', 'win', 'loss', 'void', 'cashout'];
     if (!in_array($status, $status_permitidos, true)) {
         $status = 'pending';
     }
+
+    $cashout_value = ($status === 'cashout' && isset($aposta['cashout_value'])) ? floatval($aposta['cashout_value']) : null;
 
     // Garantir que o perfil existe (prepared statement)
     ensureProfileExists($conn, $profile_id);
 
     // INSERT ... ON DUPLICATE KEY UPDATE (em vez de REPLACE INTO)
     $stmt = $conn->prepare("
-        INSERT INTO apostas (id, profile_id, date, event, odds, stake, book, ai, status, is_freebet, category)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO apostas (id, profile_id, date, event, odds, stake, book, ai, status, is_freebet, category, cashout_value)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             date = VALUES(date),
             event = VALUES(event),
@@ -132,13 +135,15 @@ if ($acao === 'salvar_aposta') {
             ai = VALUES(ai),
             status = VALUES(status),
             is_freebet = VALUES(is_freebet),
-            category = VALUES(category)
+            category = VALUES(category),
+            cashout_value = VALUES(cashout_value)
     ");
 
-    $stmt->bind_param("ssssddsssis",
+    $stmt->bind_param("ssssddsssisd",
         $id, $profile_id, $date, $event,
         $odds, $stake, $book,
-        $ai, $status, $isFreebet, $category
+        $ai, $status, $isFreebet, $category,
+        $cashout_value
     );
 
     if ($stmt->execute()) {
@@ -169,6 +174,7 @@ elseif ($acao === 'carregar_apostas') {
             $row['odds']  = (float)$row['odds'];
             $row['stake'] = (float)$row['stake'];
             $row['category'] = $row['category'] ?? null;
+            $row['cashout_value'] = isset($row['cashout_value']) ? (float)$row['cashout_value'] : null;
             $apostas[] = $row;
         }
     }
@@ -439,6 +445,100 @@ elseif ($acao === 'excluir_categoria') {
     $stmt->close();
 
     responder(["sucesso" => true, "mensagem" => "Categoria excluída com sucesso."]);
+}
+
+// ---------------------------------------------------------
+// 11. AÇÃO: SALVAR OU ATUALIZAR GANHO DE CASSINO
+// ---------------------------------------------------------
+elseif ($acao === 'salvar_casino') {
+    $casino = $dados['casino'] ?? null;
+    if (!is_array($casino)) {
+        responder(["sucesso" => false, "erro" => "Dados do cassino ausentes."]);
+    }
+
+    $profile_id = getProfileId($dados);
+
+    $id         = trim($casino['id'] ?? '');
+    $date       = trim($casino['date'] ?? '');
+    $game       = trim($casino['game'] ?? '');
+    $platform   = trim($casino['platform'] ?? '');
+    $bet_amount = floatval($casino['bet_amount'] ?? 0);
+    $win_amount = floatval($casino['win_amount'] ?? 0);
+    $ais        = !empty($casino['ais']) ? trim($casino['ais']) : null;
+    $note       = trim($casino['note'] ?? '');
+
+    if ($id === '' || $date === '' || $game === '') {
+        responder(["sucesso" => false, "erro" => "Campos obrigatórios em falta (id, date, game)."]);
+    }
+
+    ensureProfileExists($conn, $profile_id);
+
+    $stmt = $conn->prepare("
+        INSERT INTO ganhos_casino (id, profile_id, date, game, platform, bet_amount, win_amount, ais, note)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+            date = VALUES(date),
+            game = VALUES(game),
+            platform = VALUES(platform),
+            bet_amount = VALUES(bet_amount),
+            win_amount = VALUES(win_amount),
+            ais = VALUES(ais),
+            note = VALUES(note)
+    ");
+
+    $stmt->bind_param("sssssddss",
+        $id, $profile_id, $date, $game,
+        $platform, $bet_amount, $win_amount,
+        $ais, $note
+    );
+
+    if ($stmt->execute()) {
+        responder(["sucesso" => true, "mensagem" => "Registro de cassino salvo!"]);
+    } else {
+        responder(["sucesso" => false, "erro" => "Erro ao salvar registro de cassino."]);
+    }
+}
+
+// ---------------------------------------------------------
+// 12. AÇÃO: CARREGAR GANHOS DE CASSINO
+// ---------------------------------------------------------
+elseif ($acao === 'carregar_casino') {
+    $profile_id = getProfileId($dados);
+
+    $stmt = $conn->prepare("SELECT * FROM ganhos_casino WHERE profile_id = ? ORDER BY date DESC");
+    $stmt->bind_param("s", $profile_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    $registros = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $row['bet_amount'] = (float)$row['bet_amount'];
+            $row['win_amount'] = (float)$row['win_amount'];
+            $registros[] = $row;
+        }
+    }
+    $stmt->close();
+
+    echo json_encode($registros, JSON_UNESCAPED_UNICODE);
+}
+
+// ---------------------------------------------------------
+// 13. AÇÃO: EXCLUIR GANHO DE CASSINO
+// ---------------------------------------------------------
+elseif ($acao === 'excluir_casino') {
+    $id = trim($dados['id'] ?? '');
+    $profile_id = getProfileId($dados);
+    if ($id === '') {
+        responder(["sucesso" => false, "erro" => "ID do registro ausente."]);
+    }
+
+    $stmt = $conn->prepare("DELETE FROM ganhos_casino WHERE id = ? AND profile_id = ?");
+    $stmt->bind_param("ss", $id, $profile_id);
+    $stmt->execute();
+    $stmt->close();
+
+    responder(["sucesso" => true, "mensagem" => "Registro de cassino excluído."]);
 }
 
 $conn->close();

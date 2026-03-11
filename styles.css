@@ -1929,7 +1929,7 @@ button.danger:hover {
 
 .ai-ranking-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
 }
 
@@ -2395,4 +2395,104 @@ button.nav-link {
 #share-card-canvas {
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
+}
+
+/* ========================
+   MULTI-AI SELECTOR
+======================== */
+.multi-ai-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.multi-ai-selector .ai-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.multi-ai-selector .ai-checkbox:hover {
+  border-color: var(--primary);
+  background: rgba(124, 92, 255, 0.1);
+}
+
+.multi-ai-selector .ai-checkbox:has(input:checked) {
+  background: rgba(124, 92, 255, 0.2);
+  border-color: var(--primary);
+  color: var(--accent);
+}
+
+.multi-ai-selector .ai-checkbox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+/* ========================
+   CASINO STATS
+======================== */
+.stats-grid.large {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.stats-card {
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  text-align: center;
+  transition: transform 0.2s ease;
+}
+
+.stats-card:hover {
+  transform: translateY(-2px);
+}
+
+.stats-card.green .stats-value {
+  color: var(--success);
+}
+
+.stats-card.red .stats-value {
+  color: var(--danger);
+}
+
+.stats-value {
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.stats-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.chart-container {
+  padding: 16px 0;
+}
+
+.chart-container canvas {
+  width: 100% !important;
+  max-height: 300px;
 }

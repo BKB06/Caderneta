@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cassino - Caderneta de Apostas</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>🎰 Ganhos no Cassino</h1>
+        <p class="subtitle">Registre e acompanhe seus resultados em jogos de cassino.</p>
+      </div>
+      <div class="header-right">
+        <div class="profile-selector">
+          <span>👤</span>
+          <select id="profile-switch"></select>
+        </div>
+        <nav class="app-nav">
+          <a href="./index.html" class="nav-link">← Voltar para Caderneta</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="app-grid">
+      <!-- Resumo -->
+      <section class="panel full">
+        <div class="panel-header">
+          <h2>📊 Resumo do Cassino</h2>
+        </div>
+        <div class="stats-grid large">
+          <div class="stats-card green">
+            <span class="stats-value" id="casino-total-profit">R$ 0,00</span>
+            <span class="stats-label">Lucro Total</span>
+          </div>
+          <div class="stats-card">
+            <span class="stats-value" id="casino-total-bet">R$ 0,00</span>
+            <span class="stats-label">Total Apostado</span>
+          </div>
+          <div class="stats-card">
+            <span class="stats-value" id="casino-total-won">R$ 0,00</span>
+            <span class="stats-label">Total Ganho</span>
+          </div>
+          <div class="stats-card">
+            <span class="stats-value" id="casino-total-sessions">0</span>
+            <span class="stats-label">Sessões</span>
+          </div>
+          <div class="stats-card">
+            <span class="stats-value" id="casino-winrate">0%</span>
+            <span class="stats-label">Taxa de Sessões +</span>
+          </div>
+          <div class="stats-card">
+            <span class="stats-value" id="casino-roi">0%</span>
+            <span class="stats-label">ROI</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Formulário -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Novo Registro</h2>
+          <p>Registre uma sessão de cassino.</p>
+        </div>
+        <form id="casino-form" class="form-grid">
+          <label>
+            Data
+            <div class="input-group">
+              <input type="date" id="casino-date" inputmode="numeric" required />
+            </div>
+          </label>
+          <label>
+            Jogo
+            <input type="text" id="casino-game" placeholder="Ex: Fortune Tiger, Mines, Roleta..." required />
+          </label>
+          <label>
+            Plataforma
+            <input type="text" id="casino-platform" placeholder="Ex: Blaze, Bet365..." required />
+          </label>
+          <label>
+            Valor Apostado
+            <div class="input-group">
+              <span class="prefix">R$</span>
+              <input type="text" inputmode="decimal" id="casino-bet-amount" placeholder="100" required />
+            </div>
+          </label>
+          <label>
+            Valor Ganho (retorno total)
+            <div class="input-group">
+              <span class="prefix">R$</span>
+              <input type="text" inputmode="decimal" id="casino-win-amount" placeholder="250" required />
+            </div>
+          </label>
+          <label class="full">
+            Observação
+            <input type="text" id="casino-note" placeholder="Opcional - Ex: rodadas grátis, bônus..." />
+          </label>
+          <div class="form-footer">
+            <div>
+              <span class="muted">Lucro da sessão</span>
+              <strong id="casino-session-profit">R$ 0,00</strong>
+            </div>
+            <button type="submit" id="casino-submit">Salvar registro</button>
+            <button type="button" class="ghost" id="casino-reset">Limpar</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Gráfico -->
+      <section class="panel full">
+        <div class="panel-header">
+          <h2>📈 Evolução dos Ganhos</h2>
+        </div>
+        <div class="chart-container">
+          <canvas id="casino-chart"></canvas>
+        </div>
+      </section>
+
+      <!-- Top Jogos -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>🎮 Top Jogos</h2>
+          <p class="muted">Jogos mais lucrativos</p>
+        </div>
+        <div class="monthly-list" id="casino-top-games"></div>
+      </section>
+
+      <!-- Top Plataformas -->
+      <section class="panel">
+        <div class="panel-header">
+          <h2>🏢 Top Plataformas</h2>
+          <p class="muted">Plataformas mais lucrativas</p>
+        </div>
+        <div class="monthly-list" id="casino-top-platforms"></div>
+      </section>
+
+      <!-- Histórico -->
+      <section class="panel full">
+        <div class="panel-header">
+          <div>
+            <h2>📋 Histórico de Sessões</h2>
+            <p>Todas as sessões de cassino registradas.</p>
+          </div>
+        </div>
+        <div class="filters-bar">
+          <label>
+            Jogo
+            <select id="casino-game-filter">
+              <option value="all">Todos</option>
+            </select>
+          </label>
+          <label>
+            Plataforma
+            <select id="casino-platform-filter">
+              <option value="all">Todas</option>
+            </select>
+          </label>
+          <label>
+            De
+            <input type="date" id="casino-date-start" />
+          </label>
+          <label>
+            Até
+            <input type="date" id="casino-date-end" />
+          </label>
+          <button type="button" class="ghost small" id="casino-clear-filters">Limpar</button>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Jogo</th>
+                <th>Plataforma</th>
+                <th>Apostado</th>
+                <th>Ganho</th>
+                <th>Lucro</th>
+                <th>Obs.</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="casino-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>Dados salvos no localStorage. App local, sem envio para terceiros.</p>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="./casino.js"></script>
+  </body>
+</html>

@@ -132,7 +132,8 @@ async function loadBets() {
         ...bet,
         stake: Number(bet.stake),
         odds: Number(bet.odds),
-        isFreebet: Boolean(bet.isFreebet || bet.freebet)
+        isFreebet: Boolean(bet.isFreebet || bet.freebet),
+        cashout_value: bet.cashout_value != null ? Number(bet.cashout_value) : null
       }));
       
     } catch (erroJson) {
@@ -394,6 +395,36 @@ function saveCashflows() {
   localStorage.setItem(getCashflowKey(), JSON.stringify(cashflows));
 }
 
+// ========================
+// MULTI-AI HELPERS
+// ========================
+function getSelectedAIs(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return "";
+  const checked = container.querySelectorAll('input[type="checkbox"]:checked');
+  return Array.from(checked).map(cb => cb.value).join(",");
+}
+
+function setSelectedAIs(containerId, aisString) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+  const selected = aisString ? aisString.split(",").map(s => s.trim()) : [];
+  checkboxes.forEach(cb => {
+    cb.checked = selected.includes(cb.value);
+  });
+}
+
+function formatAITags(aisString) {
+  if (!aisString) return "-";
+  return aisString.split(",").map(ai => {
+    const span = document.createElement("span");
+    span.className = "fbet-ai";
+    span.textContent = ai.trim();
+    return span;
+  });
+}
+
 function parseLocaleNumber(value) {
   if (typeof value !== "string") {
     return Number(value);
@@ -417,6 +448,13 @@ function calcProfit(bet) {
   if (bet.status === "loss") {
     return bet.isFreebet ? 0 : -bet.stake;
   }
+  if (bet.status === "cashout") {
+    const cashoutVal = Number(bet.cashout_value) || 0;
+    return bet.isFreebet ? cashoutVal : cashoutVal - bet.stake;
+  }
+  if (bet.status === "void") {
+    return 0;
+  }
   return 0;
 }
 
@@ -429,7 +467,7 @@ function calcPotentialProfit(stake, odds) {
 
 function calcSettledProfit(list = bets) {
   return list
-    .filter((bet) => bet.status === "win" || bet.status === "loss")
+    .filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void")
     .reduce((sum, bet) => sum + calcProfit(bet), 0);
 }
 
@@ -557,7 +595,7 @@ function getFilteredBets() {
     if (status === "pending") {
       matchStatus = bet.status === "pending";
     } else if (status === "settled") {
-      matchStatus = bet.status === "win" || bet.status === "loss";
+      matchStatus = bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void";
     }
 
     // Filtro por data
@@ -662,6 +700,14 @@ function renderTable() {
     // 5. Status
     const tdStatus = document.createElement("td");
     tdStatus.textContent = statusLabel(bet.status);
+    if (bet.status === "cashout" && bet.cashout_value != null) {
+      const cashTag = document.createElement("small");
+      cashTag.style.display = "block";
+      cashTag.style.color = "var(--text-muted)";
+      cashTag.style.fontSize = "0.75rem";
+      cashTag.textContent = currencyFormatter.format(bet.cashout_value);
+      tdStatus.appendChild(cashTag);
+    }
     row.appendChild(tdStatus);
 
     // 6. Lucro
@@ -692,10 +738,12 @@ function renderTable() {
     // 8.6. IA
     const tdAi = document.createElement("td");
     if (bet.ai) {
-      const aiTag = document.createElement("span");
-      aiTag.className = "fbet-ai";
-      aiTag.textContent = bet.ai;
-      tdAi.appendChild(aiTag);
+      const tags = formatAITags(bet.ai);
+      if (Array.isArray(tags)) {
+        tags.forEach(tag => { tdAi.appendChild(tag); tdAi.appendChild(document.createTextNode(" ")); });
+      } else {
+        tdAi.textContent = "-";
+      }
     } else {
       tdAi.textContent = "-";
     }
@@ -745,10 +793,10 @@ function statusLabel(status) {
 
 function renderKpis() {
   // Painel de Inteligência sempre mostra TODAS as apostas, independente dos filtros do histórico
-  const allSettled = bets.filter((bet) => bet.status === "win" || bet.status === "loss");
+  const allSettled = bets.filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void");
   const totalStake = allSettled.reduce((sum, bet) => sum + bet.stake, 0);
   const totalProfit = allSettled.reduce((sum, bet) => sum + calcProfit(bet), 0);
-  const wins = allSettled.filter((bet) => bet.status === "win").length;
+  const wins = allSettled.filter((bet) => bet.status === "win" || bet.status === "cashout").length;
   const winrate = allSettled.length ? wins / allSettled.length : 0;
 
   // ROI = Lucro / Total Apostado
@@ -847,7 +895,7 @@ function renderStakedPeriod() {
 function calcCurrentStreak(data) {
   // Ordenar por data (mais recente primeiro)
   const sorted = data
-    .filter((bet) => bet.status === "win" || bet.status === "loss")
+    .filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void")
     .slice()
     .sort((a, b) => {
       const aDate = parseDateForSort(a.date);
@@ -909,7 +957,7 @@ function renderBalanceChart() {
 
   // Gráfico sempre mostra TODAS as apostas finalizadas
   const data = bets
-    .filter((bet) => bet.status === "win" || bet.status === "loss")
+    .filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void")
     .slice()
     .sort((a, b) => {
       const aDate = parseDateForSort(a.date);
@@ -1008,9 +1056,13 @@ function refreshAll() {
 
 function resetForm() {
   form.reset();
+  setSelectedAIs("bet-ai-selector", "");
   updatePotentialProfit();
   editingId = null;
   submitButton.textContent = "Salvar aposta";
+  // Esconde campo de cashout
+  const cashoutLabel = document.getElementById("cashout-value-label");
+  if (cashoutLabel) cashoutLabel.style.display = "none";
 }
 
 async function handleSubmit(event) {
@@ -1030,9 +1082,21 @@ async function handleSubmit(event) {
     book: document.getElementById("bet-book").value.trim(),
     status: document.getElementById("bet-status").value,
     isFreebet: document.getElementById("bet-stake-type").value === "freebet",
-    ai: document.getElementById("bet-ai").value || null,
+    ai: getSelectedAIs("bet-ai-selector") || null,
     category: document.getElementById("bet-category").value || null,
+    cashout_value: null,
   };
+
+  // Se status for cashout, capturar o valor do cashout
+  if (bet.status === "cashout") {
+    const cashoutInput = document.getElementById("bet-cashout-value");
+    const cashoutVal = parseLocaleNumber(cashoutInput?.value || "0");
+    if (!Number.isFinite(cashoutVal) || cashoutVal < 0) {
+      alert("Informe o valor do cashout.");
+      return;
+    }
+    bet.cashout_value = cashoutVal;
+  }
 
   if (!bet.date || !bet.event || !bet.book || !Number.isFinite(bet.odds) || !Number.isFinite(bet.stake)) {
     alert("Preencha todos os campos obrigatórios com data no formato DD/MM/AAAA.");
@@ -1062,8 +1126,20 @@ function startEdit(bet) {
   document.getElementById("bet-book").value = bet.book;
   document.getElementById("bet-status").value = bet.status;
   document.getElementById("bet-stake-type").value = bet.isFreebet ? "freebet" : "regular";
-  document.getElementById("bet-ai").value = bet.ai || "";
+  setSelectedAIs("bet-ai-selector", bet.ai || "");
   document.getElementById("bet-category").value = bet.category || "";
+  
+  // Cashout value
+  const cashoutLabel = document.getElementById("cashout-value-label");
+  const cashoutInput = document.getElementById("bet-cashout-value");
+  if (bet.status === "cashout") {
+    if (cashoutLabel) cashoutLabel.style.display = "";
+    if (cashoutInput) cashoutInput.value = bet.cashout_value ? numberFormatter.format(bet.cashout_value) : "";
+  } else {
+    if (cashoutLabel) cashoutLabel.style.display = "none";
+    if (cashoutInput) cashoutInput.value = "";
+  }
+  
   updatePotentialProfit();
   submitButton.textContent = "Atualizar aposta";
   form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1142,7 +1218,7 @@ const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 function getProfitByDate(dateKey) {
   return bets
     .filter((bet) => {
-      if (bet.status !== 'win' && bet.status !== 'loss') return false;
+      if (bet.status !== 'win' && bet.status !== 'loss' && bet.status !== 'cashout' && bet.status !== 'void') return false;
       const betDate = parseDateForSort(bet.date);
       if (!betDate) return false;
       const betKey = `${betDate.getFullYear()}-${String(betDate.getMonth() + 1).padStart(2, '0')}-${String(betDate.getDate()).padStart(2, '0')}`;
@@ -1154,7 +1230,7 @@ function getProfitByDate(dateKey) {
 function getProfitByMonth(year, month) {
   return bets
     .filter((bet) => {
-      if (bet.status !== 'win' && bet.status !== 'loss') return false;
+      if (bet.status !== 'win' && bet.status !== 'loss' && bet.status !== 'cashout' && bet.status !== 'void') return false;
       const betDate = parseDateForSort(bet.date);
       if (!betDate) return false;
       return betDate.getFullYear() === year && betDate.getMonth() === month;
@@ -1165,7 +1241,7 @@ function getProfitByMonth(year, month) {
 function getProfitByYear(year) {
   return bets
     .filter((bet) => {
-      if (bet.status !== 'win' && bet.status !== 'loss') return false;
+      if (bet.status !== 'win' && bet.status !== 'loss' && bet.status !== 'cashout' && bet.status !== 'void') return false;
       const betDate = parseDateForSort(bet.date);
       if (!betDate) return false;
       return betDate.getFullYear() === year;
@@ -1175,7 +1251,7 @@ function getProfitByYear(year) {
 
 function getBetsCountByMonth(year, month) {
   return bets.filter((bet) => {
-    if (bet.status !== 'win' && bet.status !== 'loss') return false;
+    if (bet.status !== 'win' && bet.status !== 'loss' && bet.status !== 'cashout' && bet.status !== 'void') return false;
     const betDate = parseDateForSort(bet.date);
     if (!betDate) return false;
     return betDate.getFullYear() === year && betDate.getMonth() === month;
@@ -1402,8 +1478,8 @@ function openDayModal(dateKey, displayDate) {
   const modalBetsList = document.getElementById("modal-bets-list");
 
   // Calculate summary
-  const settled = dayBets.filter(b => b.status === 'win' || b.status === 'loss');
-  const wins = dayBets.filter(b => b.status === 'win').length;
+  const settled = dayBets.filter(b => b.status === 'win' || b.status === 'loss' || b.status === 'cashout' || b.status === 'void');
+  const wins = dayBets.filter(b => b.status === 'win' || b.status === 'cashout').length;
   const losses = dayBets.filter(b => b.status === 'loss').length;
   const totalProfit = settled.reduce((sum, bet) => sum + calcProfit(bet), 0);
 
@@ -1772,7 +1848,7 @@ function showDeleteConfirmation(bet) {
       <span>Odd: <strong>${numberFormatter.format(bet.odds)}x</strong></span>
       <span>Stake: <strong>${formatStake(bet.stake)}</strong></span>
       <span>Casa: <strong>${bet.book}</strong></span>
-      ${bet.ai ? `<span>IA: <strong>${bet.ai}</strong></span>` : ''}
+      ${bet.ai ? `<span>IAs: <strong>${bet.ai.split(",").join(", ")}</strong></span>` : ''}
     </div>
   `;
   deleteModal.style.display = 'flex';
@@ -1809,21 +1885,18 @@ deleteModalConfirm?.addEventListener('click', async () => {
   const container = document.getElementById('ai-ranking-grid');
   if (!container) return;
 
-  // 1. MUDANÇA VISUAL: Aqui colocamos 'Claude' para aparecer escrito na tela
   const aiNames = ['Grok', 'Gemini', 'Claude']; 
   
   const aiStats = aiNames.map(name => {
     
-    // 2. O TRUQUE: Buscamos apostas que tenham o nome atual OU o nome antigo
+    // Suporta multi-AI (CSV) — procura se o nome da IA está na lista
     const aiBets = bets.filter(b => {
-        // Verifica se a aposta já está salva como 'Claude' (novas)
-        const isNewName = b.ai === name;
-        
-        // Verifica se estamos buscando o 'Claude', mas a aposta é antiga ('Opus 4')
-        const isLegacyName = (name === 'Claude' && b.ai === 'Opus 4'); 
-        
-        // Aceita se for uma ou outra, desde que a aposta esteja finalizada (win/loss)
-        return (isNewName || isLegacyName) && (b.status === 'win' || b.status === 'loss');
+        if (!b.ai) return false;
+        const aisList = b.ai.split(",").map(a => a.trim());
+        const isMatch = aisList.includes(name);
+        // Legado: 'Opus 4' → 'Claude'
+        const isLegacy = (name === 'Claude' && aisList.includes('Opus 4'));
+        return (isMatch || isLegacy) && (b.status === 'win' || b.status === 'loss' || b.status === 'cashout' || b.status === 'void');
     });
 
     const wins = aiBets.filter(b => b.status === 'win').length;
@@ -1873,12 +1946,12 @@ function renderWeekdayPerformance() {
 
   const dayStats = dayNames.map((_, index) => {
     const dayBets = bets.filter(b => {
-      if (b.status !== 'win' && b.status !== 'loss') return false;
+      if (b.status !== 'win' && b.status !== 'loss' && b.status !== 'cashout' && b.status !== 'void') return false;
       const betDate = parseDateForSort(b.date);
       if (!betDate) return false;
       return betDate.getDay() === index;
     });
-    const wins = dayBets.filter(b => b.status === 'win').length;
+    const wins = dayBets.filter(b => b.status === 'win' || b.status === 'cashout').length;
     const total = dayBets.length;
     const winrate = total > 0 ? wins / total : 0;
     const profit = dayBets.reduce((sum, b) => sum + calcProfit(b), 0);
@@ -1954,7 +2027,7 @@ function renderProfitGoals() {
   // Calculate weekly profit
   const weeklyProfit = bets
     .filter(b => {
-      if (b.status !== 'win' && b.status !== 'loss') return false;
+      if (b.status !== 'win' && b.status !== 'loss' && b.status !== 'cashout' && b.status !== 'void') return false;
       const d = parseDateForSort(b.date);
       return d && d >= weekStart;
     })
@@ -1963,7 +2036,7 @@ function renderProfitGoals() {
   // Calculate monthly profit
   const monthlyProfit = bets
     .filter(b => {
-      if (b.status !== 'win' && b.status !== 'loss') return false;
+      if (b.status !== 'win' && b.status !== 'loss' && b.status !== 'cashout' && b.status !== 'void') return false;
       const d = parseDateForSort(b.date);
       return d && d >= monthStart;
     })
@@ -2032,7 +2105,7 @@ function renderFinalizedBets() {
   if (!container) return;
 
   const settled = bets
-    .filter(b => b.status === 'win' || b.status === 'loss')
+    .filter(b => b.status === 'win' || b.status === 'loss' || b.status === 'cashout' || b.status === 'void')
     .slice()
     .sort((a, b) => {
       const aDate = parseDateForSort(a.date);
@@ -2054,7 +2127,7 @@ function renderFinalizedBets() {
         <span class="fbet-date">${bet.date}</span>
         <span class="fbet-event">${bet.event}</span>
         <span class="fbet-odd">${numberFormatter.format(bet.odds)}x</span>
-        ${bet.ai ? `<span class="fbet-ai">${bet.ai}</span>` : ''}
+        ${bet.ai ? bet.ai.split(",").map(ai => `<span class="fbet-ai">${ai.trim()}</span>`).join(" ") : ''}
         <span class="fbet-status-badge ${bet.status}">${statusLabel(bet.status)}</span>
         <span class="fbet-profit ${profitClass}">${formatProfit(profit)}</span>
       </div>
@@ -2112,6 +2185,15 @@ quickNotesTextarea?.addEventListener("input", () => {
 
 form.addEventListener("submit", handleSubmit);
 resetButton.addEventListener("click", resetForm);
+
+// Toggle cashout value field visibility
+const betStatusSelect = document.getElementById("bet-status");
+betStatusSelect?.addEventListener("change", (e) => {
+  const cashoutLabel = document.getElementById("cashout-value-label");
+  if (cashoutLabel) {
+    cashoutLabel.style.display = e.target.value === "cashout" ? "" : "none";
+  }
+});
 
 ["bet-stake", "bet-odds"].forEach((id) => {
   const input = document.getElementById(id);
