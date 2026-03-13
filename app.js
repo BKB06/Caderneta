@@ -1,23 +1,23 @@
-const PROFILES_KEY = "caderneta.profiles.v1";
 const ACTIVE_PROFILE_KEY = "caderneta.activeProfile.v1";
 
 // Funções para obter chaves dinâmicas baseadas no perfil ativo
 function getActiveProfileId() {
-  const profiles = JSON.parse(localStorage.getItem(PROFILES_KEY) || "[]");
-  let activeId = localStorage.getItem(ACTIVE_PROFILE_KEY);
-  
-  // Se não há perfis ainda, usar chaves legadas
-  if (profiles.length === 0) {
-    return null;
+  return localStorage.getItem(ACTIVE_PROFILE_KEY);
+}
+
+async function loadProfilesFromApi() {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_perfis' })
+    });
+    const dados = await resposta.json();
+    return Array.isArray(dados) ? dados : [];
+  } catch (erro) {
+    console.error("Erro ao carregar perfis:", erro);
+    return [];
   }
-  
-  // Se não há perfil ativo válido, usar o primeiro
-  if (!activeId || !profiles.find(p => p.id === activeId)) {
-    activeId = profiles[0].id;
-    localStorage.setItem(ACTIVE_PROFILE_KEY, activeId);
-  }
-  
-  return activeId;
 }
 
 function getStorageKey() {
@@ -1749,6 +1749,7 @@ function drawMiniStatCard(ctx, x, y, w, h, label, value, color) {
   ctx.fillText(value, x + w / 2, y + 90);
 }
 async function init() {
+  await renderProfileSwitcher();
   await loadBets();
   await loadCashflows();
   await loadCategories();
@@ -2779,11 +2780,16 @@ couponFileInput?.addEventListener("change", (e) => {
 // Profile Switcher
 const profileSwitch = document.getElementById('profile-switch');
 
-function renderProfileSwitcher() {
+async function renderProfileSwitcher() {
   if (!profileSwitch) return;
-  
-  const profiles = JSON.parse(localStorage.getItem(PROFILES_KEY) || "[]");
-  const activeId = getActiveProfileId();
+
+  const profiles = await loadProfilesFromApi();
+  let activeId = getActiveProfileId();
+
+  if (profiles.length > 0 && (!activeId || !profiles.find(p => p.id === activeId))) {
+    activeId = profiles[0].id;
+    localStorage.setItem(ACTIVE_PROFILE_KEY, activeId);
+  }
   
   profileSwitch.innerHTML = '';
   
@@ -3594,4 +3600,3 @@ shareNativeBtn?.addEventListener('click', async () => {
 //fim da func sharenativebtn
 init();
 performWeeklyBackup();
-renderProfileSwitcher();

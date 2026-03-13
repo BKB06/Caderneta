@@ -2,23 +2,11 @@
 // CASINO.JS — Ganhos no Cassino
 // ========================
 
-const PROFILES_KEY = "caderneta.profiles.v1";
 const ACTIVE_PROFILE_KEY = "caderneta.activeProfile.v1";
 
 function getActiveProfileId() {
-  const profiles = JSON.parse(localStorage.getItem(PROFILES_KEY) || "[]");
-  let activeId = localStorage.getItem(ACTIVE_PROFILE_KEY);
-  if (profiles.length === 0) return null;
-  if (!activeId || !profiles.find(p => p.id === activeId)) {
-    activeId = profiles[0].id;
-    localStorage.setItem(ACTIVE_PROFILE_KEY, activeId);
-  }
-  return activeId;
-}
-
-function getCasinoKey() {
-  const profileId = getActiveProfileId();
-  return profileId ? `caderneta.casino.${profileId}` : "caderneta.casino.v1";
+  const activeId = localStorage.getItem(ACTIVE_PROFILE_KEY);
+  return activeId || null;
 }
 
 let casinoRecords = [];
@@ -130,8 +118,19 @@ async function excluirCasinoBD(id) {
   }
 }
 
-function saveCasinoLocal() {
-  localStorage.setItem(getCasinoKey(), JSON.stringify(casinoRecords));
+async function loadProfilesFromApi() {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_perfis' })
+    });
+    const dados = await resposta.json();
+    return Array.isArray(dados) ? dados : [];
+  } catch (erro) {
+    console.error("Erro ao carregar perfis:", erro);
+    return [];
+  }
 }
 
 // ========================
@@ -629,7 +628,6 @@ async function handleSubmit(event) {
   }
 
   await salvarCasinoBD(record);
-  saveCasinoLocal();
   refreshAll();
   resetForm();
 }
@@ -662,7 +660,6 @@ async function handleTableClick(event) {
     if (confirm("Tem certeza que deseja excluir este registro?")) {
       casinoRecords = casinoRecords.filter(r => r.id !== id);
       await excluirCasinoBD(id);
-      saveCasinoLocal();
       refreshAll();
     }
   }
@@ -694,10 +691,16 @@ document.getElementById("casino-win-amount")?.addEventListener("input", updateSe
 // Profile Switcher
 const profileSwitch = document.getElementById('profile-switch');
 
-function renderProfileSwitcher() {
+async function renderProfileSwitcher() {
   if (!profileSwitch) return;
-  const profiles = JSON.parse(localStorage.getItem(PROFILES_KEY) || "[]");
-  const activeId = getActiveProfileId();
+  const profiles = await loadProfilesFromApi();
+  let activeId = getActiveProfileId();
+
+  if (profiles.length > 0 && !profiles.find(p => p.id === activeId)) {
+    activeId = profiles[0].id;
+    localStorage.setItem(ACTIVE_PROFILE_KEY, activeId);
+  }
+
   profileSwitch.innerHTML = '';
   profiles.forEach(profile => {
     const option = document.createElement('option');
@@ -727,9 +730,9 @@ profileSwitch?.addEventListener('change', (e) => {
 // ========================
 async function iniciarCasino() {
   try {
+    await renderProfileSwitcher();
     await loadCasinoRecords();
     refreshAll();
-    renderProfileSwitcher();
   } catch (e) {
     console.error("❌ Erro ao iniciar cassino:", e);
   }

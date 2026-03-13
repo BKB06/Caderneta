@@ -1,4 +1,3 @@
-const PROFILES_KEY = "caderneta.profiles.v1";
 const ACTIVE_PROFILE_KEY = "caderneta.activeProfile.v1";
 
 // Chaves dinâmicas baseadas no perfil ativo
@@ -61,41 +60,60 @@ let profiles = [];
 let activeProfileId = null;
 let categories = [];
 
-// Gerenciamento de Perfis
-function loadProfiles() {
-  const raw = localStorage.getItem(PROFILES_KEY);
-  if (raw) {
-    try {
-      profiles = JSON.parse(raw);
-    } catch (e) {
-      profiles = [];
-    }
-  }
-  
-  // Se não há perfis, criar o perfil padrão
-  if (profiles.length === 0) {
-    const defaultProfile = {
-      id: "default",
-      name: "Perfil Principal",
-      createdAt: new Date().toISOString(),
-    };
-    profiles.push(defaultProfile);
-    saveProfiles();
-    
-    // Migrar dados existentes para o perfil padrão
-    migrateExistingData("default");
-  }
-  
-  // Carregar perfil ativo
-  activeProfileId = localStorage.getItem(ACTIVE_PROFILE_KEY);
-  if (!activeProfileId || !profiles.find(p => p.id === activeProfileId)) {
-    activeProfileId = profiles[0].id;
-    localStorage.setItem(ACTIVE_PROFILE_KEY, activeProfileId);
+async function loadProfilesFromApi() {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_perfis' })
+    });
+    const dados = await resposta.json();
+    return Array.isArray(dados) ? dados : [];
+  } catch (e) {
+    console.error("Erro ao carregar perfis:", e);
+    return [];
   }
 }
 
-function saveProfiles() {
-  localStorage.setItem(PROFILES_KEY, JSON.stringify(profiles));
+async function salvarPerfilApi(perfil) {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'salvar_perfil', perfil })
+    });
+    const json = await resposta.json();
+    return json.sucesso ? json.perfil : null;
+  } catch (e) {
+    console.error("Erro ao salvar perfil:", e);
+    return null;
+  }
+}
+
+async function excluirPerfilApi(profileId) {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'excluir_perfil', profile_id: profileId })
+    });
+    const json = await resposta.json();
+    return Boolean(json.sucesso);
+  } catch (e) {
+    console.error("Erro ao excluir perfil:", e);
+    return false;
+  }
+}
+
+// Gerenciamento de Perfis
+async function loadProfiles() {
+  profiles = await loadProfilesFromApi();
+
+  activeProfileId = localStorage.getItem(ACTIVE_PROFILE_KEY);
+  if (profiles.length > 0 && (!activeProfileId || !profiles.find(p => p.id === activeProfileId))) {
+    activeProfileId = profiles[0].id;
+    localStorage.setItem(ACTIVE_PROFILE_KEY, activeProfileId);
+  }
 }
 
 function migrateExistingData(profileId) {
@@ -119,23 +137,15 @@ function migrateExistingData(profileId) {
   }
 }
 
-function createProfile(name) {
-  const id = `profile_${Date.now()}`;
-  const newProfile = {
-    id,
-    name: name.trim(),
-    createdAt: new Date().toISOString(),
-  };
-  profiles.push(newProfile);
-  saveProfiles();
-  
-  // Criar configurações padrão para o novo perfil
-  localStorage.setItem(getSettingsKey(id), JSON.stringify(defaultSettings));
-  
-  return newProfile;
+async function createProfile(name) {
+  const created = await salvarPerfilApi({ name: name.trim() });
+  if (!created) return null;
+
+  profiles = await loadProfilesFromApi();
+  return created;
 }
 
-function deleteProfile(profileId) {
+async function deleteProfile(profileId) {
   if (profiles.length <= 1) {
     alert("Você precisa ter pelo menos um perfil.");
     return false;
@@ -148,25 +158,23 @@ function deleteProfile(profileId) {
     return false;
   }
   
-  // Remover todos os dados do perfil
-  localStorage.removeItem(getStorageKey(profileId));
-  localStorage.removeItem(getCashflowKey(profileId));
-  localStorage.removeItem(getBankrollKey(profileId));
-  localStorage.removeItem(getSettingsKey(profileId));
-  
-  // Remover da lista
-  profiles = profiles.filter(p => p.id !== profileId);
-  saveProfiles();
+  const sucesso = await excluirPerfilApi(profileId);
+  if (!sucesso) {
+    alert("Não foi possível excluir o perfil.");
+    return false;
+  }
+
+  profiles = await loadProfilesFromApi();
   
   // Se era o perfil ativo, trocar para outro
   if (activeProfileId === profileId) {
-    switchProfile(profiles[0].id);
+    await switchProfile(profiles[0].id);
   }
   
   return true;
 }
 
-function switchProfile(profileId) {
+async function switchProfile(profileId) {
   const profile = profiles.find(p => p.id === profileId);
   if (!profile) return false;
   
@@ -174,7 +182,7 @@ function switchProfile(profileId) {
   localStorage.setItem(ACTIVE_PROFILE_KEY, profileId);
   
   // Recarregar configurações do novo perfil
-  loadSettings();
+  await loadSettings();
   populateForm();
   renderProfiles();
   loadNotes();
@@ -216,14 +224,14 @@ function renderProfiles() {
   
   // Event listeners
   container.querySelectorAll("button[data-action]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
+    btn.addEventListener("click", async (e) => {
       const action = e.target.dataset.action;
       const id = e.target.dataset.id;
       
       if (action === "switch") {
-        switchProfile(id);
+        await switchProfile(id);
       } else if (action === "delete") {
-        if (deleteProfile(id)) {
+        if (await deleteProfile(id)) {
           renderProfiles();
           showToast("Perfil excluído!");
         }
@@ -234,11 +242,10 @@ function renderProfiles() {
   // Atualizar info do perfil atual
   const activeProfile = getActiveProfile();
   if (infoContainer && activeProfile) {
-    const betsCount = JSON.parse(localStorage.getItem(getStorageKey(activeProfileId)) || "[]").length;
     infoContainer.innerHTML = `
       <div class="current-profile-stats">
         <span>📊 Perfil ativo: <strong>${activeProfile.name}</strong></span>
-        <span>📝 ${betsCount} apostas registradas</span>
+        <span>✅ Sincronizado com a API</span>
       </div>
     `;
   }
@@ -432,16 +439,18 @@ function showToast(message) {
 }
 
 // Profile form submit
-document.getElementById("profile-form").addEventListener("submit", (e) => {
+document.getElementById("profile-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   collectSettings();
-  saveSettings();
+  await saveSettings();
   
   // Atualizar nome do perfil se alterado
   const activeProfile = getActiveProfile();
   if (activeProfile && settings.profile.name) {
-    activeProfile.name = settings.profile.name;
-    saveProfiles();
+    const atualizado = await salvarPerfilApi({ id: activeProfile.id, name: settings.profile.name });
+    if (atualizado) {
+      profiles = await loadProfilesFromApi();
+    }
     renderProfiles();
   }
   
@@ -449,7 +458,7 @@ document.getElementById("profile-form").addEventListener("submit", (e) => {
 });
 
 // Criar novo perfil
-document.getElementById("create-profile-btn").addEventListener("click", () => {
+document.getElementById("create-profile-btn").addEventListener("click", async () => {
   const input = document.getElementById("new-profile-name");
   const name = input.value.trim();
   
@@ -458,7 +467,13 @@ document.getElementById("create-profile-btn").addEventListener("click", () => {
     return;
   }
   
-  const newProfile = createProfile(name);
+  const newProfile = await createProfile(name);
+  if (!newProfile) {
+    alert("Não foi possível criar o perfil.");
+    return;
+  }
+
+  await switchProfile(newProfile.id);
   input.value = "";
   renderProfiles();
   showToast(`Perfil "${newProfile.name}" criado!`);
@@ -939,7 +954,7 @@ document.getElementById("user-notes")?.addEventListener("input", () => {
 
 // Init Async
 async function inicializarPaginaConfiguracoes() {
-  loadProfiles();
+  await loadProfiles();
   await loadSettings(); // Agora espera o BD responder!
   populateForm();
   renderProfiles();
