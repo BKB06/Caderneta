@@ -80,6 +80,15 @@ const kpiStreak = document.getElementById("kpi-streak");
 const dateFilterStart = document.getElementById("date-filter-start");
 const dateFilterEnd = document.getElementById("date-filter-end");
 const clearDateFilter = document.getElementById("clear-date-filter");
+const betSearchInput = document.getElementById("bet-search");
+const DEFAULT_TABLE_SORT = { key: "date", direction: "desc" };
+const ALLOWED_SORT_KEYS = new Set(["date", "event", "odds", "stake", "status", "profit", "potentialProfit", "book", "category", "ai"]);
+const ALLOWED_SORT_DIRECTIONS = new Set(["asc", "desc"]);
+
+let tableSortState = {
+  key: DEFAULT_TABLE_SORT.key,
+  direction: DEFAULT_TABLE_SORT.direction,
+};
 
 // Modal elements
 const dayModal = document.getElementById("day-modal");
@@ -734,6 +743,188 @@ function updatePotentialProfit() {
   updateFormInsights();
 }
 
+function normalizeSearchText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getSearchTokens(query) {
+  const normalized = normalizeSearchText(query);
+  if (!normalized) return [];
+  return normalized.split(/\s+/).filter(Boolean);
+}
+
+function getSearchableBetText(bet) {
+  const statusMap = {
+    pending: "aberta pending",
+    win: "green ganhou win",
+    loss: "red perdeu loss",
+    void: "void devolvida",
+    cashout: "cashout",
+  };
+
+  return normalizeSearchText([
+    bet.date,
+    bet.event,
+    bet.book,
+    bet.category,
+    bet.ai,
+    statusMap[bet.status] || bet.status,
+  ].join(" "));
+}
+
+function filterByTextSearch(data) {
+  const tokens = getSearchTokens(betSearchInput?.value || "");
+  if (!tokens.length) return data;
+
+  return data.filter((bet) => {
+    const searchable = getSearchableBetText(bet);
+    return tokens.every((token) => searchable.includes(token));
+  });
+}
+
+function getSortValue(bet, key) {
+  switch (key) {
+    case "date": {
+      const parsed = parseDateForSort(bet.date);
+      return parsed ? parsed.getTime() : Number.NEGATIVE_INFINITY;
+    }
+    case "event":
+      return normalizeSearchText(bet.event);
+    case "odds":
+      return Number.isFinite(bet.odds) ? bet.odds : Number.NEGATIVE_INFINITY;
+    case "stake":
+      return Number.isFinite(bet.stake) ? bet.stake : Number.NEGATIVE_INFINITY;
+    case "status":
+      return normalizeSearchText(statusLabel(bet.status));
+    case "profit":
+      return calcProfit(bet);
+    case "potentialProfit":
+      return calcPotentialProfit(bet.stake, bet.odds);
+    case "book":
+      return normalizeSearchText(bet.book);
+    case "category":
+      return normalizeSearchText(bet.category);
+    case "ai":
+      return normalizeSearchText(bet.ai);
+    default:
+      return "";
+  }
+}
+
+function sortBets(data) {
+  const directionMultiplier = tableSortState.direction === "asc" ? 1 : -1;
+  const key = tableSortState.key;
+
+  return [...data].sort((a, b) => {
+    const aValue = getSortValue(a, key);
+    const bValue = getSortValue(b, key);
+
+    let comparison = 0;
+    if (typeof aValue === "number" && typeof bValue === "number") {
+      comparison = aValue - bValue;
+    } else {
+      comparison = String(aValue).localeCompare(String(bValue), "pt-BR", {
+        sensitivity: "base",
+        numeric: true,
+      });
+    }
+
+    if (comparison === 0) {
+      const fallbackA = parseDateForSort(a.date)?.getTime() || 0;
+      const fallbackB = parseDateForSort(b.date)?.getTime() || 0;
+      comparison = fallbackA - fallbackB;
+    }
+
+    return comparison * directionMultiplier;
+  });
+}
+
+function getVisibleBets() {
+  const filtered = getFilteredBets();
+  const searched = filterByTextSearch(filtered);
+  return sortBets(searched);
+}
+
+function updateSortHeaders() {
+  const headers = document.querySelectorAll("#bets-table-head th.sortable-header");
+  headers.forEach((header) => {
+    const isActive = header.dataset.sortKey === tableSortState.key;
+    const indicator = header.querySelector(".sort-indicator");
+    header.classList.toggle("sorted", isActive);
+
+    if (!isActive) {
+      header.setAttribute("aria-sort", "none");
+      if (indicator) indicator.textContent = "↕";
+      return;
+    }
+
+    const isAsc = tableSortState.direction === "asc";
+    header.setAttribute("aria-sort", isAsc ? "ascending" : "descending");
+    if (indicator) indicator.textContent = isAsc ? "▲" : "▼";
+  });
+}
+
+function handleTableSortClick(event) {
+  const header = event.target.closest("th.sortable-header[data-sort-key]");
+  if (!header) return;
+
+  const nextKey = header.dataset.sortKey;
+  if (!nextKey) return;
+
+  if (tableSortState.key === nextKey) {
+    tableSortState.direction = tableSortState.direction === "asc" ? "desc" : "asc";
+  } else {
+    tableSortState.key = nextKey;
+    tableSortState.direction = nextKey === "date" ? "desc" : "asc";
+  }
+
+  refreshAll();
+}
+
+function applyTableStateFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const rawQuery = params.get("q") || "";
+  const rawSort = params.get("sort");
+  const rawDir = params.get("dir");
+
+  if (betSearchInput) {
+    betSearchInput.value = rawQuery;
+  }
+
+  const sortKey = ALLOWED_SORT_KEYS.has(rawSort) ? rawSort : DEFAULT_TABLE_SORT.key;
+  const sortDir = ALLOWED_SORT_DIRECTIONS.has(rawDir) ? rawDir : DEFAULT_TABLE_SORT.direction;
+  tableSortState = { key: sortKey, direction: sortDir };
+}
+
+function syncTableStateToUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const query = (betSearchInput?.value || "").trim();
+  const isDefaultSort = tableSortState.key === DEFAULT_TABLE_SORT.key && tableSortState.direction === DEFAULT_TABLE_SORT.direction;
+
+  if (query) params.set("q", query);
+  else params.delete("q");
+
+  if (isDefaultSort) {
+    params.delete("sort");
+    params.delete("dir");
+  } else {
+    params.set("sort", tableSortState.key);
+    params.set("dir", tableSortState.direction);
+  }
+
+  const search = params.toString();
+  const nextUrl = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`;
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+  if (nextUrl !== currentUrl) {
+    history.replaceState(null, "", nextUrl);
+  }
+}
+
 function getFilteredBets() {
   const selected = bookFilter.value;
   const status = statusFilter?.value || "all";
@@ -804,7 +995,7 @@ function renderBookFilter() {
 }
 
 function renderTable() {
-  const data = getFilteredBets();
+  const data = getVisibleBets();
   const openCount = document.getElementById("open-count");
   const totalOpen = bets.filter((bet) => bet.status === "pending").length;
   if (openCount) openCount.textContent = String(totalOpen);
@@ -813,17 +1004,21 @@ function renderTable() {
   if (betsMobileList) betsMobileList.innerHTML = "";
 
   if (data.length === 0) {
+    const hasSearch = getSearchTokens(betSearchInput?.value || "").length > 0;
+    const emptyMessage = hasSearch ? "Nenhuma aposta encontrada para essa busca." : "Nenhuma aposta cadastrada ainda.";
+
     if (betsBody) {
       const row = document.createElement("tr");
       const cell = document.createElement("td");
       cell.colSpan = 11;
-      cell.textContent = "Nenhuma aposta cadastrada ainda.";
+      cell.textContent = emptyMessage;
       row.appendChild(cell);
       betsBody.appendChild(row);
     }
     if (betsMobileList) {
-      betsMobileList.innerHTML = '<div class="bet-card"><div class="bet-card-event">Nenhuma aposta cadastrada ainda.</div></div>';
+      betsMobileList.innerHTML = `<div class="bet-card"><div class="bet-card-event">${emptyMessage}</div></div>`;
     }
+    updateSortHeaders();
     return;
   }
 
@@ -894,6 +1089,8 @@ function renderTable() {
       betsMobileList.appendChild(card);
     }
   });
+
+  updateSortHeaders();
 }
 
 function statusLabel(status) {
@@ -1186,6 +1383,7 @@ function refreshAll() {
   renderWeekdayPerformance();
   renderProfitGoals();
   renderFinalizedBets();
+  syncTableStateToUrl();
 }
 
 function renderAll() {
@@ -1794,7 +1992,36 @@ dayModal?.addEventListener('click', (e) => {
   }
 });
 document.addEventListener('keydown', (e) => {
+  const ctrlOrMeta = e.ctrlKey || e.metaKey;
+
+  if (ctrlOrMeta && e.key.toLowerCase() === 'f') {
+    if (betSearchInput) {
+      e.preventDefault();
+      betSearchInput.focus();
+      betSearchInput.select();
+    }
+    return;
+  }
+
+  if (ctrlOrMeta && e.key.toLowerCase() === 'i') {
+    e.preventDefault();
+    document.getElementById("import-coupon-btn")?.click();
+    return;
+  }
+
+  if (ctrlOrMeta && e.key.toLowerCase() === 's') {
+    if (form) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+    return;
+  }
+
   if (e.key === 'Escape') {
+    if (betSearchInput?.value) {
+      betSearchInput.value = "";
+      refreshAll();
+    }
     closeDayModal();
     closeDeleteModal();
     if (typeof closePdfModal === 'function') closePdfModal();
@@ -2001,6 +2228,7 @@ function drawMiniStatCard(ctx, x, y, w, h, label, value, color) {
 }
 async function init() {
   initTheme();
+  applyTableStateFromUrl();
   const periodPill = document.getElementById("period-pill");
   if (periodPill) {
     const date = new Date();
@@ -2517,6 +2745,7 @@ betStatusSelect?.addEventListener("change", (e) => {
 bankrollInput?.addEventListener("input", handleBankrollInput);
 bookFilter?.addEventListener("change", refreshAll);
 statusFilter?.addEventListener("change", refreshAll);
+betSearchInput?.addEventListener("input", refreshAll);
 document.getElementById("category-filter")?.addEventListener("change", refreshAll);
 dateFilterStart?.addEventListener("change", refreshAll);
 dateFilterEnd?.addEventListener("change", refreshAll);
@@ -2527,6 +2756,7 @@ clearDateFilter?.addEventListener("click", () => {
 });
 betsBody?.addEventListener("click", handleTableClick);
 betsMobileList?.addEventListener("click", handleTableClick);
+document.getElementById("bets-table-head")?.addEventListener("click", handleTableSortClick);
 
 document.querySelectorAll("#bet-ai-selector .ai-chip").forEach((chip) => {
   const input = chip.querySelector("input[type='checkbox']");
@@ -2620,6 +2850,7 @@ calendarNext?.addEventListener('click', () => handleCalendarNavigation(1));
 const GEMINI_API_KEY_STORAGE = "caderneta.gemini.apikey";
 const importCouponBtn = document.getElementById("import-coupon-btn");
 const couponFileInput = document.getElementById("coupon-file-input");
+const importCouponSection = document.querySelector(".import-coupon-section");
 const importStatus = document.getElementById("import-status");
 const importProgress = document.getElementById("import-progress");
 const importProgressBar = document.getElementById("import-progress-bar");
@@ -3166,6 +3397,49 @@ importCouponBtn?.addEventListener("click", () => {
 couponFileInput?.addEventListener("change", (e) => {
   const file = e.target.files?.[0];
   if (file) handleCouponImport(file);
+});
+
+function getDroppedImageFile(dataTransfer) {
+  const files = Array.from(dataTransfer?.files || []);
+  return files.find((file) => file.type.startsWith("image/")) || null;
+}
+
+["dragenter", "dragover"].forEach((eventName) => {
+  importCouponSection?.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    importCouponSection.classList.add("drag-over");
+  });
+});
+
+["dragleave", "drop"].forEach((eventName) => {
+  importCouponSection?.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    importCouponSection.classList.remove("drag-over");
+  });
+});
+
+importCouponSection?.addEventListener("drop", (event) => {
+  const file = getDroppedImageFile(event.dataTransfer);
+  if (!file) {
+    showImportStatus("❌ Solte um arquivo de imagem válido.", "error");
+    return;
+  }
+  handleCouponImport(file);
+});
+
+window.addEventListener("dragover", (event) => {
+  if (event.dataTransfer?.types?.includes("Files")) {
+    event.preventDefault();
+  }
+});
+
+window.addEventListener("drop", (event) => {
+  const targetElement = event.target instanceof Element ? event.target : null;
+  if (event.dataTransfer?.types?.includes("Files") && !targetElement?.closest(".import-coupon-section")) {
+    event.preventDefault();
+  }
 });
 
 // Profile Switcher

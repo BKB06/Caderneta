@@ -126,6 +126,7 @@
 
               <div class="import-coupon-section">
                 <button type="button" id="import-coupon-btn" class="import-coupon-btn">📷 Importar do Cupom</button>
+                <div class="import-drop-hint">Ou arraste a imagem do cupom para esta área</div>
                 <input type="file" id="coupon-file-input" accept="image/*" capture="environment" style="display:none;" />
                 <div id="import-progress" class="import-progress" style="display:none;">
                   <div class="import-progress-bar" id="import-progress-bar"></div>
@@ -314,6 +315,10 @@
               </div>
             </div>
             <div class="filters-bar">
+              <label class="search-field">
+                Busca rápida
+                <input type="text" id="bet-search" placeholder="Ex: palmeiras bet365 green janeiro" autocomplete="off" />
+              </label>
               <label>
                 De
                 <input type="date" id="date-filter-start" />
@@ -338,20 +343,26 @@
               </label>
               <button type="button" class="ghost small" id="clear-date-filter">Limpar</button>
             </div>
+            <div class="shortcut-legend" aria-label="Atalhos disponíveis">
+              <span class="shortcut-item"><kbd>Ctrl</kbd> + <kbd>I</kbd> importar cupom</span>
+              <span class="shortcut-item"><kbd>Ctrl</kbd> + <kbd>F</kbd> focar busca</span>
+              <span class="shortcut-item"><kbd>Ctrl</kbd> + <kbd>S</kbd> salvar aposta</span>
+              <span class="shortcut-item"><kbd>Esc</kbd> limpar busca/fechar modais</span>
+            </div>
             <div class="table-wrapper">
               <table>
-                <thead>
+                <thead id="bets-table-head">
                   <tr>
-                    <th>Data</th>
-                    <th>Evento</th>
-                    <th>Odd</th>
-                    <th>Stake</th>
-                    <th>Status</th>
-                    <th>Lucro</th>
-                    <th>Lucro potencial</th>
-                    <th>Casa</th>
-                    <th>Categoria</th>
-                    <th>IA</th>
+                    <th class="sortable-header sorted" data-sort-key="date" aria-sort="descending">Data <span class="sort-indicator">▼</span></th>
+                    <th class="sortable-header" data-sort-key="event" aria-sort="none">Evento <span class="sort-indicator">↕</span></th>
+                    <th class="sortable-header" data-sort-key="odds" aria-sort="none">Odd <span class="sort-indicator">↕</span></th>
+                    <th class="sortable-header" data-sort-key="stake" aria-sort="none">Stake <span class="sort-indicator">↕</span></th>
+                    <th class="sortable-header" data-sort-key="status" aria-sort="none">Status <span class="sort-indicator">↕</span></th>
+                    <th class="sortable-header" data-sort-key="profit" aria-sort="none">Lucro <span class="sort-indicator">↕</span></th>
+                    <th class="sortable-header" data-sort-key="potentialProfit" aria-sort="none">Lucro potencial <span class="sort-indicator">↕</span></th>
+                    <th class="sortable-header" data-sort-key="book" aria-sort="none">Casa <span class="sort-indicator">↕</span></th>
+                    <th class="sortable-header" data-sort-key="category" aria-sort="none">Categoria <span class="sort-indicator">↕</span></th>
+                    <th class="sortable-header" data-sort-key="ai" aria-sort="none">IA <span class="sort-indicator">↕</span></th>
                     <th>Ações</th>
                   </tr>
                 </thead>

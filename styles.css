@@ -297,6 +297,15 @@ p {
   gap: 4px;
 }
 
+.filters-bar label.search-field {
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+
+.filters-bar label.search-field input {
+  min-width: 220px;
+}
+
 .filters-bar input,
 .filters-bar select {
   padding: 8px 10px;
@@ -306,6 +315,41 @@ p {
 
 .filters-bar input[type="date"] {
   min-width: 130px;
+}
+
+.shortcut-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.shortcut-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  letter-spacing: 0.01em;
+}
+
+.shortcut-item kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.72rem;
+  line-height: 1;
 }
 
 button.small {
@@ -666,6 +710,27 @@ th {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.7rem;
+}
+
+th.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+th.sortable-header:hover {
+  color: var(--text);
+}
+
+th.sortable-header .sort-indicator {
+  margin-left: 6px;
+  opacity: 0.5;
+  font-size: 0.75rem;
+}
+
+th.sortable-header.sorted .sort-indicator {
+  opacity: 1;
+  color: var(--accent);
 }
 
 tr:hover td {
@@ -1785,6 +1850,18 @@ button.danger:hover {
   background: var(--panel);
   border-radius: var(--radius-sm);
   border: 1px dashed var(--border);
+}
+
+.import-coupon-section.drag-over {
+  border-color: var(--accent);
+  background: rgba(45, 212, 191, 0.12);
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
+}
+
+.import-drop-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .import-coupon-btn {
