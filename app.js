@@ -1,4 +1,5 @@
 const ACTIVE_PROFILE_KEY = "caderneta.activeProfile.v1";
+const THEME_KEY = "caderneta.theme";
 
 // Funções para obter chaves dinâmicas baseadas no perfil ativo
 function getActiveProfileId() {
@@ -53,6 +54,7 @@ function getGoalsKey() {
 const form = document.getElementById("bet-form");
 const potentialProfitEl = document.getElementById("potential-profit");
 const betsBody = document.getElementById("bets-body");
+const betsMobileList = document.getElementById("bets-mobile-list");
 const resetButton = document.getElementById("reset-button");
 const submitButton = document.getElementById("submit-button");
 
@@ -91,6 +93,7 @@ let cashflows = [];
 let editingId = null;
 let deletePendingId = null;
 let balanceChart = null;
+let miniProfitChart = null;
 let baseBankroll = null;
 let settings = null;
 let categories = [];
@@ -110,6 +113,40 @@ const numberFormatter = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+
+function applyTheme(theme) {
+  const html = document.documentElement;
+  const allowed = ["dark", "light-azulado", "light"];
+  const resolved = allowed.includes(theme) ? theme : "dark";
+  html.classList.remove("light", "dark", "light-azulado", "light-bege");
+  html.classList.add(resolved);
+  localStorage.setItem(THEME_KEY, resolved);
+
+  const toggle = document.getElementById("theme-toggle");
+  if (toggle) {
+    if (resolved === "dark") toggle.textContent = "🌙";
+    if (resolved === "light-azulado" || resolved === "light") toggle.textContent = "🧊";
+  }
+}
+
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved === "dark" || saved === "light" || saved === "light-azulado") {
+    applyTheme(saved);
+    return;
+  }
+  const preferredDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  applyTheme(preferredDark ? "dark" : "light-azulado");
+}
+
+function toggleTheme() {
+  const html = document.documentElement;
+  if (html.classList.contains("dark")) {
+    applyTheme("light-azulado");
+    return;
+  }
+  applyTheme("dark");
+}
 //calma
 async function loadBets() {
   try {
@@ -235,6 +272,7 @@ function loadSettings() {
       showTotalBets: true,
       showStreak: true,
       showStakedPeriod: true,
+      maxStakePct: 5,
     },
     columns: {
       date: true,
@@ -412,6 +450,7 @@ function setSelectedAIs(containerId, aisString) {
   const selected = aisString ? aisString.split(",").map(s => s.trim()) : [];
   checkboxes.forEach(cb => {
     cb.checked = selected.includes(cb.value);
+    cb.closest(".ai-chip")?.classList.toggle("ai-chip--active", cb.checked);
   });
 }
 
@@ -441,6 +480,11 @@ function formatProfit(value) {
   return currencyFormatter.format(value);
 }
 
+function getThemeColor(variableName, fallback) {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+  return value || fallback;
+}
+
 function calcProfit(bet) {
   if (bet.status === "win") {
     return bet.stake * (bet.odds - 1);
@@ -463,6 +507,114 @@ function calcPotentialProfit(stake, odds) {
     return 0;
   }
   return stake * (odds - 1);
+}
+
+function calcKelly(winRate, odds, bankroll) {
+  const b = odds - 1;
+  const p = winRate / 100;
+  const q = 1 - p;
+  if (!Number.isFinite(b) || b <= 0 || !Number.isFinite(bankroll) || bankroll <= 0) {
+    return { fraction: 0, suggested: 0 };
+  }
+  const fraction = (p * b - q) / b;
+  const suggested = Math.max(0, fraction) * bankroll;
+  return { fraction: fraction * 100, suggested };
+}
+
+function getSettledBetsByMonth(dateRef) {
+  return bets.filter((bet) => {
+    if (bet.status !== "win" && bet.status !== "loss" && bet.status !== "cashout" && bet.status !== "void") {
+      return false;
+    }
+    const date = parseDateForSort(bet.date);
+    return date && date.getMonth() === dateRef.getMonth() && date.getFullYear() === dateRef.getFullYear();
+  });
+}
+
+function calculateMonthlyDelta(metric) {
+  const now = new Date();
+  const currentRef = new Date(now.getFullYear(), now.getMonth(), 1);
+  const previousRef = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  const currentList = getSettledBetsByMonth(currentRef);
+  const previousList = getSettledBetsByMonth(previousRef);
+
+  const extractMetric = (list) => {
+    if (metric === "profit") {
+      return list.reduce((sum, bet) => sum + calcProfit(bet), 0);
+    }
+    if (metric === "winrate") {
+      if (!list.length) return 0;
+      const wins = list.filter((bet) => bet.status === "win" || bet.status === "cashout").length;
+      return wins / list.length;
+    }
+    if (metric === "roi") {
+      const totalStake = list.reduce((sum, bet) => sum + bet.stake, 0);
+      if (!totalStake) return 0;
+      return list.reduce((sum, bet) => sum + calcProfit(bet), 0) / totalStake;
+    }
+    if (metric === "avgOdd") {
+      if (!list.length) return 0;
+      return list.reduce((sum, bet) => sum + bet.odds, 0) / list.length;
+    }
+    return 0;
+  };
+
+  const current = extractMetric(currentList);
+  const previous = extractMetric(previousList);
+  const delta = current - previous;
+  const deltaPercent = previous !== 0 ? (delta / Math.abs(previous)) * 100 : (current !== 0 ? 100 : 0);
+
+  return { current, previous, delta, deltaPercent };
+}
+
+function formatDeltaText(deltaValue, suffix, monthLabel) {
+  if (!Number.isFinite(deltaValue) || deltaValue === 0) {
+    return `= igual vs. ${monthLabel}`;
+  }
+  const prefix = deltaValue > 0 ? "▲" : "▼";
+  const absValue = Math.abs(deltaValue);
+  return `${prefix} ${numberFormatter.format(absValue)}${suffix} vs. ${monthLabel}`;
+}
+
+function updateFormInsights() {
+  const kellyEl = document.getElementById("kelly-hint");
+  const alertEl = document.getElementById("bankroll-alert");
+  const stake = parseLocaleNumber(document.getElementById("bet-stake")?.value || "");
+  const odds = parseLocaleNumber(document.getElementById("bet-odds")?.value || "");
+  const bankroll = getEffectiveBankroll();
+
+  if (kellyEl) {
+    const settled = bets.filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void");
+    const wins = settled.filter((bet) => bet.status === "win" || bet.status === "cashout").length;
+    const winRate = settled.length ? (wins / settled.length) * 100 : 0;
+
+    if (Number.isFinite(stake) && Number.isFinite(odds) && Number.isFinite(bankroll) && bankroll > 0 && winRate > 0) {
+      const kelly = calcKelly(winRate, odds, bankroll);
+      kellyEl.textContent = `Kelly sugere ${formatProfit(kelly.suggested)} (${numberFormatter.format(Math.max(0, kelly.fraction))}% da banca de ${formatProfit(bankroll)})`;
+      kellyEl.classList.add("visible");
+    } else {
+      kellyEl.classList.remove("visible");
+      kellyEl.textContent = "";
+    }
+  }
+
+  if (alertEl) {
+    const maxStakePct = Number(settings?.display?.maxStakePct ?? 5);
+    if (Number.isFinite(stake) && stake > 0 && Number.isFinite(bankroll) && bankroll > 0) {
+      const pct = (stake / bankroll) * 100;
+      if (pct > maxStakePct) {
+        alertEl.textContent = `Stake de ${formatProfit(stake)} representa ${numberFormatter.format(pct)}% da banca - acima do limite de ${numberFormatter.format(maxStakePct)}%.`;
+        alertEl.classList.add("visible");
+      } else {
+        alertEl.classList.remove("visible");
+        alertEl.textContent = "";
+      }
+    } else {
+      alertEl.classList.remove("visible");
+      alertEl.textContent = "";
+    }
+  }
 }
 
 function calcSettledProfit(list = bets) {
@@ -576,7 +728,10 @@ function updatePotentialProfit() {
   const stake = parseLocaleNumber(document.getElementById("bet-stake").value);
   const odds = parseLocaleNumber(document.getElementById("bet-odds").value);
   const value = calcPotentialProfit(stake, odds);
-  potentialProfitEl.textContent = formatProfit(value);
+  if (potentialProfitEl) {
+    potentialProfitEl.textContent = formatProfit(value);
+  }
+  updateFormInsights();
 }
 
 function getFilteredBets() {
@@ -650,133 +805,94 @@ function renderBookFilter() {
 
 function renderTable() {
   const data = getFilteredBets();
-  betsBody.innerHTML = ""; // Limpa a tabela
+  const openCount = document.getElementById("open-count");
+  const totalOpen = bets.filter((bet) => bet.status === "pending").length;
+  if (openCount) openCount.textContent = String(totalOpen);
+
+  if (betsBody) betsBody.innerHTML = "";
+  if (betsMobileList) betsMobileList.innerHTML = "";
 
   if (data.length === 0) {
-    const row = document.createElement("tr");
-    const cell = document.createElement("td");
-    cell.colSpan = 11;
-    cell.textContent = "Nenhuma aposta cadastrada ainda.";
-    row.appendChild(cell);
-    betsBody.appendChild(row);
+    if (betsBody) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 11;
+      cell.textContent = "Nenhuma aposta cadastrada ainda.";
+      row.appendChild(cell);
+      betsBody.appendChild(row);
+    }
+    if (betsMobileList) {
+      betsMobileList.innerHTML = '<div class="bet-card"><div class="bet-card-event">Nenhuma aposta cadastrada ainda.</div></div>';
+    }
     return;
   }
 
   data.forEach((bet) => {
-    const row = document.createElement("tr");
     const profit = calcProfit(bet);
     const potentialProfit = calcPotentialProfit(bet.stake, bet.odds);
+    const statusClass = `status-badge ${bet.status}`;
 
-    // Criação segura das colunas
-    // 1. Data
-    const tdDate = document.createElement("td");
-    tdDate.textContent = bet.date;
-    row.appendChild(tdDate);
-
-    // 2. Evento (com negrito)
-    const tdEvent = document.createElement("td");
-    const strongEvent = document.createElement("strong");
-    strongEvent.textContent = bet.event; // Aqui usamos textContent para segurança
-    tdEvent.appendChild(strongEvent);
-    row.appendChild(tdEvent);
-
-    // 3. Odd
-    const tdOdds = document.createElement("td");
-    tdOdds.textContent = numberFormatter.format(bet.odds);
-    row.appendChild(tdOdds);
-
-    // 4. Stake
-    const tdStake = document.createElement("td");
-    tdStake.textContent = formatStake(bet.stake);
-    if (bet.isFreebet) {
-      const tag = document.createElement("span");
-      tag.classList.add("tag");
-      tag.textContent = "Grátis";
-      tdStake.appendChild(document.createElement("br"));
-      tdStake.appendChild(tag);
-    }
-    row.appendChild(tdStake);
-
-    // 5. Status
-    const tdStatus = document.createElement("td");
-    tdStatus.textContent = statusLabel(bet.status);
-    if (bet.status === "cashout" && bet.cashout_value != null) {
-      const cashTag = document.createElement("small");
-      cashTag.style.display = "block";
-      cashTag.style.color = "var(--text-muted)";
-      cashTag.style.fontSize = "0.75rem";
-      cashTag.textContent = currencyFormatter.format(bet.cashout_value);
-      tdStatus.appendChild(cashTag);
-    }
-    row.appendChild(tdStatus);
-
-    // 6. Lucro
-    const tdProfit = document.createElement("td");
-    tdProfit.textContent = formatProfit(profit);
-    row.appendChild(tdProfit);
-
-    // 7. Lucro potencial
-    const tdPotential = document.createElement("td");
-    tdPotential.textContent = formatProfit(potentialProfit);
-    row.appendChild(tdPotential);
-
-    // 8. Casa (Book)
-    const tdBook = document.createElement("td");
-    tdBook.textContent = bet.book;
-    row.appendChild(tdBook);
-
-    // 8.5. Categoria
-    const tdCategory = document.createElement("td");
-    if (bet.category) {
-      const cat = categories.find(c => c.name === bet.category);
-      tdCategory.textContent = cat ? `${cat.icon || '🏅'} ${cat.name}` : bet.category;
-    } else {
-      tdCategory.textContent = "-";
-    }
-    row.appendChild(tdCategory);
-
-    // 8.6. IA
-    const tdAi = document.createElement("td");
-    if (bet.ai) {
-      const tags = formatAITags(bet.ai);
-      if (Array.isArray(tags)) {
-        tags.forEach(tag => { tdAi.appendChild(tag); tdAi.appendChild(document.createTextNode(" ")); });
-      } else {
-        tdAi.textContent = "-";
-      }
-    } else {
-      tdAi.textContent = "-";
-    }
-    row.appendChild(tdAi);
-
-    // 9. Botões de Ação
-    const tdActions = document.createElement("td");
-    tdActions.className = "actions-cell";
-    
-    // Botões de ação rápida para status (apenas para apostas pendentes)
-    if (bet.status === "pending") {
-      tdActions.innerHTML = `
-        <div class="quick-status-actions">
-          <button type="button" class="action-btn green" data-action="set-win" data-id="${bet.id}" title="Marcar como Green">✓</button>
-          <button type="button" class="action-btn red" data-action="set-loss" data-id="${bet.id}" title="Marcar como Red">✗</button>
-        </div>
-        <div class="main-actions">
-          <button type="button" class="ghost small" data-action="edit" data-id="${bet.id}">Editar</button>
-          <button type="button" class="ghost small" data-action="delete" data-id="${bet.id}">Excluir</button>
-        </div>
+    if (betsBody) {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${bet.date}</td>
+        <td><strong>${bet.event}</strong></td>
+        <td>${numberFormatter.format(bet.odds)}x</td>
+        <td>${formatStake(bet.stake)}</td>
+        <td><span class="${statusClass}">${statusLabel(bet.status)}</span></td>
+        <td>${formatProfit(profit)}</td>
+        <td>${formatProfit(potentialProfit)}</td>
+        <td>${bet.book || "-"}</td>
+        <td>${bet.category || "-"}</td>
+        <td>${bet.ai || "-"}</td>
+        <td>
+          ${bet.status === "pending" ? `
+            <button type="button" class="quick-action green" data-action="resolve-win" data-id="${bet.id}">✓ Green</button>
+            <button type="button" class="quick-action red" data-action="resolve-loss" data-id="${bet.id}">✗ Red</button>
+            <button type="button" class="quick-action cash" data-action="toggle-cash" data-id="${bet.id}">$ Cash</button>
+            <button type="button" class="quick-action" data-action="edit" data-id="${bet.id}">...</button>
+            <div class="inline-cashout" id="cashout-inline-${bet.id}" style="display:none;">
+              <input type="text" inputmode="decimal" placeholder="Valor" id="cashout-value-${bet.id}" />
+              <button type="button" class="quick-action" data-action="confirm-cash" data-id="${bet.id}">Confirmar</button>
+            </div>
+          ` : `
+            <button type="button" class="quick-action" data-action="edit" data-id="${bet.id}">...</button>
+          `}
+        </td>
       `;
-    } else {
-      tdActions.innerHTML = `
-        <div class="main-actions">
-          <button type="button" class="ghost small" data-action="share" data-id="${bet.id}" title="Compartilhar">📱</button>
-          <button type="button" class="ghost small" data-action="edit" data-id="${bet.id}">Editar</button>
-          <button type="button" class="ghost small" data-action="delete" data-id="${bet.id}">Excluir</button>
-        </div>
-      `;
+      betsBody.appendChild(row);
     }
-    row.appendChild(tdActions);
 
-    betsBody.appendChild(row);
+    if (betsMobileList) {
+      const card = document.createElement("article");
+      card.className = "bet-card";
+      card.innerHTML = `
+        <div class="bet-card-head">
+          <strong class="bet-card-event">${bet.event}</strong>
+          <span class="${statusClass}">${statusLabel(bet.status)}</span>
+        </div>
+        <div class="bet-card-meta">
+          <span>${numberFormatter.format(bet.odds)}x Odd</span>
+          <span>${formatStake(bet.stake)} Stake</span>
+          <span>${formatProfit(potentialProfit)} Potencial</span>
+        </div>
+        <div class="bet-card-actions">
+          ${bet.status === "pending" ? `
+            <button type="button" class="quick-action green" data-action="resolve-win" data-id="${bet.id}">✓ Green</button>
+            <button type="button" class="quick-action red" data-action="resolve-loss" data-id="${bet.id}">✗ Red</button>
+            <button type="button" class="quick-action cash" data-action="toggle-cash" data-id="${bet.id}">$ Cash</button>
+          ` : ""}
+          <button type="button" class="quick-action" data-action="edit" data-id="${bet.id}">...</button>
+        </div>
+        ${bet.status === "pending" ? `
+          <div class="inline-cashout" id="cashout-inline-mobile-${bet.id}" style="display:none;">
+            <input type="text" inputmode="decimal" placeholder="Valor" id="cashout-value-mobile-${bet.id}" />
+            <button type="button" class="quick-action" data-action="confirm-cash" data-id="${bet.id}">Confirmar</button>
+          </div>
+        ` : ""}
+      `;
+      betsMobileList.appendChild(card);
+    }
   });
 }
 
@@ -931,7 +1047,7 @@ function updateBankrollExposure() {
   const exposure = bankroll > 0 ? pendingStake / bankroll : 0;
 
   bankrollProgress.style.width = `${Math.min(exposure * 100, 100)}%`;
-  bankrollExposure.textContent = percentFormatter.format(exposure);
+  bankrollExposure.textContent = `Exposição ${percentFormatter.format(exposure)}`;
   bankrollExposureValue.textContent = `${formatProfit(pendingStake)} expostos`;
 }
 
@@ -954,6 +1070,16 @@ function renderBalanceChart() {
   if (!context || typeof Chart === "undefined") {
     return;
   }
+
+  const isDarkTheme = document.documentElement.classList.contains("dark");
+  const tickColor = getThemeColor("--text-muted", "rgba(120, 130, 150, 0.9)");
+  const gridColor = getThemeColor("--border", "rgba(120, 130, 150, 0.2)");
+  const lineColor = isDarkTheme
+    ? "#2dd4bf"
+    : getThemeColor("--primary", "#7c5cff");
+  const fillColor = isDarkTheme
+    ? "rgba(45, 212, 191, 0.20)"
+    : "rgba(124, 92, 255, 0.20)";
 
   // Gráfico sempre mostra TODAS as apostas finalizadas
   const data = bets
@@ -992,6 +1118,11 @@ function renderBalanceChart() {
   if (balanceChart) {
     balanceChart.data.labels = labels;
     balanceChart.data.datasets[0].data = values;
+    balanceChart.data.datasets[0].borderColor = lineColor;
+    balanceChart.options.scales.x.ticks.color = tickColor;
+    balanceChart.options.scales.y.ticks.color = tickColor;
+    balanceChart.options.scales.x.grid.color = gridColor;
+    balanceChart.options.scales.y.grid.color = gridColor;
     balanceChart.update();
     return;
   }
@@ -1004,8 +1135,8 @@ function renderBalanceChart() {
         {
           label: "Lucro acumulado",
           data: values,
-          borderColor: "#7c5cff",
-          backgroundColor: "rgba(124, 92, 255, 0.2)",
+          borderColor: lineColor,
+          backgroundColor: fillColor,
           tension: 0.35,
           fill: true,
         },
@@ -1021,18 +1152,18 @@ function renderBalanceChart() {
       scales: {
         x: {
           ticks: {
-            color: "rgba(245, 247, 255, 0.6)",
+            color: tickColor,
           },
           grid: {
-            color: "rgba(255, 255, 255, 0.05)",
+            color: gridColor,
           },
         },
         y: {
           ticks: {
-            color: "rgba(245, 247, 255, 0.6)",
+            color: tickColor,
           },
           grid: {
-            color: "rgba(255, 255, 255, 0.05)",
+            color: gridColor,
           },
         },
       },
@@ -1045,13 +1176,102 @@ function refreshAll() {
   renderCategorySelects();
   renderTable();
   renderKpis();
+  renderKpiDeltas();
   updateBankrollDisplay();
   updateBankrollExposure();
+  updateFormInsights();
   renderBalanceChart();
+  renderMiniProfitChart();
   renderAIRanking();
   renderWeekdayPerformance();
   renderProfitGoals();
   renderFinalizedBets();
+}
+
+function renderAll() {
+  refreshAll();
+}
+
+function renderMiniProfitChart() {
+  const context = document.getElementById("mini-profit-chart");
+  if (!context || typeof Chart === "undefined") {
+    return;
+  }
+
+  const now = new Date();
+  const byDay = new Map();
+
+  bets.forEach((bet) => {
+    const date = parseDateForSort(bet.date);
+    if (!date || date.getMonth() !== now.getMonth() || date.getFullYear() !== now.getFullYear()) {
+      return;
+    }
+    if (bet.status !== "win" && bet.status !== "loss" && bet.status !== "cashout" && bet.status !== "void") {
+      return;
+    }
+
+    const day = date.getDate();
+    const prev = byDay.get(day) || 0;
+    byDay.set(day, prev + calcProfit(bet));
+  });
+
+  const labels = Array.from(byDay.keys()).sort((a, b) => a - b).map((day) => String(day));
+  const values = labels.map((day) => byDay.get(Number(day)) || 0);
+
+  if (!labels.length) {
+    labels.push("-");
+    values.push(0);
+  }
+
+  const dataset = {
+    label: "Lucro diário",
+    data: values,
+    backgroundColor: values.map((v) => (v >= 0 ? "rgba(34, 197, 94, 0.55)" : "rgba(255, 107, 107, 0.55)")),
+    borderRadius: 4,
+  };
+
+  if (miniProfitChart) {
+    miniProfitChart.data.labels = labels;
+    miniProfitChart.data.datasets[0] = dataset;
+    miniProfitChart.update();
+    return;
+  }
+
+  miniProfitChart = new Chart(context, {
+    type: "bar",
+    data: { labels, datasets: [dataset] },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { display: false }, beginAtZero: true },
+      },
+    },
+  });
+}
+
+function renderKpiDeltas() {
+  const monthNames = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const prevMonthLabel = monthNames[(new Date().getMonth() + 11) % 12];
+
+  const map = [
+    { metric: "profit", id: "kpi-profit-delta", suffix: "%" },
+    { metric: "winrate", id: "kpi-winrate-delta", suffix: "pp" },
+    { metric: "roi", id: "kpi-roi-delta", suffix: "pp" },
+    { metric: "avgOdd", id: "kpi-avg-odd-delta", suffix: "x" },
+  ];
+
+  map.forEach(({ metric, id, suffix }) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const result = calculateMonthlyDelta(metric);
+    const deltaVal = metric === "profit" ? result.deltaPercent : (metric === "winrate" || metric === "roi" ? result.delta * 100 : result.delta);
+    el.classList.remove("positive", "negative");
+    if (deltaVal > 0) el.classList.add("positive");
+    if (deltaVal < 0) el.classList.add("negative");
+    el.textContent = formatDeltaText(deltaVal, suffix, prevMonthLabel);
+  });
 }
 
 function resetForm() {
@@ -1145,52 +1365,83 @@ function startEdit(bet) {
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-// 1. Adiciona a palavra 'async' aqui no início:
+async function resolveAposta(id, novoStatus, cashoutValue = null) {
+  const aposta = bets.find((b) => b.id === id);
+  if (!aposta) return;
+
+  const payload = { ...aposta, status: novoStatus };
+  if (novoStatus === "cashout" && cashoutValue !== null) {
+    payload.cashout_value = cashoutValue;
+  }
+
+  await fetch("api.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      acao: "salvar_aposta",
+      profile_id: getActiveProfileId(),
+      aposta: payload,
+    }),
+  });
+
+  await loadBets();
+  renderAll();
+}
+
+function toggleInlineCashout(id) {
+  const desktop = document.getElementById(`cashout-inline-${id}`);
+  const mobile = document.getElementById(`cashout-inline-mobile-${id}`);
+  [desktop, mobile].forEach((el) => {
+    if (!el) return;
+    el.style.display = el.style.display === "none" || !el.style.display ? "flex" : "none";
+  });
+}
+
 async function handleTableClick(event) {
   const button = event.target.closest("button[data-action]");
-  if (!button) {
-    return;
-  }
+  if (!button) return;
+
   const id = button.dataset.id;
   const action = button.dataset.action;
 
   if (action === "edit") {
     const bet = bets.find((item) => item.id === id);
-    if (bet) {
-      startEdit(bet);
-    }
+    if (bet) startEdit(bet);
     return;
   }
 
   if (action === "delete") {
     const bet = bets.find((item) => item.id === id);
-    if (bet) {
-      showDeleteConfirmation(bet);
-    }
+    if (bet) showDeleteConfirmation(bet);
     return;
   }
 
-  // 2. Coloca o 'await' antes do salvarApostaBD:
-  if (action === "set-win") {
-    const bet = bets.find((item) => item.id === id);
-    if (bet) {
-      bet.status = "win";
-      saveBets();
-      await salvarApostaBD(bet); // ✨ OBRIGA a esperar o banco gravar!
-      refreshAll();
-    }
+  if (action === "resolve-win") {
+    await resolveAposta(id, "win");
     return;
   }
 
-  // 3. O mesmo para o botão de Red:
-  if (action === "set-loss") {
-    const bet = bets.find((item) => item.id === id);
-    if (bet) {
-      bet.status = "loss";
-      saveBets();
-      await salvarApostaBD(bet); // ✨ OBRIGA a esperar o banco gravar!
-      refreshAll();
+  if (action === "resolve-loss") {
+    await resolveAposta(id, "loss");
+    return;
+  }
+
+  if (action === "toggle-cash") {
+    toggleInlineCashout(id);
+    return;
+  }
+
+  if (action === "confirm-cash") {
+    const desktopInput = document.getElementById(`cashout-value-${id}`);
+    const mobileInput = document.getElementById(`cashout-value-mobile-${id}`);
+    const cashValue = parseLocaleNumber((desktopInput?.value || mobileInput?.value || "").trim());
+
+    if (!Number.isFinite(cashValue) || cashValue < 0) {
+      alert("Informe um valor de cashout válido.");
+      return;
     }
+
+    await resolveAposta(id, "cashout", cashValue);
     return;
   }
 }
@@ -1749,6 +2000,14 @@ function drawMiniStatCard(ctx, x, y, w, h, label, value, color) {
   ctx.fillText(value, x + w / 2, y + 90);
 }
 async function init() {
+  initTheme();
+  const periodPill = document.getElementById("period-pill");
+  if (periodPill) {
+    const date = new Date();
+    const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+    periodPill.textContent = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+  }
+
   await renderProfileSwitcher();
   await loadBets();
   await loadCashflows();
@@ -1760,6 +2019,7 @@ async function init() {
   updatePotentialProfit();
   refreshAll();
   renderCalendar();
+  handleHashSection();
   await loadQuickNotes();   // <-- Adiciona o await
 }
 async function salvarApostaBD(aposta) {
@@ -1989,8 +2249,28 @@ function renderWeekdayPerformance() {
 // PROFIT GOALS
 // ========================
 let profitGoals = { weekly: 0, monthly: 0 };
+let goalsSaveTimer = null;
+let goalsSaveRequestSeq = 0;
+
+function normalizeGoals(raw) {
+  const weekly = Number(raw?.weekly);
+  const monthly = Number(raw?.monthly);
+  return {
+    weekly: Number.isFinite(weekly) ? weekly : 0,
+    monthly: Number.isFinite(monthly) ? monthly : 0,
+  };
+}
 
 async function loadGoals() {
+  const localRaw = localStorage.getItem(getGoalsKey());
+  if (localRaw) {
+    try {
+      profitGoals = normalizeGoals(JSON.parse(localRaw));
+    } catch (e) {
+      profitGoals = { weekly: 0, monthly: 0 };
+    }
+  }
+
   try {
     const resposta = await fetch('api.php', {
       method: 'POST',
@@ -1998,8 +2278,16 @@ async function loadGoals() {
       body: JSON.stringify({ acao: 'carregar_dados_extras', profile_id: getActiveProfileId() })
     });
     const json = await resposta.json();
-    profitGoals = (json.sucesso && json.dados && json.dados.goals_json) ? JSON.parse(json.dados.goals_json) : { weekly: 0, monthly: 0 };
-  } catch (e) { profitGoals = { weekly: 0, monthly: 0 }; }
+    const fromApi = (json.sucesso && json.dados && json.dados.goals_json)
+      ? JSON.parse(json.dados.goals_json)
+      : null;
+    if (fromApi) {
+      profitGoals = normalizeGoals(fromApi);
+      localStorage.setItem(getGoalsKey(), JSON.stringify(profitGoals));
+    }
+  } catch (e) {
+    // Mantém fallback local quando API falhar.
+  }
   
   const weeklyInput = document.getElementById('weekly-goal-input');
   const monthlyInput = document.getElementById('monthly-goal-input');
@@ -2008,11 +2296,34 @@ async function loadGoals() {
 }
 
 async function saveGoals() {
-  await fetch('api.php', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ acao: 'salvar_dados_extras', profile_id: getActiveProfileId(), tipo: 'goals', valor: JSON.stringify(profitGoals) })
-  });
+  profitGoals = normalizeGoals(profitGoals);
+  localStorage.setItem(getGoalsKey(), JSON.stringify(profitGoals));
+
+  const requestSeq = ++goalsSaveRequestSeq;
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'salvar_dados_extras', profile_id: getActiveProfileId(), tipo: 'goals', valor: JSON.stringify(profitGoals) })
+    });
+    const json = await resposta.json();
+    if (requestSeq !== goalsSaveRequestSeq) return;
+    if (!json?.sucesso) {
+      console.warn('Falha ao salvar metas no servidor. Mantendo backup local.');
+    }
+  } catch (e) {
+    if (requestSeq !== goalsSaveRequestSeq) return;
+    console.warn('Erro ao salvar metas no servidor. Mantendo backup local.', e);
+  }
+}
+
+function queueSaveGoals() {
+  if (goalsSaveTimer) {
+    clearTimeout(goalsSaveTimer);
+  }
+  goalsSaveTimer = setTimeout(() => {
+    saveGoals();
+  }, 350);
 }
 
 function renderProfitGoals() {
@@ -2058,17 +2369,19 @@ function renderProfitGoals() {
     weeklyGoalBar.className = `progress-bar ${weeklyPct >= 100 ? 'exceeded' : ''}`;
   }
   if (weeklyGoalPercent) {
-    weeklyGoalPercent.textContent = `${Math.round(weeklyPct)}%`;
+    weeklyGoalPercent.textContent = `Semanal ${Math.round(weeklyPct)}%`;
     weeklyGoalPercent.className = `profit-goal-percent ${weeklyPct >= 100 ? 'reached' : ''}`;
   }
 
   // Update monthly
   const monthlyGoalCurrent = document.getElementById('monthly-goal-current');
+  const monthlyGoalCurrentPanel = document.getElementById('monthly-goal-current-panel');
   const monthlyGoalTarget = document.getElementById('monthly-goal-target');
   const monthlyGoalBar = document.getElementById('monthly-goal-bar');
   const monthlyGoalPercent = document.getElementById('monthly-goal-percent');
 
   if (monthlyGoalCurrent) monthlyGoalCurrent.textContent = formatProfit(monthlyProfit);
+  if (monthlyGoalCurrentPanel) monthlyGoalCurrentPanel.textContent = formatProfit(monthlyProfit);
   if (monthlyGoalTarget) monthlyGoalTarget.textContent = `de ${formatProfit(profitGoals.monthly)}`;
   
   const monthlyPct = profitGoals.monthly > 0 ? Math.max(0, (monthlyProfit / profitGoals.monthly) * 100) : 0;
@@ -2077,7 +2390,7 @@ function renderProfitGoals() {
     monthlyGoalBar.className = `progress-bar ${monthlyPct >= 100 ? 'exceeded' : ''}`;
   }
   if (monthlyGoalPercent) {
-    monthlyGoalPercent.textContent = `${Math.round(monthlyPct)}%`;
+    monthlyGoalPercent.textContent = `Mensal ${Math.round(monthlyPct)}%`;
     monthlyGoalPercent.className = `profit-goal-percent ${monthlyPct >= 100 ? 'reached' : ''}`;
   }
 }
@@ -2088,13 +2401,13 @@ const monthlyGoalInput = document.getElementById('monthly-goal-input');
 
 weeklyGoalInput?.addEventListener('input', () => {
   profitGoals.weekly = parseLocaleNumber(weeklyGoalInput.value) || 0;
-  saveGoals();
+  queueSaveGoals();
   renderProfitGoals();
 });
 
 monthlyGoalInput?.addEventListener('input', () => {
   profitGoals.monthly = parseLocaleNumber(monthlyGoalInput.value) || 0;
-  saveGoals();
+  queueSaveGoals();
   renderProfitGoals();
 });
 
@@ -2184,8 +2497,8 @@ quickNotesTextarea?.addEventListener("input", () => {
   }, 1000);
 });
 
-form.addEventListener("submit", handleSubmit);
-resetButton.addEventListener("click", resetForm);
+form?.addEventListener("submit", handleSubmit);
+resetButton?.addEventListener("click", resetForm);
 
 // Toggle cashout value field visibility
 const betStatusSelect = document.getElementById("bet-status");
@@ -2198,11 +2511,11 @@ betStatusSelect?.addEventListener("change", (e) => {
 
 ["bet-stake", "bet-odds"].forEach((id) => {
   const input = document.getElementById(id);
-  input.addEventListener("input", updatePotentialProfit);
+  input?.addEventListener("input", updatePotentialProfit);
 });
 
-bankrollInput.addEventListener("input", handleBankrollInput);
-bookFilter.addEventListener("change", refreshAll);
+bankrollInput?.addEventListener("input", handleBankrollInput);
+bookFilter?.addEventListener("change", refreshAll);
 statusFilter?.addEventListener("change", refreshAll);
 document.getElementById("category-filter")?.addEventListener("change", refreshAll);
 dateFilterStart?.addEventListener("change", refreshAll);
@@ -2212,7 +2525,85 @@ clearDateFilter?.addEventListener("click", () => {
   if (dateFilterEnd) dateFilterEnd.value = "";
   refreshAll();
 });
-betsBody.addEventListener("click", handleTableClick);
+betsBody?.addEventListener("click", handleTableClick);
+betsMobileList?.addEventListener("click", handleTableClick);
+
+document.querySelectorAll("#bet-ai-selector .ai-chip").forEach((chip) => {
+  const input = chip.querySelector("input[type='checkbox']");
+  if (input?.checked) chip.classList.add("ai-chip--active");
+  chip.addEventListener("click", () => {
+    if (!input) return;
+    setTimeout(() => {
+      chip.classList.toggle("ai-chip--active", input.checked);
+    }, 0);
+  });
+});
+
+const mobileMenuBtn = document.getElementById("mobile-menu-btn");
+const mobileOverlay = document.getElementById("mobile-overlay");
+const appSidebar = document.getElementById("app-sidebar");
+const sidebarLinkBets = document.getElementById("sidebar-link-bets");
+const sidebarLinkCalendar = document.getElementById("sidebar-link-calendar");
+const topbarTitle = document.querySelector(".topbar-title");
+
+const newBetShortcut = document.getElementById("new-bet-shortcut");
+newBetShortcut?.addEventListener("click", () => {
+  if (window.location.hash) {
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+  }
+  setSidebarSection("bets");
+  document.getElementById("new-bet-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+sidebarLinkCalendar?.addEventListener("click", (event) => {
+  event.preventDefault();
+  window.location.hash = "calendar-section";
+  handleHashSection();
+});
+
+sidebarLinkBets?.addEventListener("click", (event) => {
+  event.preventDefault();
+  history.replaceState(null, "", window.location.pathname + window.location.search);
+  setSidebarSection("bets");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+window.addEventListener("hashchange", handleHashSection);
+
+function setSidebarSection(section) {
+  if (sidebarLinkBets) sidebarLinkBets.classList.toggle("active", section === "bets");
+  if (sidebarLinkCalendar) sidebarLinkCalendar.classList.toggle("active", section === "calendar");
+  if (topbarTitle) topbarTitle.textContent = section === "calendar" ? "Calendário" : "Apostas";
+}
+
+function scrollToSectionWithOffset(elementId) {
+  const target = document.getElementById(elementId);
+  if (!target) return;
+  const topOffset = 70;
+  const top = target.getBoundingClientRect().top + window.scrollY - topOffset;
+  window.scrollTo({ top, behavior: "smooth" });
+}
+
+function handleHashSection() {
+  const hash = (window.location.hash || "").toLowerCase();
+  const isCalendarHash = hash === "#calendar-section" || hash === "#calendar-container";
+  setSidebarSection(isCalendarHash ? "calendar" : "bets");
+  if (isCalendarHash) {
+    scrollToSectionWithOffset("calendar-section");
+  }
+}
+
+mobileMenuBtn?.addEventListener("click", () => {
+  appSidebar?.classList.toggle("open");
+  mobileOverlay?.classList.toggle("show");
+});
+
+mobileOverlay?.addEventListener("click", () => {
+  appSidebar?.classList.remove("open");
+  mobileOverlay?.classList.remove("show");
+});
+
+document.getElementById("theme-toggle")?.addEventListener("click", toggleTheme);
 
 // Calendar event listeners
 calendarViewSelect?.addEventListener('change', (e) => {
@@ -2779,6 +3170,45 @@ couponFileInput?.addEventListener("change", (e) => {
 
 // Profile Switcher
 const profileSwitch = document.getElementById('profile-switch');
+const profileDropdown = document.getElementById('profile-dropdown');
+const profileNameDisplay = document.getElementById('profile-name-display');
+const profileAvatar = document.getElementById('profile-avatar');
+const profileTrigger = document.getElementById('profile-trigger');
+
+function initialsFromName(name) {
+  if (!name) return "PF";
+  const parts = name.split(" ").filter(Boolean);
+  if (!parts.length) return "PF";
+  return parts.slice(0, 2).map((p) => p[0].toUpperCase()).join("");
+}
+
+function syncProfileVisual(profiles, activeId) {
+  const active = profiles.find((p) => p.id === activeId) || profiles[0] || { name: "Perfil principal", id: "" };
+
+  if (profileNameDisplay) {
+    profileNameDisplay.textContent = active.name || "Perfil principal";
+  }
+
+  if (profileAvatar) {
+    profileAvatar.textContent = initialsFromName(active.name);
+  }
+
+  if (profileDropdown) {
+    profileDropdown.innerHTML = "";
+    profiles.forEach((profile) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `profile-option ${profile.id === activeId ? "active" : ""}`;
+      button.textContent = profile.name;
+      button.dataset.value = profile.id;
+      button.addEventListener("click", () => {
+        profileSwitch.value = profile.id;
+        profileSwitch.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      profileDropdown.appendChild(button);
+    });
+  }
+}
 
 async function renderProfileSwitcher() {
   if (!profileSwitch) return;
@@ -2807,6 +3237,8 @@ async function renderProfileSwitcher() {
     option.textContent = 'Perfil Principal';
     profileSwitch.appendChild(option);
   }
+
+  syncProfileVisual(profiles, activeId);
 }
 
 profileSwitch?.addEventListener('change', (e) => {
@@ -2816,6 +3248,16 @@ profileSwitch?.addEventListener('change', (e) => {
     // Recarregar a página para aplicar o novo perfil
     window.location.reload();
   }
+});
+
+profileTrigger?.addEventListener("click", () => {
+  profileDropdown?.classList.toggle("open");
+});
+
+document.addEventListener("click", (event) => {
+  if (!profileDropdown || !profileTrigger) return;
+  if (profileDropdown.contains(event.target) || profileTrigger.contains(event.target)) return;
+  profileDropdown.classList.remove("open");
 });
 
 // ========================

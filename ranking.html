@@ -1,5 +1,5 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
+﻿<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,205 +7,138 @@
     <link rel="stylesheet" href="./styles.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <header class="app-header">
-      <div>
-        <h1>🏆 Ranking e Estatísticas</h1>
-        <p class="subtitle">Acompanhe seus recordes e desempenho detalhado.</p>
+    <div class="app-shell">
+      <aside class="sidebar" id="app-sidebar">
+        <div class="sidebar-brand"><h2>Caderneta</h2><p>v2 · MySQL</p></div>
+        <div class="sidebar-group">
+          <span class="sidebar-label">Principal</span>
+          <a class="sidebar-item is-bets" href="./index.html"><span class="sidebar-dot"></span><span>Apostas</span></a>
+          <a class="sidebar-item" href="./casino.html"><span class="sidebar-dot"></span><span>Cassino</span></a>
+          <a class="sidebar-item" href="./cashflow.html"><span class="sidebar-dot"></span><span>Fluxo de caixa</span></a>
+        </div>
+        <div class="sidebar-group">
+          <span class="sidebar-label">Análise</span>
+          <a class="sidebar-item active" href="./ranking.html"><span class="sidebar-dot"></span><span>Ranking</span></a>
+          <a class="sidebar-item" href="./index.html#calendar-container"><span class="sidebar-dot"></span><span>Calendário</span></a>
+        </div>
+        <div class="sidebar-group">
+          <span class="sidebar-label">Sistema</span>
+          <a class="sidebar-item" href="./settings.html"><span class="sidebar-dot"></span><span>Configurações</span></a>
+          <a class="sidebar-item" href="./index.html"><span class="sidebar-dot"></span><span>Exportar / PDF</span></a>
+        </div>
+        <div class="sidebar-profile" id="sidebar-profile">
+          <select id="profile-switch" class="profile-switch-native"></select>
+          <button type="button" class="profile-trigger" id="profile-trigger"><span class="profile-avatar" id="profile-avatar">--</span><span class="profile-meta"><strong class="profile-name" id="profile-name-display">Perfil</strong><small class="profile-role" id="profile-role-display">Perfil principal</small></span><span class="profile-caret">▴</span></button>
+          <div class="profile-dropdown" id="profile-dropdown"></div>
+        </div>
+      </aside>
+
+      <div class="main-area">
+        <header class="topbar">
+          <div class="topbar-left"><button type="button" class="icon-button mobile-menu-btn" id="mobile-menu-btn">☰</button><h1 class="topbar-title">Ranking</h1><button type="button" class="period-pill">Estatísticas</button></div>
+          <div class="topbar-right"><button type="button" class="theme-toggle" id="theme-toggle">🌙</button></div>
+        </header>
+
+        <main class="page-content">
+          <div class="app-grid">
+            <section class="panel full">
+              <div class="panel-header"><h2>Recordes Gerais</h2><p>Suas melhores e piores apostas.</p></div>
+              <div class="ranking-grid">
+                <div class="ranking-card positive"><span class="ranking-icon">💰</span><div class="ranking-info"><span class="ranking-label">Maior Lucro (única aposta)</span><strong id="ranking-max-profit">R$ 0,00</strong><span class="ranking-detail" id="ranking-max-profit-detail">-</span></div></div>
+                <div class="ranking-card negative"><span class="ranking-icon">📉</span><div class="ranking-info"><span class="ranking-label">Maior Perda (única aposta)</span><strong id="ranking-max-loss">R$ 0,00</strong><span class="ranking-detail" id="ranking-max-loss-detail">-</span></div></div>
+                <div class="ranking-card positive"><span class="ranking-icon">🎯</span><div class="ranking-info"><span class="ranking-label">Maior Odd Acertada</span><strong id="ranking-max-odd-win">0,00x</strong><span class="ranking-detail" id="ranking-max-odd-win-detail">-</span></div></div>
+                <div class="ranking-card negative"><span class="ranking-icon">❌</span><div class="ranking-info"><span class="ranking-label">Menor Odd Perdida</span><strong id="ranking-min-odd-loss">0,00x</strong><span class="ranking-detail" id="ranking-min-odd-loss-detail">-</span></div></div>
+              </div>
+            </section>
+
+            <section class="panel full">
+              <div class="panel-header"><h2>Estatísticas Gerais</h2><p>Visão geral do seu desempenho.</p></div>
+              <div class="stats-grid large">
+                <div class="stats-card"><span class="stats-value" id="stats-total-bets">0</span><span class="stats-label">Total de Apostas</span></div>
+                <div class="stats-card green"><span class="stats-value" id="stats-total-greens">0</span><span class="stats-label">Greens</span></div>
+                <div class="stats-card red"><span class="stats-value" id="stats-total-reds">0</span><span class="stats-label">Reds</span></div>
+                <div class="stats-card"><span class="stats-value" id="stats-pending">0</span><span class="stats-label">Abertas</span></div>
+                <div class="stats-card"><span class="stats-value" id="stats-winrate">0%</span><span class="stats-label">Taxa de Acerto</span></div>
+                <div class="stats-card"><span class="stats-value" id="stats-total-profit">R$ 0</span><span class="stats-label">Lucro Total</span></div>
+                <div class="stats-card"><span class="stats-value" id="stats-avg-odd">0,00x</span><span class="stats-label">Odd Média</span></div>
+                <div class="stats-card"><span class="stats-value" id="stats-avg-stake">R$ 0</span><span class="stats-label">Stake Médio</span></div>
+              </div>
+            </section>
+
+            <section class="panel"><div class="panel-header"><h2>Top 5 Maiores Lucros</h2></div><div class="top-list" id="top-profits"></div></section>
+            <section class="panel"><div class="panel-header"><h2>Top 5 Maiores Perdas</h2></div><div class="top-list" id="top-losses"></div></section>
+
+            <section class="panel full"><div class="panel-header"><h2>Desempenho por Casa</h2><p>Comparativo entre casas de apostas.</p></div><div class="table-wrapper"><table><thead><tr><th>#</th><th>Casa</th><th>Apostas</th><th>Greens</th><th>Reds</th><th>Taxa Acerto</th><th>Lucro</th><th>ROI</th></tr></thead><tbody id="ranking-by-book"></tbody></table></div></section>
+            <section class="panel full"><div class="panel-header"><h2>Ranking de IAs</h2><p>Qual IA mais acerta as sugestões de apostas?</p></div><div class="ai-ranking-grid" id="ai-ranking-grid-page"></div><div class="table-wrapper" style="margin-top:16px;"><table><thead><tr><th>#</th><th>IA</th><th>Apostas</th><th>Greens</th><th>Reds</th><th>Taxa Acerto</th><th>Lucro</th></tr></thead><tbody id="ai-ranking-table"></tbody></table></div></section>
+            <section class="panel"><div class="panel-header"><h2>Distribuição por Casa</h2></div><div class="chart-container"><canvas id="book-distribution-chart"></canvas></div></section>
+            <section class="panel"><div class="panel-header"><h2>Lucro por Casa</h2></div><div class="chart-container"><canvas id="book-profit-chart"></canvas></div></section>
+          </div>
+        </main>
+
+        <footer class="app-footer"><p>Dados salvos no MySQL via api.php · App local</p></footer>
       </div>
-      <div class="header-right">
-        <div class="profile-selector">
-          <span>👤</span>
-          <select id="profile-switch"></select>
-        </div>
-        <nav class="app-nav">
-          <a href="./index.html" class="nav-link">← Voltar para Caderneta</a>
-        </nav>
-      </div>
-    </header>
+    </div>
 
-    <main class="app-grid">
-      <!-- Recordes Gerais -->
-      <section class="panel full">
-        <div class="panel-header">
-          <h2>🏆 Recordes Gerais</h2>
-          <p>Suas melhores e piores apostas.</p>
-        </div>
-        <div class="ranking-grid">
-          <div class="ranking-card positive">
-            <span class="ranking-icon">💰</span>
-            <div class="ranking-info">
-              <span class="ranking-label">Maior Lucro (única aposta)</span>
-              <strong id="ranking-max-profit">R$ 0,00</strong>
-              <span class="ranking-detail" id="ranking-max-profit-detail">-</span>
-            </div>
-          </div>
-          <div class="ranking-card negative">
-            <span class="ranking-icon">📉</span>
-            <div class="ranking-info">
-              <span class="ranking-label">Maior Perda (única aposta)</span>
-              <strong id="ranking-max-loss">R$ 0,00</strong>
-              <span class="ranking-detail" id="ranking-max-loss-detail">-</span>
-            </div>
-          </div>
-          <div class="ranking-card positive">
-            <span class="ranking-icon">🎯</span>
-            <div class="ranking-info">
-              <span class="ranking-label">Maior Odd Acertada</span>
-              <strong id="ranking-max-odd-win">0,00x</strong>
-              <span class="ranking-detail" id="ranking-max-odd-win-detail">-</span>
-            </div>
-          </div>
-          <div class="ranking-card negative">
-            <span class="ranking-icon">❌</span>
-            <div class="ranking-info">
-              <span class="ranking-label">Menor Odd Perdida</span>
-              <strong id="ranking-min-odd-loss">0,00x</strong>
-              <span class="ranking-detail" id="ranking-min-odd-loss-detail">-</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Estatísticas Gerais -->
-      <section class="panel full">
-        <div class="panel-header">
-          <h2>📊 Estatísticas Gerais</h2>
-          <p>Visão geral do seu desempenho.</p>
-        </div>
-        <div class="stats-grid large">
-          <div class="stats-card">
-            <span class="stats-value" id="stats-total-bets">0</span>
-            <span class="stats-label">Total de Apostas</span>
-          </div>
-          <div class="stats-card green">
-            <span class="stats-value" id="stats-total-greens">0</span>
-            <span class="stats-label">Greens</span>
-          </div>
-          <div class="stats-card red">
-            <span class="stats-value" id="stats-total-reds">0</span>
-            <span class="stats-label">Reds</span>
-          </div>
-          <div class="stats-card">
-            <span class="stats-value" id="stats-pending">0</span>
-            <span class="stats-label">Abertas</span>
-          </div>
-          <div class="stats-card">
-            <span class="stats-value" id="stats-winrate">0%</span>
-            <span class="stats-label">Taxa de Acerto</span>
-          </div>
-          <div class="stats-card">
-            <span class="stats-value" id="stats-total-profit">R$ 0</span>
-            <span class="stats-label">Lucro Total</span>
-          </div>
-          <div class="stats-card">
-            <span class="stats-value" id="stats-avg-odd">0,00x</span>
-            <span class="stats-label">Odd Média</span>
-          </div>
-          <div class="stats-card">
-            <span class="stats-value" id="stats-avg-stake">R$ 0</span>
-            <span class="stats-label">Stake Médio</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Top 5 Maiores Lucros -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>💚 Top 5 Maiores Lucros</h2>
-        </div>
-        <div class="top-list" id="top-profits"></div>
-      </section>
-
-      <!-- Top 5 Maiores Perdas -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>❤️ Top 5 Maiores Perdas</h2>
-        </div>
-        <div class="top-list" id="top-losses"></div>
-      </section>
-
-      <!-- Desempenho por Casa -->
-      <section class="panel full">
-        <div class="panel-header">
-          <h2>🏠 Desempenho por Casa</h2>
-          <p>Comparativo entre casas de apostas.</p>
-        </div>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Casa</th>
-                <th>Apostas</th>
-                <th>Greens</th>
-                <th>Reds</th>
-                <th>Taxa Acerto</th>
-                <th>Lucro</th>
-                <th>ROI</th>
-              </tr>
-            </thead>
-            <tbody id="ranking-by-book"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- Ranking de IAs -->
-      <section class="panel full">
-        <div class="panel-header">
-          <h2>🤖 Ranking de IAs</h2>
-          <p>Qual IA mais acerta as sugestões de apostas?</p>
-        </div>
-        <div class="ai-ranking-grid" id="ai-ranking-grid-page"></div>
-        <div class="table-wrapper" style="margin-top: 16px;">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>IA</th>
-                <th>Apostas</th>
-                <th>Greens</th>
-                <th>Reds</th>
-                <th>Taxa Acerto</th>
-                <th>Lucro</th>
-              </tr>
-            </thead>
-            <tbody id="ai-ranking-table"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- Gráfico de Pizza - Distribuição por Casa -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>📈 Distribuição por Casa</h2>
-        </div>
-        <div class="chart-container">
-          <canvas id="book-distribution-chart"></canvas>
-        </div>
-      </section>
-
-      <!-- Gráfico de Barras - Lucro por Casa -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>💹 Lucro por Casa</h2>
-        </div>
-        <div class="chart-container">
-          <canvas id="book-profit-chart"></canvas>
-        </div>
-      </section>
-    </main>
-
-    <footer class="app-footer">
-      <p>Dados salvos no localStorage. App local, sem envio para terceiros.</p>
-    </footer>
+    <div class="mobile-overlay" id="mobile-overlay"></div>
+    <nav class="bottom-nav"><a href="./index.html">Apostas</a><a href="./casino.html">Cassino</a><a href="./ranking.html" class="active">Ranking</a><a href="./settings.html">Mais</a></nav>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="./ranking.js"></script>
+    <script>
+      (function () {
+        const THEME_KEY = "caderneta.theme";
+        const html = document.documentElement;
+        const toggle = document.getElementById("theme-toggle");
+        const saved = localStorage.getItem(THEME_KEY);
+        const preferredDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const setTheme = (t) => {
+          html.classList.remove("light", "dark", "light-azulado", "light-bege");
+          html.classList.add(t);
+          localStorage.setItem(THEME_KEY, t);
+          if (toggle) {
+            if (t === "dark") toggle.textContent = "🌙";
+            if (t === "light-azulado" || t === "light") toggle.textContent = "🧊";
+          }
+        };
+        const initial = (saved === "dark" || saved === "light" || saved === "light-azulado") ? saved : (preferredDark ? "dark" : "light-azulado");
+        setTheme(initial);
+        toggle && toggle.addEventListener("click", () => {
+          if (html.classList.contains("dark")) return setTheme("light-azulado");
+          setTheme("dark");
+        });
+
+        const sidebar = document.getElementById("app-sidebar");
+        const overlay = document.getElementById("mobile-overlay");
+        document.getElementById("mobile-menu-btn")?.addEventListener("click", () => { sidebar?.classList.toggle("open"); overlay?.classList.toggle("show"); });
+        overlay?.addEventListener("click", () => { sidebar?.classList.remove("open"); overlay?.classList.remove("show"); });
+
+        const select = document.getElementById("profile-switch");
+        const trigger = document.getElementById("profile-trigger");
+        const dropdown = document.getElementById("profile-dropdown");
+        const avatar = document.getElementById("profile-avatar");
+        const name = document.getElementById("profile-name-display");
+        const initials = (n) => (n || "PF").split(" ").filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("") || "PF";
+        const sync = () => {
+          if (!select) return;
+          const options = Array.from(select.options);
+          const active = options.find((o) => o.selected) || options[0];
+          if (active) { name.textContent = active.textContent; avatar.textContent = initials(active.textContent); }
+          dropdown.innerHTML = "";
+          options.forEach((opt) => {
+            const btn = document.createElement("button"); btn.className = "profile-option" + (opt.selected ? " active" : ""); btn.type = "button"; btn.textContent = opt.textContent;
+            btn.onclick = () => { select.value = opt.value; select.dispatchEvent(new Event("change", { bubbles: true })); };
+            dropdown.appendChild(btn);
+          });
+        };
+        trigger && trigger.addEventListener("click", () => dropdown.classList.toggle("open"));
+        select && select.addEventListener("change", sync);
+        const observer = new MutationObserver(sync);
+        if (select) observer.observe(select, { childList: true, subtree: true, attributes: true });
+        sync();
+      })();
+    </script>
   </body>
 </html>

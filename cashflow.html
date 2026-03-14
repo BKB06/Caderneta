@@ -1,5 +1,5 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
+﻿<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,167 +7,143 @@
     <link rel="stylesheet" href="./styles.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <header class="app-header">
-      <div>
-        <h1>💰 Saques e Depósitos</h1>
-        <p class="subtitle">Controle suas entradas e saídas da banca.</p>
+    <div class="app-shell">
+      <aside class="sidebar" id="app-sidebar">
+        <div class="sidebar-brand"><h2>Caderneta</h2><p>v2 · MySQL</p></div>
+        <div class="sidebar-group">
+          <span class="sidebar-label">Principal</span>
+          <a class="sidebar-item is-bets" href="./index.html"><span class="sidebar-dot"></span><span>Apostas</span></a>
+          <a class="sidebar-item" href="./casino.html"><span class="sidebar-dot"></span><span>Cassino</span></a>
+          <a class="sidebar-item active" href="./cashflow.html"><span class="sidebar-dot"></span><span>Fluxo de caixa</span></a>
+        </div>
+        <div class="sidebar-group">
+          <span class="sidebar-label">Análise</span>
+          <a class="sidebar-item" href="./ranking.html"><span class="sidebar-dot"></span><span>Ranking</span></a>
+          <a class="sidebar-item" href="./index.html#calendar-container"><span class="sidebar-dot"></span><span>Calendário</span></a>
+        </div>
+        <div class="sidebar-group">
+          <span class="sidebar-label">Sistema</span>
+          <a class="sidebar-item" href="./settings.html"><span class="sidebar-dot"></span><span>Configurações</span></a>
+          <a class="sidebar-item" href="./index.html"><span class="sidebar-dot"></span><span>Exportar / PDF</span></a>
+        </div>
+        <div class="sidebar-profile" id="sidebar-profile">
+          <select id="profile-switch" class="profile-switch-native"></select>
+          <button type="button" class="profile-trigger" id="profile-trigger"><span class="profile-avatar" id="profile-avatar">--</span><span class="profile-meta"><strong class="profile-name" id="profile-name-display">Perfil</strong><small class="profile-role" id="profile-role-display">Perfil principal</small></span><span class="profile-caret">▴</span></button>
+          <div class="profile-dropdown" id="profile-dropdown"></div>
+        </div>
+      </aside>
+
+      <div class="main-area">
+        <header class="topbar">
+          <div class="topbar-left"><button type="button" class="icon-button mobile-menu-btn" id="mobile-menu-btn">☰</button><h1 class="topbar-title">Fluxo de caixa</h1><button type="button" class="period-pill">Entradas e saídas</button></div>
+          <div class="topbar-right"><button type="button" class="theme-toggle" id="theme-toggle">🌙</button></div>
+        </header>
+
+        <main class="page-content">
+          <div class="app-grid">
+            <section class="panel full">
+              <div class="panel-header"><h2>Resumo Financeiro</h2></div>
+              <div class="stats-grid large">
+                <div class="stats-card green"><span class="stats-value" id="total-deposits">R$ 0,00</span><span class="stats-label">Total Depositado</span></div>
+                <div class="stats-card red"><span class="stats-value" id="total-withdraws">R$ 0,00</span><span class="stats-label">Total Sacado</span></div>
+                <div class="stats-card"><span class="stats-value" id="net-flow">R$ 0,00</span><span class="stats-label">Saldo Líquido</span></div>
+                <div class="stats-card"><span class="stats-value" id="total-movements">0</span><span class="stats-label">Movimentações</span></div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header"><h2>Nova Movimentação</h2><p>Registre depósitos e saques.</p></div>
+              <form id="cashflow-form" class="form-grid">
+                <label>Data<div class="input-group"><input type="date" id="cashflow-date" inputmode="numeric" required /></div></label>
+                <label>Tipo<select id="cashflow-type" required><option value="deposit">Depósito</option><option value="withdraw">Saque</option></select></label>
+                <label class="full">Valor<div class="input-group"><span class="prefix">R$</span><input type="text" inputmode="decimal" id="cashflow-amount" placeholder="200" required /></div></label>
+                <label class="full">Observação<input type="text" id="cashflow-note" placeholder="Opcional - Ex: PIX, Bonus, etc." /></label>
+                <div class="form-footer"><button type="submit" id="cashflow-submit">Salvar movimentação</button><button type="button" class="ghost" id="cashflow-reset">Limpar</button></div>
+              </form>
+            </section>
+
+            <section class="panel"><div class="panel-header"><h2>Evolução do Fluxo</h2></div><div class="chart-container"><canvas id="cashflow-chart"></canvas></div></section>
+
+            <section class="panel full">
+              <div class="panel-header"><div><h2>Histórico de Movimentações</h2><p>Todas as entradas e saídas registradas.</p></div></div>
+              <div class="filters-bar">
+                <label>Tipo<select id="type-filter"><option value="all">Todos</option><option value="deposit">Depósitos</option><option value="withdraw">Saques</option></select></label>
+                <label>De<input type="date" id="date-filter-start" /></label>
+                <label>Até<input type="date" id="date-filter-end" /></label>
+                <button type="button" class="ghost small" id="clear-filters">Limpar filtros</button>
+              </div>
+              <div class="table-wrapper"><table><thead><tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Observação</th><th>Ações</th></tr></thead><tbody id="cashflow-body"></tbody></table></div>
+            </section>
+
+            <section class="panel"><div class="panel-header"><h2>Depósitos por Mês</h2></div><div class="monthly-list" id="deposits-by-month"></div></section>
+            <section class="panel"><div class="panel-header"><h2>Saques por Mês</h2></div><div class="monthly-list" id="withdraws-by-month"></div></section>
+          </div>
+        </main>
+
+        <footer class="app-footer"><p>Dados salvos no MySQL via api.php · App local</p></footer>
       </div>
-      <div class="header-right">
-        <div class="profile-selector">
-          <span>👤</span>
-          <select id="profile-switch"></select>
-        </div>
-        <nav class="app-nav">
-          <a href="./index.html" class="nav-link">← Voltar para Caderneta</a>
-        </nav>
-      </div>
-    </header>
+    </div>
 
-    <main class="app-grid">
-      <!-- Resumo Financeiro -->
-      <section class="panel full">
-        <div class="panel-header">
-          <h2>📊 Resumo Financeiro</h2>
-        </div>
-        <div class="stats-grid large">
-          <div class="stats-card green">
-            <span class="stats-value" id="total-deposits">R$ 0,00</span>
-            <span class="stats-label">Total Depositado</span>
-          </div>
-          <div class="stats-card red">
-            <span class="stats-value" id="total-withdraws">R$ 0,00</span>
-            <span class="stats-label">Total Sacado</span>
-          </div>
-          <div class="stats-card">
-            <span class="stats-value" id="net-flow">R$ 0,00</span>
-            <span class="stats-label">Saldo Líquido</span>
-          </div>
-          <div class="stats-card">
-            <span class="stats-value" id="total-movements">0</span>
-            <span class="stats-label">Movimentações</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Formulário -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Nova Movimentação</h2>
-          <p>Registre depósitos e saques.</p>
-        </div>
-        <form id="cashflow-form" class="form-grid">
-          <label>
-            Data
-            <div class="input-group">
-              <input type="date" id="cashflow-date" inputmode="numeric" required />
-            </div>
-          </label>
-          <label>
-            Tipo
-            <select id="cashflow-type" required>
-              <option value="deposit">Depósito</option>
-              <option value="withdraw">Saque</option>
-            </select>
-          </label>
-          <label class="full">
-            Valor
-            <div class="input-group">
-              <span class="prefix">R$</span>
-              <input type="text" inputmode="decimal" id="cashflow-amount" placeholder="200" required />
-            </div>
-          </label>
-          <label class="full">
-            Observação
-            <input type="text" id="cashflow-note" placeholder="Opcional - Ex: PIX, Bonus, etc." />
-          </label>
-          <div class="form-footer">
-            <button type="submit" id="cashflow-submit">Salvar movimentação</button>
-            <button type="button" class="ghost" id="cashflow-reset">Limpar</button>
-          </div>
-        </form>
-      </section>
-
-      <!-- Gráfico de Evolução -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>📈 Evolução do Fluxo</h2>
-        </div>
-        <div class="chart-container">
-          <canvas id="cashflow-chart"></canvas>
-        </div>
-      </section>
-
-      <!-- Histórico Completo -->
-      <section class="panel full">
-        <div class="panel-header">
-          <div>
-            <h2>📋 Histórico de Movimentações</h2>
-            <p>Todas as entradas e saídas registradas.</p>
-          </div>
-        </div>
-        <div class="filters-bar">
-          <label>
-            Tipo
-            <select id="type-filter">
-              <option value="all">Todos</option>
-              <option value="deposit">Depósitos</option>
-              <option value="withdraw">Saques</option>
-            </select>
-          </label>
-          <label>
-            De
-            <input type="date" id="date-filter-start" />
-          </label>
-          <label>
-            Até
-            <input type="date" id="date-filter-end" />
-          </label>
-          <button type="button" class="ghost small" id="clear-filters">Limpar filtros</button>
-        </div>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Tipo</th>
-                <th>Valor</th>
-                <th>Observação</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody id="cashflow-body"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- Depósitos por Mês -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>📅 Depósitos por Mês</h2>
-        </div>
-        <div class="monthly-list" id="deposits-by-month"></div>
-      </section>
-
-      <!-- Saques por Mês -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>📅 Saques por Mês</h2>
-        </div>
-        <div class="monthly-list" id="withdraws-by-month"></div>
-      </section>
-    </main>
-
-    <footer class="app-footer">
-      <p>Dados salvos no localStorage. App local, sem envio para terceiros.</p>
-    </footer>
+    <div class="mobile-overlay" id="mobile-overlay"></div>
+    <nav class="bottom-nav"><a href="./index.html">Apostas</a><a href="./casino.html">Cassino</a><a href="./ranking.html">Ranking</a><a href="./settings.html" class="active">Mais</a></nav>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="./cashflow.js"></script>
+    <script>
+      (function () {
+        const THEME_KEY = "caderneta.theme";
+        const html = document.documentElement;
+        const toggle = document.getElementById("theme-toggle");
+        const saved = localStorage.getItem(THEME_KEY);
+        const preferredDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const setTheme = (t) => {
+          html.classList.remove("light", "dark", "light-azulado", "light-bege");
+          html.classList.add(t);
+          localStorage.setItem(THEME_KEY, t);
+          if (toggle) {
+            if (t === "dark") toggle.textContent = "🌙";
+            if (t === "light-azulado" || t === "light") toggle.textContent = "🧊";
+          }
+        };
+        const initial = (saved === "dark" || saved === "light" || saved === "light-azulado") ? saved : (preferredDark ? "dark" : "light-azulado");
+        setTheme(initial);
+        toggle && toggle.addEventListener("click", () => {
+          if (html.classList.contains("dark")) return setTheme("light-azulado");
+          setTheme("dark");
+        });
+
+        const sidebar = document.getElementById("app-sidebar");
+        const overlay = document.getElementById("mobile-overlay");
+        document.getElementById("mobile-menu-btn")?.addEventListener("click", () => { sidebar?.classList.toggle("open"); overlay?.classList.toggle("show"); });
+        overlay?.addEventListener("click", () => { sidebar?.classList.remove("open"); overlay?.classList.remove("show"); });
+
+        const select = document.getElementById("profile-switch");
+        const trigger = document.getElementById("profile-trigger");
+        const dropdown = document.getElementById("profile-dropdown");
+        const avatar = document.getElementById("profile-avatar");
+        const name = document.getElementById("profile-name-display");
+        const initials = (n) => (n || "PF").split(" ").filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("") || "PF";
+        const sync = () => {
+          if (!select) return;
+          const options = Array.from(select.options);
+          const active = options.find((o) => o.selected) || options[0];
+          if (active) { name.textContent = active.textContent; avatar.textContent = initials(active.textContent); }
+          dropdown.innerHTML = "";
+          options.forEach((opt) => {
+            const btn = document.createElement("button"); btn.className = "profile-option" + (opt.selected ? " active" : ""); btn.type = "button"; btn.textContent = opt.textContent;
+            btn.onclick = () => { select.value = opt.value; select.dispatchEvent(new Event("change", { bubbles: true })); };
+            dropdown.appendChild(btn);
+          });
+        };
+        trigger && trigger.addEventListener("click", () => dropdown.classList.toggle("open"));
+        select && select.addEventListener("change", sync);
+        const observer = new MutationObserver(sync);
+        if (select) observer.observe(select, { childList: true, subtree: true, attributes: true });
+        sync();
+      })();
+    </script>
   </body>
 </html>

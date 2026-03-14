@@ -1,5 +1,5 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
+﻿<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,194 +7,668 @@
     <link rel="stylesheet" href="./styles.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      .casino-page {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .topbar-layout {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+      }
+
+      .topbar-center {
+        display: flex;
+        justify-content: center;
+      }
+
+      .topbar-center select {
+        max-width: 220px;
+      }
+
+      .kpi-hero-section {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+      }
+
+      .hero-left .hero-label {
+        display: block;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+
+      .hero-value {
+        font-size: 48px;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .hero-value.positive {
+        color: var(--success);
+      }
+
+      .hero-value.negative {
+        color: var(--danger);
+      }
+
+      .hero-sub {
+        margin-top: 6px;
+        color: var(--text-muted);
+      }
+
+      .hero-right {
+        min-width: 260px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .hero-tag {
+        display: inline-flex;
+        width: fit-content;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-weight: 600;
+      }
+
+      .hero-tag.positive {
+        background: color-mix(in srgb, var(--success) 20%, transparent);
+        color: var(--success);
+      }
+
+      .hero-tag.negative {
+        background: color-mix(in srgb, var(--danger) 20%, transparent);
+        color: var(--danger);
+      }
+
+      .kpi-strip.casino-kpi-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .casino-entry-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 270px;
+        gap: 14px;
+      }
+
+      .seg {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .seg-btn {
+        border: 0;
+        border-right: 1px solid var(--border);
+        border-radius: 0;
+        background: transparent;
+        color: var(--text);
+        padding: 10px 12px;
+      }
+
+      .seg-btn:last-child {
+        border-right: 0;
+      }
+
+      .seg-btn.active {
+        background: color-mix(in srgb, var(--primary) 18%, transparent);
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 600;
+      }
+
+      .badge.free {
+        background: color-mix(in srgb, var(--warning) 20%, transparent);
+        color: color-mix(in srgb, var(--warning) 75%, var(--text) 25%);
+      }
+
+      .free-block {
+        margin-top: 8px;
+        border: 1px solid color-mix(in srgb, var(--warning) 44%, var(--border));
+        background: color-mix(in srgb, var(--warning) 12%, transparent);
+        border-radius: 10px;
+        padding: 10px;
+        display: none;
+      }
+
+      .free-block h4 {
+        margin: 0 0 8px;
+        color: color-mix(in srgb, var(--warning) 75%, var(--text) 25%);
+      }
+
+      .hint {
+        margin-top: 6px;
+        font-size: 0.82rem;
+        color: var(--text-muted);
+      }
+
+      .hint.warning {
+        color: color-mix(in srgb, var(--warning) 70%, var(--text) 30%);
+      }
+
+      #free-mode-badge {
+        margin-left: 8px;
+      }
+
+      #casino-submit.free-mode {
+        background: transparent;
+        color: color-mix(in srgb, var(--warning) 80%, var(--text) 20%);
+        border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+        box-shadow: none;
+      }
+
+      #casino-realtime-panel {
+        display: grid;
+        gap: 10px;
+        align-content: start;
+      }
+
+      .realtime-value {
+        font-size: 48px;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .realtime-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: var(--text-muted);
+      }
+
+      .realtime-row strong {
+        color: var(--text);
+      }
+
+      #realtime-financed strong,
+      #realtime-perspin strong {
+        color: color-mix(in srgb, var(--warning) 70%, var(--text) 30%);
+      }
+
+      .history-pills {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+
+      .history-pill {
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--text);
+        padding: 8px 14px;
+      }
+
+      .history-pill.active {
+        background: color-mix(in srgb, var(--primary) 20%, transparent);
+        border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+      }
+
+      .history-type {
+        font-size: 0.72rem;
+        font-weight: 600;
+      }
+
+      .history-type.positive {
+        color: var(--success);
+      }
+
+      .history-type.negative {
+        color: var(--danger);
+      }
+
+      .history-type.draw {
+        color: var(--text-muted);
+      }
+
+      .mini-rank {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .mini-rank-item {
+        display: grid;
+        grid-template-columns: 28px 1fr auto auto;
+        gap: 8px;
+        align-items: center;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 8px;
+      }
+
+      .mini-rank-item:last-child {
+        border-bottom: 0;
+      }
+
+      .mini-rank-item .pos {
+        color: var(--text-muted);
+        font-weight: 600;
+      }
+
+      .mini-rank-item .sessions {
+        color: var(--text-muted);
+        font-size: 0.82rem;
+      }
+
+      .mini-rank-item .profit.positive {
+        color: var(--success);
+      }
+
+      .mini-rank-item .profit.negative {
+        color: var(--danger);
+      }
+
+      .sim-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+      }
+
+      .sim-body {
+        display: none;
+        margin-top: 10px;
+      }
+
+      .sim-body.open {
+        display: block;
+      }
+
+      .sim-result {
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--bg-panel) 90%, var(--text) 10%);
+      }
+
+      .sidebar-overlay {
+        display: none;
+      }
+
+      .empty-msg {
+        color: var(--text-muted);
+        font-size: 0.92rem;
+      }
+
+      @media (max-width: 980px) {
+        .casino-entry-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .topbar-layout {
+          grid-template-columns: auto 1fr;
+          grid-template-areas:
+            "left right"
+            "center center";
+        }
+
+        .topbar-left {
+          grid-area: left;
+        }
+
+        .topbar-right {
+          grid-area: right;
+          justify-content: flex-end;
+        }
+
+        .topbar-center {
+          grid-area: center;
+          justify-content: flex-start;
+        }
+      }
+
+      @media (max-width: 767px) {
+        .kpi-strip.casino-kpi-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .kpi-hero-section {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar-overlay {
+          display: none;
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.45);
+          z-index: 205;
+        }
+
+        .sidebar-overlay.show {
+          display: block;
+        }
+      }
+    </style>
   </head>
   <body>
-    <header class="app-header">
-      <div>
-        <h1>🎰 Ganhos no Cassino</h1>
-        <p class="subtitle">Registre e acompanhe seus resultados em jogos de cassino.</p>
-      </div>
-      <div class="header-right">
-        <div class="profile-selector">
-          <span>👤</span>
-          <select id="profile-switch"></select>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+          <h2>Caderneta</h2>
+          <p>v2 · MySQL</p>
         </div>
-        <nav class="app-nav">
-          <a href="./index.html" class="nav-link">← Voltar para Caderneta</a>
+
+        <div class="sidebar-group">
+          <span class="sidebar-label">Principal</span>
+          <a class="sidebar-item is-bets" href="./index.html">
+            <span class="sidebar-dot"></span>
+            <span>Apostas</span>
+          </a>
+          <a class="sidebar-item active" href="./casino.html">
+            <span class="sidebar-dot"></span>
+            <span>Cassino</span>
+          </a>
+          <a class="sidebar-item" href="./cashflow.html">
+            <span class="sidebar-dot"></span>
+            <span>Fluxo de caixa</span>
+          </a>
+        </div>
+
+        <div class="sidebar-group">
+          <span class="sidebar-label">Análise</span>
+          <a class="sidebar-item" href="./ranking.html">
+            <span class="sidebar-dot"></span>
+            <span>Ranking</span>
+          </a>
+          <a class="sidebar-item" href="./index.html#calendar-section">
+            <span class="sidebar-dot"></span>
+            <span>Calendário</span>
+          </a>
+        </div>
+
+        <div class="sidebar-group">
+          <span class="sidebar-label">Sistema</span>
+          <a class="sidebar-item" href="./settings.html">
+            <span class="sidebar-dot"></span>
+            <span>Configurações</span>
+          </a>
+          <a class="sidebar-item" href="./index.html">
+            <span class="sidebar-dot"></span>
+            <span>Exportar / PDF</span>
+          </a>
+        </div>
+
+        <div class="sidebar-profile" id="sidebar-profile">
+          <select id="profile-switch" class="profile-switch-native"></select>
+          <button type="button" class="profile-trigger" id="profile-trigger">
+            <span class="profile-avatar" id="profile-avatar">--</span>
+            <span class="profile-meta">
+              <strong class="profile-name" id="profile-name-display">Perfil</strong>
+              <small class="profile-role" id="profile-role-display">Perfil principal</small>
+            </span>
+            <span class="profile-caret">▴</span>
+          </button>
+          <div class="profile-dropdown" id="profile-dropdown"></div>
+        </div>
+      </aside>
+
+      <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+      <div class="main-area">
+        <header class="topbar">
+          <div class="topbar-layout">
+            <div class="topbar-left">
+              <button type="button" class="icon-button mobile-menu-btn" id="sidebar-toggle" aria-label="Abrir menu">☰</button>
+              <h1 class="topbar-title">Cassino</h1>
+            </div>
+            <div class="topbar-center">
+              <select id="period-filter">
+                <option value="all">Todo o período</option>
+                <option value="month">Mês atual</option>
+                <option value="week">Semana atual</option>
+              </select>
+            </div>
+            <div class="topbar-right">
+              <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Alterar tema">🌙</button>
+            </div>
+          </div>
+        </header>
+
+        <main class="page-content casino-page">
+          <section class="panel kpi-hero-section">
+            <div class="hero-left">
+              <span class="hero-label">Lucro / perda total</span>
+              <div class="hero-value" id="casino-total-profit">R$ 0,00</div>
+              <div class="hero-sub" id="casino-hero-sub">0 sessões · R$ 0,00 em volume</div>
+            </div>
+            <div class="hero-right">
+              <span class="hero-tag" id="casino-hero-tag">Sem sessões</span>
+              <span id="casino-hero-avg">Média: R$ 0,00/sessão</span>
+              <span id="casino-hero-last">Última sessão: -</span>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="kpi-strip casino-kpi-grid">
+              <article class="kpi-kard">
+                <span>Volume apostado</span>
+                <strong id="casino-total-bet">R$ 0,00</strong>
+                <div class="kpi-delta">exposição total</div>
+                <div class="kpi-track"><div id="casino-volume-bar" style="width:0%"></div></div>
+              </article>
+              <article class="kpi-kard">
+                <span>Sessões positivas</span>
+                <strong id="casino-sessions-pos">0 de 0</strong>
+                <div class="kpi-delta" id="casino-sessions-pospct">0% das sessões</div>
+                <div class="kpi-track"><div id="casino-sessions-bar" style="width:0%"></div></div>
+              </article>
+              <article class="kpi-kard">
+                <span>Média por sessão</span>
+                <strong id="casino-avg-session">R$ 0,00</strong>
+                <div class="kpi-delta">ganho ou perda típica</div>
+                <div class="kpi-track"><div id="casino-avg-bar" style="width:0%"></div></div>
+              </article>
+              <article class="kpi-kard">
+                <span>Rodadas grátis</span>
+                <strong id="casino-free-total">+R$ 0,00</strong>
+                <div class="kpi-delta" id="casino-free-sub">0 sessões · 0 rodadas</div>
+                <div class="kpi-track"><div id="casino-free-bar" style="width:0%"></div></div>
+              </article>
+            </div>
+          </section>
+
+          <section class="casino-entry-grid">
+            <section class="panel" id="casino-form-panel">
+              <div class="panel-header" style="margin-bottom: 12px;">
+                <h2>Nova sessão <span class="badge free" id="free-mode-badge" style="display:none;">Rodadas grátis</span></h2>
+              </div>
+
+              <div class="seg" id="session-type-seg" style="margin-bottom: 12px;">
+                <button class="seg-btn active" id="btn-mode-normal" onclick="setSessionMode('normal')" type="button">Sessão normal</button>
+                <button class="seg-btn" id="btn-mode-free" onclick="setSessionMode('free')" type="button">Rodadas grátis</button>
+              </div>
+
+              <form id="casino-form" class="form-grid">
+                <label>
+                  Data
+                  <input type="date" id="casino-date" required />
+                </label>
+                <label>
+                  Jogo
+                  <input type="text" id="casino-game" placeholder="Fortune Tiger, Mines..." required />
+                </label>
+                <label>
+                  Plataforma
+                  <input type="text" id="casino-platform" placeholder="Blaze, Bet365..." required />
+                </label>
+                <label>
+                  Valor apostado
+                  <input type="text" id="casino-bet-amount" inputmode="decimal" placeholder="100" required />
+                  <small class="hint warning" id="bet-amount-hint" style="display:none;">Casa financia as rodadas · apostado = R$ 0</small>
+                </label>
+
+                <div class="free-block full" id="freespins-block">
+                  <h4>Detalhes das rodadas grátis</h4>
+                  <div class="form-grid">
+                    <label>
+                      Nº de rodadas
+                      <input type="number" id="casino-free-spins" min="1" placeholder="20" />
+                    </label>
+                    <label>
+                      Aposta por rodada
+                      <input type="text" id="casino-spin-bet" inputmode="decimal" placeholder="2,50" />
+                    </label>
+                  </div>
+                  <p class="hint" id="freespins-calc-hint">Preencha para ver o valor financiado pela casa</p>
+                </div>
+
+                <label>
+                  Valor ganho (retorno total)
+                  <input type="text" id="casino-win-amount" inputmode="decimal" placeholder="0" required />
+                </label>
+                <label>
+                  Resultado rápido
+                  <select id="casino-quick-result">
+                    <option value="">Manual</option>
+                    <option value="loss">Não ganhei nada</option>
+                  </select>
+                </label>
+                <label class="full">
+                  Observação
+                  <input type="text" id="casino-note" placeholder="Modo comprado, bônus, rodadas bônus..." />
+                </label>
+
+                <div class="form-footer">
+                  <div>
+                    <span class="muted">Lucro da sessão</span>
+                    <strong id="casino-session-profit">R$ 0,00</strong>
+                  </div>
+                  <button type="submit" id="casino-submit">Salvar sessão</button>
+                  <button type="button" class="ghost" id="casino-reset">Limpar</button>
+                </div>
+              </form>
+            </section>
+
+            <aside class="panel" id="casino-realtime-panel">
+              <h2 style="margin-bottom: 4px;">Resultado da sessão</h2>
+              <span class="muted" id="realtime-label">lucro / perda</span>
+              <div class="realtime-value" id="realtime-profit">R$ 0,00</div>
+
+              <div class="realtime-row" id="realtime-bet-row"><span>Apostado</span><strong id="realtime-bet">R$ 0,00</strong></div>
+              <div class="realtime-row" id="realtime-spins-row" style="display:none;"><span>Rodadas</span><strong id="realtime-spins">0</strong></div>
+              <div class="realtime-row" id="realtime-financed-row" style="display:none;"><span>Financiado pela casa</span><strong id="realtime-financed">R$ 0,00</strong></div>
+              <div class="realtime-row"><span>Retorno</span><strong id="realtime-win">R$ 0,00</strong></div>
+              <div class="realtime-row" id="realtime-perspin-row" style="display:none;"><span>Por rodada</span><strong id="realtime-perspin">R$ 0,00</strong></div>
+
+              <span class="hero-tag" id="realtime-badge">Sem dados</span>
+            </aside>
+          </section>
+
+          <section class="app-grid" style="grid-template-columns: 1fr 1fr;">
+            <section class="panel">
+              <div class="panel-header"><h2>Top jogos</h2></div>
+              <div id="casino-top-games" class="mini-rank"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-header"><h2>Top plataformas</h2></div>
+              <div id="casino-top-platforms" class="mini-rank"></div>
+            </section>
+          </section>
+
+          <section class="panel full" id="casino-history-section">
+            <div class="panel-header">
+              <h2>Histórico de sessões</h2>
+            </div>
+
+            <div class="history-pills" id="history-pills">
+              <button class="history-pill active" type="button" data-filter="all" onclick="filterHistory('all')">Todas</button>
+              <button class="history-pill" type="button" data-filter="pos" onclick="filterHistory('pos')">Positivas</button>
+              <button class="history-pill" type="button" data-filter="neg" onclick="filterHistory('neg')">Negativas</button>
+              <button class="history-pill" type="button" data-filter="free" onclick="filterHistory('free')">Rodadas grátis</button>
+            </div>
+
+            <div class="filters-bar">
+              <label>
+                De
+                <input type="date" id="casino-date-start" />
+              </label>
+              <label>
+                Até
+                <input type="date" id="casino-date-end" />
+              </label>
+              <button type="button" class="ghost small" id="casino-clear-filters">Limpar</button>
+            </div>
+
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Jogo</th>
+                    <th>Plataforma</th>
+                    <th>Apostado</th>
+                    <th>Retorno</th>
+                    <th>Lucro/Perda</th>
+                    <th>Tipo</th>
+                    <th>Obs.</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="casino-body"></tbody>
+              </table>
+            </div>
+
+            <div style="margin-top:12px;">
+              <canvas id="casino-chart" height="120"></canvas>
+            </div>
+          </section>
+
+          <section class="panel full">
+            <div class="sim-header" onclick="toggleSimulator()">
+              <h3>Simulador: se continuar jogando assim...</h3>
+              <span id="sim-toggle-indicator" class="muted">▼ expandir</span>
+            </div>
+            <div class="sim-body" id="sim-body">
+              <div class="form-grid" style="margin-top: 10px;">
+                <label>
+                  Sessões por semana
+                  <input type="number" id="sim-sessions-week" min="1" value="3" />
+                </label>
+                <label>
+                  Semanas
+                  <input type="number" id="sim-weeks" min="1" value="4" />
+                </label>
+              </div>
+              <div class="sim-result" id="sim-result"></div>
+              <p class="muted" style="margin-top:8px;">Projeção estatística — variância no cassino é alta.</p>
+            </div>
+          </section>
+        </main>
+
+        <nav class="bottom-nav">
+          <a href="./index.html">Apostas</a>
+          <a href="./casino.html" class="active">Cassino</a>
+          <a href="./ranking.html">Ranking</a>
+          <a href="./settings.html">Mais</a>
         </nav>
+
+        <footer class="app-footer">
+          <p>Dados salvos no MySQL via api.php · App local</p>
+        </footer>
       </div>
-    </header>
-
-    <main class="app-grid">
-      <!-- Resumo -->
-      <section class="panel full">
-        <div class="panel-header">
-          <h2>📊 Resumo do Cassino</h2>
-        </div>
-        <div class="stats-grid large">
-          <div class="stats-card green">
-            <span class="stats-value" id="casino-total-profit">R$ 0,00</span>
-            <span class="stats-label">Lucro Total</span>
-          </div>
-          <div class="stats-card">
-            <span class="stats-value" id="casino-total-bet">R$ 0,00</span>
-            <span class="stats-label">Total Apostado</span>
-          </div>
-          <div class="stats-card">
-            <span class="stats-value" id="casino-total-won">R$ 0,00</span>
-            <span class="stats-label">Total Ganho</span>
-          </div>
-          <div class="stats-card">
-            <span class="stats-value" id="casino-total-sessions">0</span>
-            <span class="stats-label">Sessões</span>
-          </div>
-          <div class="stats-card">
-            <span class="stats-value" id="casino-winrate">0%</span>
-            <span class="stats-label">Taxa de Sessões +</span>
-          </div>
-          <div class="stats-card">
-            <span class="stats-value" id="casino-roi">0%</span>
-            <span class="stats-label">ROI</span>
-          </div>
-        </div>
-      </section>
-
-      <!-- Formulário -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>Novo Registro</h2>
-          <p>Registre uma sessão de cassino.</p>
-        </div>
-        <form id="casino-form" class="form-grid">
-          <label>
-            Data
-            <div class="input-group">
-              <input type="date" id="casino-date" inputmode="numeric" required />
-            </div>
-          </label>
-          <label>
-            Jogo
-            <input type="text" id="casino-game" placeholder="Ex: Fortune Tiger, Mines, Roleta..." required />
-          </label>
-          <label>
-            Plataforma
-            <input type="text" id="casino-platform" placeholder="Ex: Blaze, Bet365..." required />
-          </label>
-          <label>
-            Valor Apostado
-            <div class="input-group">
-              <span class="prefix">R$</span>
-              <input type="text" inputmode="decimal" id="casino-bet-amount" placeholder="100" required />
-            </div>
-          </label>
-          <label>
-            Valor Ganho (retorno total)
-            <div class="input-group">
-              <span class="prefix">R$</span>
-              <input type="text" inputmode="decimal" id="casino-win-amount" placeholder="250" required />
-            </div>
-          </label>
-          <label class="full">
-            Observação
-            <input type="text" id="casino-note" placeholder="Opcional - Ex: rodadas grátis, bônus..." />
-          </label>
-          <div class="form-footer">
-            <div>
-              <span class="muted">Lucro da sessão</span>
-              <strong id="casino-session-profit">R$ 0,00</strong>
-            </div>
-            <button type="submit" id="casino-submit">Salvar registro</button>
-            <button type="button" class="ghost" id="casino-reset">Limpar</button>
-          </div>
-        </form>
-      </section>
-
-      <!-- Gráfico -->
-      <section class="panel full">
-        <div class="panel-header">
-          <h2>📈 Evolução dos Ganhos</h2>
-        </div>
-        <div class="chart-container">
-          <canvas id="casino-chart"></canvas>
-        </div>
-      </section>
-
-      <!-- Top Jogos -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>🎮 Top Jogos</h2>
-          <p class="muted">Jogos mais lucrativos</p>
-        </div>
-        <div class="monthly-list" id="casino-top-games"></div>
-      </section>
-
-      <!-- Top Plataformas -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>🏢 Top Plataformas</h2>
-          <p class="muted">Plataformas mais lucrativas</p>
-        </div>
-        <div class="monthly-list" id="casino-top-platforms"></div>
-      </section>
-
-      <!-- Histórico -->
-      <section class="panel full">
-        <div class="panel-header">
-          <div>
-            <h2>📋 Histórico de Sessões</h2>
-            <p>Todas as sessões de cassino registradas.</p>
-          </div>
-        </div>
-        <div class="filters-bar">
-          <label>
-            Jogo
-            <select id="casino-game-filter">
-              <option value="all">Todos</option>
-            </select>
-          </label>
-          <label>
-            Plataforma
-            <select id="casino-platform-filter">
-              <option value="all">Todas</option>
-            </select>
-          </label>
-          <label>
-            De
-            <input type="date" id="casino-date-start" />
-          </label>
-          <label>
-            Até
-            <input type="date" id="casino-date-end" />
-          </label>
-          <button type="button" class="ghost small" id="casino-clear-filters">Limpar</button>
-        </div>
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Jogo</th>
-                <th>Plataforma</th>
-                <th>Apostado</th>
-                <th>Ganho</th>
-                <th>Lucro</th>
-                <th>Obs.</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody id="casino-body"></tbody>
-          </table>
-        </div>
-      </section>
-    </main>
-
-    <footer class="app-footer">
-      <p>Dados salvos no localStorage. App local, sem envio para terceiros.</p>
-    </footer>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="./casino.js"></script>
