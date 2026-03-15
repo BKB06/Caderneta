@@ -1,5 +1,6 @@
 const ACTIVE_PROFILE_KEY = "caderneta.activeProfile.v1";
 const THEME_KEY = "caderneta.theme";
+const DEFAULT_AI_OPTIONS = ["Grok", "Claude", "Gemini", "Gemini DS", "ChatGPT"];
 
 // Funções para obter chaves dinâmicas baseadas no perfil ativo
 function getActiveProfileId() {
@@ -294,6 +295,7 @@ function loadSettings() {
       book: true,
     },
     favorites: [],
+    aiOptions: [...DEFAULT_AI_OPTIONS],
     defaults: {
       status: "pending",
       filter: "pending",
@@ -311,11 +313,14 @@ function loadSettings() {
       settings.columns = { ...defaultSettings.columns, ...saved.columns };
       settings.defaults = { ...defaultSettings.defaults, ...saved.defaults };
       settings.favorites = saved.favorites || [];
+      settings.aiOptions = sanitizeAiOptions(saved.aiOptions);
     } catch (e) {
       settings = defaultSettings;
+      settings.aiOptions = [...DEFAULT_AI_OPTIONS];
     }
   } else {
     settings = defaultSettings;
+    settings.aiOptions = [...DEFAULT_AI_OPTIONS];
   }
 }
 
@@ -410,6 +415,8 @@ function applySettings() {
       .map((fav) => `<option value="${fav}">`)
       .join("");
   }
+
+  renderAiSelectorOptions("bet-ai-selector");
 }
 
 async function loadBankrollBase() {
@@ -440,6 +447,59 @@ function saveBets() {
 
 function saveCashflows() {
   localStorage.setItem(getCashflowKey(), JSON.stringify(cashflows));
+}
+
+function normalizeAiName(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function sanitizeAiOptions(options) {
+  const source = Array.isArray(options) ? options : [];
+  const unique = [];
+  const seen = new Set();
+
+  source.forEach((item) => {
+    const name = normalizeAiName(item);
+    if (!name) return;
+    const key = name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push(name);
+  });
+
+  return unique.length ? unique : [...DEFAULT_AI_OPTIONS];
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function syncAiChipStates(container) {
+  if (!container) return;
+  container.querySelectorAll(".ai-chip").forEach((chip) => {
+    const input = chip.querySelector("input[type='checkbox']");
+    chip.classList.toggle("ai-chip--active", Boolean(input?.checked));
+  });
+}
+
+function renderAiSelectorOptions(containerId = "bet-ai-selector") {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const selected = getSelectedAIs(containerId);
+  const options = sanitizeAiOptions(settings?.aiOptions);
+
+  container.innerHTML = options
+    .map((name) => `<label class="ai-chip"><input type="checkbox" value="${escapeHtml(name)}" />${escapeHtml(name)}</label>`)
+    .join("");
+
+  setSelectedAIs(containerId, selected);
+  syncAiChipStates(container);
 }
 
 // ========================
@@ -2774,16 +2834,11 @@ betsBody?.addEventListener("click", handleTableClick);
 betsMobileList?.addEventListener("click", handleTableClick);
 document.getElementById("bets-table-head")?.addEventListener("click", handleTableSortClick);
 
-document.querySelectorAll("#bet-ai-selector .ai-chip").forEach((chip) => {
-  const input = chip.querySelector("input[type='checkbox']");
-  if (input?.checked) chip.classList.add("ai-chip--active");
-  chip.addEventListener("click", () => {
-    if (!input) return;
-    setTimeout(() => {
-      chip.classList.toggle("ai-chip--active", input.checked);
-    }, 0);
-  });
-});
+const aiSelector = document.getElementById("bet-ai-selector");
+if (aiSelector) {
+  aiSelector.addEventListener("change", () => syncAiChipStates(aiSelector));
+  syncAiChipStates(aiSelector);
+}
 
 const mobileMenuBtn = document.getElementById("mobile-menu-btn");
 const mobileOverlay = document.getElementById("mobile-overlay");

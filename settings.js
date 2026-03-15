@@ -1,4 +1,5 @@
 const ACTIVE_PROFILE_KEY = "caderneta.activeProfile.v1";
+const DEFAULT_AI_OPTIONS = ["Grok", "Claude", "Gemini", "Gemini DS", "ChatGPT"];
 
 // Chaves dinâmicas baseadas no perfil ativo
 function getStorageKey(profileId) {
@@ -48,6 +49,7 @@ const defaultSettings = {
     book: true,
   },
   favorites: [],
+  aiOptions: [...DEFAULT_AI_OPTIONS],
   defaults: {
     status: "pending",
     filter: "pending",
@@ -59,6 +61,27 @@ let settings = { ...defaultSettings };
 let profiles = [];
 let activeProfileId = null;
 let categories = [];
+
+function normalizeAiName(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function sanitizeAiOptions(options) {
+  const source = Array.isArray(options) ? options : [];
+  const unique = [];
+  const seen = new Set();
+
+  source.forEach((item) => {
+    const name = normalizeAiName(item);
+    if (!name) return;
+    const key = name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push(name);
+  });
+
+  return unique.length ? unique : [...DEFAULT_AI_OPTIONS];
+}
 
 async function loadProfilesFromApi() {
   try {
@@ -269,12 +292,15 @@ async function loadSettings() {
       settings.columns = { ...defaultSettings.columns, ...saved.columns };
       settings.defaults = { ...defaultSettings.defaults, ...saved.defaults };
       settings.favorites = saved.favorites || [];
+      settings.aiOptions = sanitizeAiOptions(saved.aiOptions);
     } else {
       settings = { ...defaultSettings }; // Usa o padrão se não houver nada no BD
+      settings.aiOptions = [...DEFAULT_AI_OPTIONS];
     }
   } catch (e) {
     console.error("Erro ao carregar configurações da API:", e);
     settings = { ...defaultSettings };
+    settings.aiOptions = [...DEFAULT_AI_OPTIONS];
   }
 }
 
@@ -348,6 +374,42 @@ function populateForm() {
 
   // Favorites
   renderFavorites();
+  renderAiOptions();
+}
+
+function renderAiOptions() {
+  const container = document.getElementById("ais-list");
+  if (!container) return;
+
+  const options = sanitizeAiOptions(settings.aiOptions);
+  settings.aiOptions = options;
+
+  container.innerHTML = "";
+  options.forEach((name, index) => {
+    const item = document.createElement("div");
+    item.className = "favorite-item";
+    item.innerHTML = `
+      <span>${name}</span>
+      <button type="button" class="ghost small" data-ai-index="${index}" title="Remover IA">✕</button>
+    `;
+    container.appendChild(item);
+  });
+
+  container.querySelectorAll("button[data-ai-index]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      if (settings.aiOptions.length <= 1) {
+        alert("Você precisa manter pelo menos 1 IA na lista.");
+        return;
+      }
+      const index = Number(e.currentTarget.dataset.aiIndex);
+      if (!Number.isInteger(index)) return;
+      settings.aiOptions.splice(index, 1);
+      settings.aiOptions = sanitizeAiOptions(settings.aiOptions);
+      await saveSettings();
+      renderAiOptions();
+      showToast("IA removida!");
+    });
+  });
 }
 
 function renderFavorites() {
@@ -506,6 +568,36 @@ document.getElementById("new-favorite").addEventListener("keypress", (e) => {
   }
 });
 
+// Add AI option
+document.getElementById("add-ai-btn")?.addEventListener("click", async () => {
+  const input = document.getElementById("new-ai-name");
+  const value = normalizeAiName(input?.value);
+
+  if (!value) {
+    alert("Digite um nome de IA.");
+    return;
+  }
+
+  const exists = sanitizeAiOptions(settings.aiOptions).some((ai) => ai.toLowerCase() === value.toLowerCase());
+  if (exists) {
+    alert("Essa IA já está na lista.");
+    return;
+  }
+
+  settings.aiOptions = sanitizeAiOptions([...(settings.aiOptions || []), value]);
+  await saveSettings();
+  renderAiOptions();
+  if (input) input.value = "";
+  showToast("IA adicionada!");
+});
+
+document.getElementById("new-ai-name")?.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    document.getElementById("add-ai-btn")?.click();
+  }
+});
+
 // Export data
 document.getElementById("export-data").addEventListener("click", () => {
   const data = {
@@ -578,6 +670,7 @@ document.getElementById("import-file").addEventListener("change", (e) => {
       }
       if (data.settings) {
         settings = { ...defaultSettings, ...data.settings };
+        settings.aiOptions = sanitizeAiOptions(data.settings.aiOptions);
         saveSettings();
         populateForm();
       }
