@@ -28,6 +28,7 @@ const defaultSettings = {
     showChart: true,
     showBankroll: true,
     showKpis: true,
+    showAiSuggestions: true,
     showPotentialProfit: true,
     showTablePotential: true,
     showRoi: true,
@@ -348,6 +349,7 @@ function populateForm() {
   document.getElementById("show-chart").checked = settings.display.showChart;
   document.getElementById("show-bankroll").checked = settings.display.showBankroll;
   document.getElementById("show-kpis").checked = settings.display.showKpis;
+  document.getElementById("show-ai-suggestions").checked = settings.display.showAiSuggestions !== false;
   document.getElementById("show-potential-profit").checked = settings.display.showPotentialProfit;
   document.getElementById("show-table-potential").checked = settings.display.showTablePotential;
   document.getElementById("show-roi").checked = settings.display.showRoi;
@@ -451,6 +453,7 @@ function collectSettings() {
   settings.display.showChart = document.getElementById("show-chart").checked;
   settings.display.showBankroll = document.getElementById("show-bankroll").checked;
   settings.display.showKpis = document.getElementById("show-kpis").checked;
+  settings.display.showAiSuggestions = document.getElementById("show-ai-suggestions").checked;
   settings.display.showPotentialProfit = document.getElementById("show-potential-profit").checked;
   settings.display.showTablePotential = document.getElementById("show-table-potential").checked;
   settings.display.showRoi = document.getElementById("show-roi").checked;

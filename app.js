@@ -273,6 +273,7 @@ function loadSettings() {
       showChart: true,
       showBankroll: true,
       showKpis: true,
+      showAiSuggestions: true,
       showPotentialProfit: true,
       showTablePotential: true,
       showRoi: true,
@@ -333,6 +334,8 @@ function applySettings() {
   const bankManagement = document.querySelector('.bank-management');
   const kpiGrid = document.querySelector('.kpi-grid');
   const potentialProfitContainer = potentialProfitEl?.closest('div');
+  const aiSuggestionsContainer = document.getElementById('bet-ai-selector')?.closest('label');
+  const aiRankingContainer = document.getElementById('ai-ranking-container');
 
   // KPI containers individuais
   const kpiRoiContainer = document.getElementById('kpi-roi-container');
@@ -353,6 +356,12 @@ function applySettings() {
   }
   if (kpiGrid) {
     kpiGrid.style.display = settings.display.showKpis ? '' : 'none';
+  }
+  if (aiSuggestionsContainer) {
+    aiSuggestionsContainer.style.display = settings.display.showAiSuggestions !== false ? '' : 'none';
+  }
+  if (aiRankingContainer) {
+    aiRankingContainer.style.display = settings.display.showAiSuggestions !== false ? '' : 'none';
   }
   if (potentialProfitContainer) {
     potentialProfitContainer.style.display = settings.display.showPotentialProfit ? '' : 'none';
@@ -506,6 +515,9 @@ function renderAiSelectorOptions(containerId = "bet-ai-selector") {
 // MULTI-AI HELPERS
 // ========================
 function getSelectedAIs(containerId) {
+  if (containerId === "bet-ai-selector" && settings?.display?.showAiSuggestions === false) {
+    return "";
+  }
   const container = document.getElementById(containerId);
   if (!container) return "";
   const checked = container.querySelectorAll('input[type="checkbox"]:checked');
