@@ -2446,18 +2446,38 @@ deleteModalConfirm?.addEventListener('click', async () => {
   const container = document.getElementById('ai-ranking-grid');
   if (!container) return;
 
-  const aiNames = ['Grok', 'Gemini', 'Claude']; 
+  const settledStatuses = new Set(['win', 'loss', 'cashout', 'void']);
+  const configuredAiNames = sanitizeAiOptions(settings?.aiOptions);
+  const usedAiNames = bets.reduce((acc, bet) => {
+    if (!bet.ai) return acc;
+    bet.ai
+      .split(',')
+      .map((name) => name.trim())
+      .map((name) => (name === 'Opus 4' ? 'Claude' : name))
+      .filter(Boolean)
+      .forEach((name) => acc.push(name));
+    return acc;
+  }, []);
+  const aiNames = [];
+  const seenAi = new Set();
+
+  [...configuredAiNames, ...usedAiNames].forEach((name) => {
+    const normalized = normalizeAiName(name);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seenAi.has(key)) return;
+    seenAi.add(key);
+    aiNames.push(normalized);
+  });
   
   const aiStats = aiNames.map(name => {
-    
-    // Suporta multi-AI (CSV) — procura se o nome da IA está na lista
     const aiBets = bets.filter(b => {
-        if (!b.ai) return false;
-        const aisList = b.ai.split(",").map(a => a.trim());
-        const isMatch = aisList.includes(name);
-        // Legado: 'Opus 4' → 'Claude'
-        const isLegacy = (name === 'Claude' && aisList.includes('Opus 4'));
-        return (isMatch || isLegacy) && (b.status === 'win' || b.status === 'loss' || b.status === 'cashout' || b.status === 'void');
+        if (!b.ai || !settledStatuses.has(b.status)) return false;
+        const aisList = b.ai
+          .split(',')
+          .map(a => a.trim())
+          .map((aiName) => (aiName === 'Opus 4' ? 'Claude' : aiName));
+        return aisList.includes(name);
     });
 
     const wins = aiBets.filter(b => b.status === 'win').length;

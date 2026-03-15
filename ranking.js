@@ -1,8 +1,52 @@
 const ACTIVE_PROFILE_KEY = "caderneta.activeProfile.v1";
+const DEFAULT_AI_OPTIONS = ["Grok", "Claude", "Gemini", "Gemini DS", "ChatGPT"];
 
 function getActiveProfileId() {
   const activeId = localStorage.getItem(ACTIVE_PROFILE_KEY);
   return activeId || null;
+}
+
+function getSettingsKey() {
+  const profileId = getActiveProfileId();
+  return profileId ? `caderneta.settings.${profileId}` : "caderneta.settings.v1";
+}
+
+function normalizeAiName(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function getConfiguredAiNames() {
+  const fallback = [...DEFAULT_AI_OPTIONS];
+  try {
+    const raw = localStorage.getItem(getSettingsKey());
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    const options = Array.isArray(parsed?.aiOptions) ? parsed.aiOptions : fallback;
+    const unique = [];
+    const seen = new Set();
+
+    options.forEach((option) => {
+      const normalized = normalizeAiName(option);
+      if (!normalized) return;
+      const key = normalized.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      unique.push(normalized);
+    });
+
+    return unique.length ? unique : fallback;
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function getAiNamesFromBet(bet) {
+  if (!bet?.ai) return [];
+  return bet.ai
+    .split(',')
+    .map((name) => normalizeAiName(name))
+    .map((name) => (name === 'Opus 4' ? 'Claude' : name))
+    .filter(Boolean);
 }
 
 async function loadProfilesFromApi() {
@@ -73,6 +117,22 @@ async function loadBets() {
 
 function formatProfit(value) {
   return currencyFormatter.format(value);
+}
+
+function truncateText(value, maxLength = 58) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
+function getPrimaryAiLabel(aisValue) {
+  if (!aisValue) return '';
+  const first = String(aisValue)
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)[0] || '';
+  if (!first) return '';
+  return first === 'Opus 4' ? 'Claude' : first;
 }
 
 function calcProfit(bet) {
@@ -216,28 +276,28 @@ function renderRecords() {
   if (maxProfitEl) {
     maxProfitEl.textContent = formatProfit(stats.maxProfit);
     maxProfitDetailEl.textContent = stats.maxProfitBet 
-      ? `${stats.maxProfitBet.event} @ ${numberFormatter.format(stats.maxProfitBet.odds)}x`
+      ? `${truncateText(stats.maxProfitBet.event, 44)}${getPrimaryAiLabel(stats.maxProfitBet.ai) ? ` - ${getPrimaryAiLabel(stats.maxProfitBet.ai)}` : ''} @ ${numberFormatter.format(stats.maxProfitBet.odds)}x`
       : '-';
   }
 
   if (maxLossEl) {
     maxLossEl.textContent = formatProfit(-stats.maxLoss);
     maxLossDetailEl.textContent = stats.maxLossBet 
-      ? `${stats.maxLossBet.event} @ ${numberFormatter.format(stats.maxLossBet.odds)}x`
+      ? `${truncateText(stats.maxLossBet.event, 44)}${getPrimaryAiLabel(stats.maxLossBet.ai) ? ` - ${getPrimaryAiLabel(stats.maxLossBet.ai)}` : ''} @ ${numberFormatter.format(stats.maxLossBet.odds)}x`
       : '-';
   }
 
   if (maxOddWinEl) {
     maxOddWinEl.textContent = `${numberFormatter.format(stats.maxOddWin)}x`;
     maxOddWinDetailEl.textContent = stats.maxOddWinBet 
-      ? `${stats.maxOddWinBet.event} - ${formatProfit(calcProfit(stats.maxOddWinBet))}`
+      ? truncateText(stats.maxOddWinBet.event, 66)
       : '-';
   }
 
   if (minOddLossEl) {
     minOddLossEl.textContent = stats.minOddLoss > 0 ? `${numberFormatter.format(stats.minOddLoss)}x` : '-';
     minOddLossDetailEl.textContent = stats.minOddLossBet 
-      ? `${stats.minOddLossBet.event} - ${formatProfit(calcProfit(stats.minOddLossBet))}`
+      ? truncateText(stats.minOddLossBet.event, 66)
       : '-';
   }
 }
@@ -464,9 +524,29 @@ function renderAIRankingPage() {
   const tableBody = document.getElementById('ai-ranking-table');
   if (!container && !tableBody) return;
 
-  const aiNames = ['Grok', 'Gemini', 'Claude'];
+  const configuredAiNames = getConfiguredAiNames();
+  const usedAiNames = bets.reduce((acc, bet) => {
+    getAiNamesFromBet(bet).forEach((name) => acc.push(name));
+    return acc;
+  }, []);
+  const aiNames = [];
+  const seenAi = new Set();
+
+  [...configuredAiNames, ...usedAiNames].forEach((name) => {
+    const normalized = normalizeAiName(name);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seenAi.has(key)) return;
+    seenAi.add(key);
+    aiNames.push(normalized);
+  });
+
   const aiStats = aiNames.map(name => {
-    const aiBets = bets.filter(b => b.ai === name && (b.status === 'win' || b.status === 'loss'));
+    const aiBets = bets.filter((b) => {
+      if (b.status !== 'win' && b.status !== 'loss') return false;
+      const names = getAiNamesFromBet(b);
+      return names.includes(name);
+    });
     const wins = aiBets.filter(b => b.status === 'win').length;
     const losses = aiBets.filter(b => b.status === 'loss').length;
     const total = aiBets.length;
@@ -501,24 +581,20 @@ function renderAIRankingPage() {
   }
 
   if (tableBody) {
-    if (aiStats.every(a => a.total === 0)) {
-      tableBody.innerHTML = '<tr><td colspan="7">Nenhuma aposta com IA registrada ainda.</td></tr>';
-    } else {
-      tableBody.innerHTML = aiStats.map((ai, index) => {
-        const medal = index === 0 ? '\ud83e\udd47' : index === 1 ? '\ud83e\udd48' : '\ud83e\udd49';
-        return `
-          <tr>
-            <td>${medal}</td>
-            <td><strong>${ai.name}</strong></td>
-            <td>${ai.total}</td>
-            <td style="color: var(--success)">${ai.wins}</td>
-            <td style="color: var(--danger)">${ai.losses}</td>
-            <td>${ai.total > 0 ? percentFormatter.format(ai.winrate) : '-'}</td>
-            <td style="color: ${ai.profit >= 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: 600">${formatProfit(ai.profit)}</td>
-          </tr>
-        `;
-      }).join('');
-    }
+    tableBody.innerHTML = aiStats.map((ai, index) => {
+      const medal = medals[index] || '';
+      return `
+        <tr>
+          <td>${medal}</td>
+          <td><strong>${ai.name}</strong></td>
+          <td>${ai.total}</td>
+          <td style="color: var(--success)">${ai.wins}</td>
+          <td style="color: var(--danger)">${ai.losses}</td>
+          <td>${ai.total > 0 ? percentFormatter.format(ai.winrate) : '-'}</td>
+          <td style="color: ${ai.profit >= 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: 600">${formatProfit(ai.profit)}</td>
+        </tr>
+      `;
+    }).join('');
   }
 }
 

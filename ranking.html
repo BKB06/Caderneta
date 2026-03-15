@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ranking - Caderneta de Apostas</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260315-3" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -46,11 +46,31 @@
           <div class="app-grid">
             <section class="panel full">
               <div class="panel-header"><h2>Recordes Gerais</h2><p>Suas melhores e piores apostas.</p></div>
-              <div class="ranking-grid">
-                <div class="ranking-card positive"><span class="ranking-icon">💰</span><div class="ranking-info"><span class="ranking-label">Maior Lucro (única aposta)</span><strong id="ranking-max-profit">R$ 0,00</strong><span class="ranking-detail" id="ranking-max-profit-detail">-</span></div></div>
-                <div class="ranking-card negative"><span class="ranking-icon">📉</span><div class="ranking-info"><span class="ranking-label">Maior Perda (única aposta)</span><strong id="ranking-max-loss">R$ 0,00</strong><span class="ranking-detail" id="ranking-max-loss-detail">-</span></div></div>
-                <div class="ranking-card positive"><span class="ranking-icon">🎯</span><div class="ranking-info"><span class="ranking-label">Maior Odd Acertada</span><strong id="ranking-max-odd-win">0,00x</strong><span class="ranking-detail" id="ranking-max-odd-win-detail">-</span></div></div>
-                <div class="ranking-card negative"><span class="ranking-icon">❌</span><div class="ranking-info"><span class="ranking-label">Menor Odd Perdida</span><strong id="ranking-min-odd-loss">0,00x</strong><span class="ranking-detail" id="ranking-min-odd-loss-detail">-</span></div></div>
+              <div class="ranking-list">
+                <div class="ranking-row positive">
+                  <span class="ranking-icon">💰</span>
+                  <span class="ranking-title">Maior lucro</span>
+                  <span class="ranking-row-detail" id="ranking-max-profit-detail">-</span>
+                  <strong class="ranking-row-value" id="ranking-max-profit">R$ 0,00</strong>
+                </div>
+                <div class="ranking-row negative">
+                  <span class="ranking-icon">📉</span>
+                  <span class="ranking-title">Maior perda</span>
+                  <span class="ranking-row-detail" id="ranking-max-loss-detail">-</span>
+                  <strong class="ranking-row-value" id="ranking-max-loss">R$ 0,00</strong>
+                </div>
+                <div class="ranking-row positive">
+                  <span class="ranking-icon">🎯</span>
+                  <span class="ranking-title">Maior odd acertada</span>
+                  <span class="ranking-row-detail" id="ranking-max-odd-win-detail">-</span>
+                  <strong class="ranking-row-value" id="ranking-max-odd-win">0,00x</strong>
+                </div>
+                <div class="ranking-row negative">
+                  <span class="ranking-icon">❌</span>
+                  <span class="ranking-title">Menor odd perdida</span>
+                  <span class="ranking-row-detail" id="ranking-min-odd-loss-detail">-</span>
+                  <strong class="ranking-row-value" id="ranking-min-odd-loss">0,00x</strong>
+                </div>
               </div>
             </section>
 
@@ -86,7 +106,7 @@
     <nav class="bottom-nav"><a href="./index.html">Apostas</a><a href="./casino.html">Cassino</a><a href="./ranking.html" class="active">Ranking</a><a href="./settings.html">Mais</a></nav>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="./ranking.js"></script>
+    <script src="./ranking.js?v=20260315-2"></script>
     <script>
       (function () {
         const THEME_KEY = "caderneta.theme";
