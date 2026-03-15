@@ -81,7 +81,12 @@ function ensureAuthorizedProfile(mysqli $conn, string $profile_id): void {
     }
 
     if (!hash_equals((string)$row['session_id'], $currentSessionId)) {
-        responder(["sucesso" => false, "erro" => "Não autorizado para este perfil."]);
+        // Sessão mudou (ex: XAMPP reiniciado). Como é aplicação local,
+        // atualizamos a sessão em vez de bloquear o acesso.
+        $stmt = $conn->prepare("UPDATE profile_access SET session_id = ? WHERE profile_id = ?");
+        $stmt->bind_param("ss", $currentSessionId, $profile_id);
+        $stmt->execute();
+        $stmt->close();
     }
 }
 
@@ -152,10 +157,10 @@ if ($acao === 'carregar_perfis') {
     ensureProfileAccessTable($conn);
 
     $sessionId = session_id();
-    $stmt = $conn->prepare("SELECT p.id, p.name FROM perfis p INNER JOIN profile_access pa ON pa.profile_id = p.id WHERE pa.session_id = ? ORDER BY p.created_at ASC");
-    $stmt->bind_param("s", $sessionId);
-    $stmt->execute();
-    $result = $stmt->get_result();
+
+    // Retorna todos os perfis (app local, usuário único).
+    // O filtro por session_id causava perda de perfis ao reiniciar o XAMPP.
+    $result = $conn->query("SELECT id, name FROM perfis ORDER BY created_at ASC");
 
     $perfis = [];
     if ($result) {
@@ -163,7 +168,6 @@ if ($acao === 'carregar_perfis') {
             $perfis[] = $row;
         }
     }
-    $stmt->close();
 
     if (count($perfis) === 0) {
         $defaultId = 'profile_' . substr(hash('sha256', session_id()), 0, 16);

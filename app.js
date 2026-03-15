@@ -2664,14 +2664,30 @@ function renderFinalizedBets() {
   container.innerHTML = settled.map(bet => {
     const profit = calcProfit(bet);
     const profitClass = profit > 0 ? 'positive' : profit < 0 ? 'negative' : '';
+    const stakeValue = Number.isFinite(Number(bet.stake)) ? Number(bet.stake) : 0;
+    const aiChips = bet.ai
+      ? bet.ai
+          .split(",")
+          .map(ai => ai.trim())
+          .filter(Boolean)
+          .map(ai => `<span class="fbet-ai">${ai}</span>`)
+          .join("")
+      : '';
     return `
       <div class="finalized-bet-item">
-        <span class="fbet-date">${bet.date}</span>
-        <span class="fbet-event">${bet.event}</span>
-        <span class="fbet-odd">${numberFormatter.format(bet.odds)}x</span>
-        ${bet.ai ? bet.ai.split(",").map(ai => `<span class="fbet-ai">${ai.trim()}</span>`).join(" ") : ''}
-        <span class="fbet-status-badge ${bet.status}">${statusLabel(bet.status)}</span>
-        <span class="fbet-profit ${profitClass}">${formatProfit(profit)}</span>
+        <div class="fbet-main">
+          <span class="fbet-event">${bet.event}</span>
+          <div class="fbet-meta-row">
+            <span class="fbet-date">${bet.date}</span>
+            <span class="fbet-odd">${numberFormatter.format(bet.odds)}x</span>
+            ${aiChips ? `<span class="fbet-ai-list">${aiChips}</span>` : ''}
+            <span class="fbet-status-badge ${bet.status}">${statusLabel(bet.status)}</span>
+          </div>
+        </div>
+        <div class="fbet-money">
+          <span class="fbet-profit ${profitClass}">${formatProfit(profit)}</span>
+          <span class="fbet-stake">stake ${currencyFormatter.format(stakeValue)}</span>
+        </div>
       </div>
     `;
   }).join('');
