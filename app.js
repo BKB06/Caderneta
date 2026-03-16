@@ -1098,6 +1098,7 @@ function renderTable() {
     const profit = calcProfit(bet);
     const potentialProfit = calcPotentialProfit(bet.stake, bet.odds);
     const statusClass = `status-badge ${bet.status}`;
+    const freebetBadge = bet.isFreebet ? '<span class="stake-type-badge">Grátis</span>' : "";
 
     if (betsBody) {
       const row = document.createElement("tr");
@@ -1105,7 +1106,7 @@ function renderTable() {
         <td>${bet.date}</td>
         <td><strong>${bet.event}</strong></td>
         <td>${numberFormatter.format(bet.odds)}x</td>
-        <td>${formatStake(bet.stake)}</td>
+        <td><div class="stake-cell">${formatStake(bet.stake)}${freebetBadge}</div></td>
         <td><span class="${statusClass}">${statusLabel(bet.status)}</span></td>
         <td>${formatProfit(profit)}</td>
         <td>${formatProfit(potentialProfit)}</td>
@@ -1142,6 +1143,7 @@ function renderTable() {
           <span>${numberFormatter.format(bet.odds)}x Odd</span>
           <span>${formatStake(bet.stake)} Stake</span>
           <span>${formatProfit(potentialProfit)} Potencial</span>
+          ${freebetBadge}
         </div>
         <div class="bet-card-actions">
           ${bet.status === "pending" ? `
