@@ -3010,7 +3010,7 @@ function parseBetFromText(text) {
     { patterns: ["sportingbet"], name: "Sportingbet" },
     { patterns: ["betfair"], name: "Betfair" },
     { patterns: ["pixbet"], name: "PixBet" },
-    { patterns: ["stake"], name: "Stake" },
+    { patterns: ["\\bstake\\.com\\b", "\\bstake\\b"], name: "Stake" },
     { patterns: ["pinnacle"], name: "Pinnacle" },
     { patterns: ["1xbet"], name: "1xBet" },
     { patterns: ["novibet"], name: "Novibet" },
@@ -3025,6 +3025,23 @@ function parseBetFromText(text) {
     { patterns: ["rivalry"], name: "Rivalry" },
     { patterns: ["luva\\.?bet", "luvabet"], name: "Luva.bet" },
     { patterns: ["aposta ?ganha"], name: "Aposta Ganha" },
+    { patterns: ["\\bkto\\b"], name: "KTO" },
+    { patterns: ["rivalo"], name: "Rivalo" },
+    { patterns: ["betmotion"], name: "Betmotion" },
+    { patterns: ["vaidebet"], name: "Vaidebet" },
+    { patterns: ["\\bblaze\\b"], name: "Blaze" },
+    { patterns: ["bet7k"], name: "Bet7k" },
+    { patterns: ["b1bet"], name: "B1Bet" },
+    { patterns: ["realsbet"], name: "Realsbet" },
+    { patterns: ["betpix"], name: "BetPix" },
+    { patterns: ["brazino"], name: "Brazino" },
+    { patterns: ["sorte ?online"], name: "Sorte Online" },
+    { patterns: ["mcgames?", "mc ?games?"], name: "MC Games" },
+    { patterns: ["wbet", "w ?bet\\b"], name: "WBet" },
+    { patterns: ["betsson"], name: "Betsson" },
+    { patterns: ["unibet"], name: "Unibet" },
+    { patterns: ["bwin"], name: "Bwin" },
+    { patterns: ["888sport", "888 ?sport"], name: "888sport" },
   ];
   
   const lowerText = fullText.toLowerCase();
@@ -3048,16 +3065,19 @@ function parseBetFromText(text) {
   
   // --- DETECTAR STAKE (valores com R$) ---
   const valoresMonetarios = new Set();
-  const monetaryRegex = /R\$\s*(\d+[.,]?\d*)/gi;
+  // Alternation order: decimal first (e.g. 50,00 / 50.00) then bare integer (e.g. 50).
+  // This ensures parseFloat produces the correct value for both forms.
+  const monetaryRegex = /R\$\s*(\d+[.,]\d+|\d+)/gi;
   let mMatch;
   while ((mMatch = monetaryRegex.exec(fullText)) !== null) {
     const val = parseFloat(mMatch[1].replace(",", "."));
     if (val > 0) valoresMonetarios.add(val);
   }
   
-  const stakeMatch = fullText.match(/(?:simples|aposta)\s+R?\$?\s*(\d+[.,]?\d*)/i)
-    || fullText.match(/(?:aposta|valor|stake|investido)\s*[:=]?\s*R?\$?\s*(\d+[.,]?\d*)/i)
-    || fullText.match(/R\$\s*(\d+[.,]?\d*)/i);
+  const stakeMatch = fullText.match(/(?:simples|aposta\s+simples)\s+R?\$?\s*(\d+[.,]\d+|\d+)/i)
+    || fullText.match(/(?:valor\s+(?:da\s+)?aposta|valor\s+apostado|stake|investido)\s*[:=]?\s*R?\$?\s*(\d+[.,]\d+|\d+)/i)
+    || fullText.match(/(?:aposta|apostado)\s*[:=]?\s*R?\$?\s*(\d+[.,]\d+|\d+)/i)
+    || fullText.match(/R\$\s*(\d+[.,]\d+|\d+)/i);
   if (stakeMatch) {
     const val = parseFloat(stakeMatch[1].replace(",", "."));
     if (val > 0 && val < 100000) result.stake = val;
@@ -3231,13 +3251,21 @@ function parseBetFromText(text) {
     { patterns: ["dupla chance", "double chance"], name: "Dupla Chance" },
     { patterns: ["over", "acima", "mais de"], name: "Over" },
     { patterns: ["under", "abaixo", "menos de"], name: "Under" },
-    { patterns: ["ambas marcam", "btts", "both teams"], name: "Ambas Marcam" },
+    { patterns: ["ambas? marcam", "btts", "both teams", "both score"], name: "Ambas Marcam" },
     { patterns: ["handicap"], name: "Handicap" },
     { patterns: ["escanteio", "corner"], name: "Escanteios" },
     { patterns: ["cart.{0,3}o", "card"], name: "Cartões" },
     { patterns: ["intervalo", "half.?time", "1.{0,2}tempo"], name: "Intervalo" },
     { patterns: ["gols", "goals", "total de gols"], name: "Gols" },
     { patterns: ["vencedor", "winner", "moneyline"], name: "Vencedor" },
+    { patterns: ["placar exato", "exact score", "correct score"], name: "Placar Exato" },
+    { patterns: ["pr[oó]ximo gol", "next goal", "first goal"], name: "Próximo Gol" },
+    { patterns: ["marcador a qualquer momento", "anytime goal"], name: "Marcador" },
+    { patterns: ["falta", "foul"], name: "Faltas" },
+    { patterns: ["impedimento", "offside"], name: "Impedimentos" },
+    { patterns: ["chute", "shot"], name: "Chutes" },
+    { patterns: ["posse de bola", "possession"], name: "Posse de Bola" },
+    { patterns: ["total de times", "team total"], name: "Total de Times" },
   ];
   
   for (const mercado of mercados) {
@@ -3300,9 +3328,25 @@ async function resolveGeminiModel(apiKey) {
     const generative = models.filter((m) =>
       m.supportedGenerationMethods?.includes("generateContent")
     );
-    const preferred = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
+    // Ordered from most capable/preferred to fallback.
+    // Use exact-then-versioned matching so "gemini-2.0-flash" does not accidentally
+    // resolve to "gemini-2.0-flash-lite" when both are present.
+    const preferred = [
+      "gemini-2.5-flash-preview",
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-lite",
+      "gemini-1.5-flash",
+      "gemini-pro",
+    ];
     for (const pref of preferred) {
-      const match = generative.find((m) => m.name?.includes(pref));
+      const match = generative.find((m) => {
+        const shortName = (m.name || "").replace("models/", "");
+        // Exact match or versioned variant (e.g. pref + "-001", pref + "-exp")
+        // but not a "sub-family" match (e.g. "gemini-2.0-flash" must not match
+        // "gemini-2.0-flash-lite" when we are looking for "gemini-2.0-flash").
+        return shortName === pref || shortName.startsWith(pref + "-");
+      });
       if (match) return match.name;
     }
     return generative[0]?.name || null;
@@ -3315,62 +3359,94 @@ async function extractBetWithGemini(imageBase64, mimeType) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) return null;
   
-  const prompt = `Analise esta imagem de um cupom/comprovante de aposta esportiva e extraia as seguintes informações em formato JSON:
+  const prompt = `Analise esta imagem de um cupom/comprovante de aposta esportiva e extraia as informações abaixo em formato JSON puro (sem markdown, sem blocos de código).
 
+Formato esperado:
 {
   "evento": "Time A - Time B",
-  "odd": número decimal da odd (ex: 1.85),
-  "stake": valor apostado em reais sem símbolo (ex: 50.00),
-  "casa": "Nome da casa de apostas (ex: Bet365, Betano, Sportingbet)",
-  "data": "Data da aposta no formato DD/MM/AAAA",
-  "tipo_aposta": "Mercado + seleção apostada (ex: Resultado Final Arsenal, Over 2.5 gols, Ambas Marcam Sim)"
+  "odd": 1.85,
+  "stake": 50.00,
+  "casa": "Nome da casa de apostas",
+  "data": "DD/MM/AAAA",
+  "tipo_aposta": "Mercado e seleção apostada"
 }
 
-REGRAS IMPORTANTES:
-- Retorne APENAS o JSON, sem explicações ou markdown
-- Se não conseguir identificar algum campo, use null
-- A odd deve ser um número decimal (use ponto como separador)
-- O stake deve ser apenas o número, sem R$ ou símbolos
-- O campo "evento" deve conter APENAS os nomes dos times/jogadores separados por " - " (ex: "Arsenal - Sunderland"). NÃO inclua mercados, seleções ou promoções no evento.
-- O campo "tipo_aposta" deve conter o mercado E a seleção apostada. Exemplos:
-  * Se apostou no Arsenal no resultado final: "Resultado Final Arsenal"
-  * Se apostou em Over 2.5 gols: "Over 2.5 gols"
-  * Se apostou em Ambas Marcam Sim: "Ambas Marcam Sim"
-  * Se apostou no empate: "Resultado Final Empate"
-  * Se apostou em handicap -1.5 Arsenal: "Handicap -1.5 Arsenal"
-  IGNORE nomes de promoções como "SuperOdds", "Odds Turbinadas", "Boost", etc.
-- Se houver múltiplas apostas (aposta múltipla/combo), extraia apenas os dados gerais: odd total, stake total
-- Para o evento em aposta múltipla, liste os eventos separados por " + "
-- Se a data não estiver visível, use null`;
+REGRAS:
+- Retorne SOMENTE o objeto JSON, sem nenhum texto antes ou depois.
+- Se um campo não estiver visível, use null.
+- "odd": número decimal com ponto como separador (ex: 1.85). Nunca use vírgula.
+- "stake": somente o número, sem R$ ou outros símbolos (ex: 50.00).
+- "evento": apenas os nomes dos times/jogadores separados por " - " (ex: "Arsenal - Sunderland"). Não inclua mercados, seleções nem promoções.
+- "tipo_aposta": mercado + seleção apostada. Exemplos:
+    "Resultado Final Arsenal", "Over 2.5 gols", "Ambas Marcam Sim",
+    "Resultado Final Empate", "Handicap -1.5 Arsenal".
+    Ignore nomes de promoções como SuperOdds, Boost, Odds Turbinadas.
+- "data": formato DD/MM/AAAA. Se não estiver visível, use null.
+- "casa": nome da casa de apostas (ex: Bet365, Betano, Sportingbet, PixBet, KTO).
+- Para apostas múltiplas/combo: use a odd total e stake total; liste os eventos separados por " + " no campo "evento".`;
+  
+  const doRequest = async (model) => {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: imageBase64 } }
+            ]
+          }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
+        })
+      }
+    );
+    return response;
+  };
 
-  const model = await resolveGeminiModel(apiKey);
+  let model = await resolveGeminiModel(apiKey);
   if (!model) return null;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/${model}:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type: mimeType, data: imageBase64 } }
-          ]
-        }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
-      })
-    }
-  );
-  
-  if (!response.ok) return null;
+  let response = await doRequest(model);
+
+  // If the cached model returns an error (e.g. deprecated), clear the cache and retry
+  if (!response.ok) {
+    localStorage.removeItem("caderneta.gemini.model");
+    model = await resolveGeminiModel(apiKey);
+    if (!model) return null;
+    response = await doRequest(model);
+    if (!response.ok) return null;
+  }
+
+  // Cache the working model so future calls skip the model-list fetch
+  localStorage.setItem("caderneta.gemini.model", model);
   
   const data = await response.json();
   const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!textResponse) return null;
   
-  let cleanJson = textResponse.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  return JSON.parse(cleanJson);
+  // Strip any surrounding markdown code fences before parsing
+  const cleanJson = textResponse
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleanJson);
+  } catch (parseErr) {
+    // Attempt to extract a JSON object from within the response text
+    const jsonMatch = cleanJson.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch {
+        // ignore
+      }
+    }
+    console.error("Gemini JSON parse error:", parseErr, "Raw response:", textResponse);
+    return null;
+  }
 }
 
 // ---- PREENCHIMENTO DO FORMULÁRIO ----

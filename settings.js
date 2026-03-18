@@ -764,10 +764,12 @@ function loadGeminiApiKey() {
 
 function saveGeminiApiKey() {
   const input = document.getElementById("gemini-api-key");
-  const statusEl = document.getElementById("api-key-status");
   if (!input) return;
   
   const key = input.value.trim();
+  // Clear cached model whenever the key changes so the next use picks the best
+  // available model for the new key.
+  localStorage.removeItem("caderneta.gemini.model");
   if (key) {
     localStorage.setItem(GEMINI_API_KEY_STORAGE, key);
     showApiStatus("✓ Chave API salva com sucesso!", "success");
@@ -806,15 +808,23 @@ async function resolveGeminiModel(apiKey) {
       m.supportedGenerationMethods?.includes("generateContent")
     );
 
-    // Ordem de preferência
+    // Ordem de preferência — do mais capaz para o fallback.
+    // Utiliza correspondência exata/versionada para evitar que
+    // "gemini-2.0-flash" resolva acidentalmente para "gemini-2.0-flash-lite".
     const preferred = [
+      "gemini-2.5-flash-preview",
+      "gemini-2.5-flash",
       "gemini-2.0-flash",
+      "gemini-2.0-flash-lite",
       "gemini-1.5-flash",
       "gemini-pro",
     ];
 
     for (const pref of preferred) {
-      const match = generative.find((m) => m.name?.includes(pref));
+      const match = generative.find((m) => {
+        const shortName = (m.name || "").replace("models/", "");
+        return shortName === pref || shortName.startsWith(pref + "-");
+      });
       if (match) return match.name;
     }
 
