@@ -66,6 +66,7 @@ const bankrollExposureValue = document.getElementById("bankroll-exposure-value")
 const bankrollDeposits = document.getElementById("bankroll-deposits");
 const bankrollWithdraws = document.getElementById("bankroll-withdraws");
 const bankrollProfitIndicator = document.getElementById("bankroll-profit-indicator");
+const houseBankrollList = document.getElementById("house-bankroll-list");
 const bookFilter = document.getElementById("book-filter");
 const statusFilter = document.getElementById("status-filter");
 
@@ -107,6 +108,18 @@ let miniProfitChart = null;
 let baseBankroll = null;
 let settings = null;
 let categories = [];
+
+// Expor variáveis globalmente para debug no console
+if (typeof globalThis !== "undefined") {
+  globalThis.caderneta = {
+    get bets() { return bets; },
+    get cashflows() { return cashflows; },
+    get baseBankroll() { return baseBankroll; },
+    get settings() { return settings; },
+    get categories() { return categories; },
+    get editingId() { return editingId; }
+  };
+}
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -179,6 +192,7 @@ async function loadBets() {
         ...bet,
         stake: Number(bet.stake),
         odds: Number(bet.odds),
+        book: normalizeBookName(bet.book),
         isFreebet: Boolean(bet.isFreebet || bet.freebet),
         cashout_value: bet.cashout_value != null ? Number(bet.cashout_value) : null
       }));
@@ -208,6 +222,7 @@ async function loadCashflows() {
     cashflows = dados.map((flow) => ({
       ...flow,
       amount: Number(flow.amount),
+      book: normalizeBookName(flow.book),
     }));
   } catch (erro) {
     console.error("Erro ao carregar fluxo na página principal:", erro);
@@ -296,6 +311,7 @@ function loadSettings() {
       book: true,
     },
     favorites: [],
+    houseBalances: {},
     aiOptions: [...DEFAULT_AI_OPTIONS],
     defaults: {
       status: "pending",
@@ -314,6 +330,7 @@ function loadSettings() {
       settings.columns = { ...defaultSettings.columns, ...saved.columns };
       settings.defaults = { ...defaultSettings.defaults, ...saved.defaults };
       settings.favorites = saved.favorites || [];
+      settings.houseBalances = sanitizeHouseBalances(saved.houseBalances);
       settings.aiOptions = sanitizeAiOptions(saved.aiOptions);
     } catch (e) {
       settings = defaultSettings;
@@ -410,20 +427,7 @@ function applySettings() {
     betStakeType.value = settings.defaults.stakeType;
   }
 
-  // Apply favorites to book input (datalist)
-  const bookInput = document.getElementById("bet-book");
-  if (bookInput && settings.favorites.length > 0) {
-    let datalist = document.getElementById("book-datalist");
-    if (!datalist) {
-      datalist = document.createElement("datalist");
-      datalist.id = "book-datalist";
-      document.body.appendChild(datalist);
-      bookInput.setAttribute("list", "book-datalist");
-    }
-    datalist.innerHTML = settings.favorites
-      .map((fav) => `<option value="${fav}">`)
-      .join("");
-  }
+  renderBookSuggestions();
 
   renderAiSelectorOptions("bet-ai-selector");
 }
@@ -456,6 +460,53 @@ function saveBets() {
 
 function saveCashflows() {
   localStorage.setItem(getCashflowKey(), JSON.stringify(cashflows));
+}
+
+function normalizeBookName(value) {
+  return String(value || "").trim();
+}
+
+function normalizeHouseBalanceKey(value) {
+  return normalizeBookName(value).toLowerCase();
+}
+
+function sanitizeHouseBalances(map) {
+  if (!map || typeof map !== "object" || Array.isArray(map)) return {};
+
+  const result = {};
+  Object.entries(map).forEach(([rawKey, rawValue]) => {
+    const key = normalizeHouseBalanceKey(rawKey);
+    if (!key) return;
+    const value = Number(rawValue);
+    result[key] = Number.isFinite(value) ? value : 0;
+  });
+
+  return result;
+}
+
+function getHouseBaseBalance(book) {
+  const key = normalizeHouseBalanceKey(book);
+  const map = sanitizeHouseBalances(settings?.houseBalances);
+  return Number(map[key] || 0);
+}
+
+function getKnownBooks() {
+  const fromSettings = Array.isArray(settings?.favorites) ? settings.favorites : [];
+
+  return Array.from(new Set(
+    [...fromSettings]
+      .map((book) => normalizeBookName(book))
+      .filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
+}
+
+function renderBookSuggestions() {
+  const bookInput = document.getElementById("bet-book");
+  const datalist = document.getElementById("book-datalist");
+  if (!bookInput || !datalist) return;
+
+  const books = getKnownBooks();
+  datalist.innerHTML = books.map((book) => `<option value="${escapeHtml(book)}"></option>`).join("");
 }
 
 function normalizeAiName(value) {
@@ -661,9 +712,11 @@ function formatDeltaText(deltaValue, suffix, monthLabel) {
 function updateFormInsights() {
   const kellyEl = document.getElementById("kelly-hint");
   const alertEl = document.getElementById("bankroll-alert");
+  const selectedBook = normalizeBookName(document.getElementById("bet-book")?.value || "");
+  const bankrollScope = selectedBook ? `na ${selectedBook}` : "na banca geral";
   const stake = parseLocaleNumber(document.getElementById("bet-stake")?.value || "");
   const odds = parseLocaleNumber(document.getElementById("bet-odds")?.value || "");
-  const bankroll = getEffectiveBankroll();
+  const bankroll = selectedBook ? getEffectiveBankroll(selectedBook) : getEffectiveBankroll();
 
   if (kellyEl) {
     const settled = bets.filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void");
@@ -672,7 +725,7 @@ function updateFormInsights() {
 
     if (Number.isFinite(stake) && Number.isFinite(odds) && Number.isFinite(bankroll) && bankroll > 0 && winRate > 0) {
       const kelly = calcKelly(winRate, odds, bankroll);
-      kellyEl.textContent = `Kelly sugere ${formatProfit(kelly.suggested)} (${numberFormatter.format(Math.max(0, kelly.fraction))}% da banca de ${formatProfit(bankroll)})`;
+      kellyEl.textContent = `Kelly sugere ${formatProfit(kelly.suggested)} (${numberFormatter.format(Math.max(0, kelly.fraction))}% ${bankrollScope}, banca ${formatProfit(bankroll)}).`;
       kellyEl.classList.add("visible");
     } else {
       kellyEl.classList.remove("visible");
@@ -685,7 +738,7 @@ function updateFormInsights() {
     if (Number.isFinite(stake) && stake > 0 && Number.isFinite(bankroll) && bankroll > 0) {
       const pct = (stake / bankroll) * 100;
       if (pct > maxStakePct) {
-        alertEl.textContent = `Stake de ${formatProfit(stake)} representa ${numberFormatter.format(pct)}% da banca - acima do limite de ${numberFormatter.format(maxStakePct)}%.`;
+        alertEl.textContent = `Stake de ${formatProfit(stake)} representa ${numberFormatter.format(pct)}% ${bankrollScope} - acima do limite de ${numberFormatter.format(maxStakePct)}%.`;
         alertEl.classList.add("visible");
       } else {
         alertEl.classList.remove("visible");
@@ -704,8 +757,22 @@ function calcSettledProfit(list = bets) {
     .reduce((sum, bet) => sum + calcProfit(bet), 0);
 }
 
-function calcCashflowTotal(list = cashflows) {
+function calcSettledProfitByBook(book, list = bets) {
+  const targetBook = normalizeBookName(book);
+  if (!targetBook) return calcSettledProfit(list);
+
+  return list
+    .filter((bet) => normalizeBookName(bet.book) === targetBook)
+    .filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void")
+    .reduce((sum, bet) => sum + calcProfit(bet), 0);
+}
+
+function calcCashflowTotal(list = cashflows, book = null) {
+  const targetBook = normalizeBookName(book);
   return list.reduce((sum, flow) => {
+    if (targetBook && normalizeBookName(flow.book) !== targetBook) {
+      return sum;
+    }
     if (flow.type === "deposit") {
       return sum + flow.amount;
     }
@@ -716,19 +783,28 @@ function calcCashflowTotal(list = cashflows) {
   }, 0);
 }
 
-function calcTotalDeposits(list = cashflows) {
+function calcTotalDeposits(list = cashflows, book = null) {
+  const targetBook = normalizeBookName(book);
   return list
+    .filter((flow) => !targetBook || normalizeBookName(flow.book) === targetBook)
     .filter((flow) => flow.type === "deposit")
     .reduce((sum, flow) => sum + flow.amount, 0);
 }
 
-function calcTotalWithdraws(list = cashflows) {
+function calcTotalWithdraws(list = cashflows, book = null) {
+  const targetBook = normalizeBookName(book);
   return list
+    .filter((flow) => !targetBook || normalizeBookName(flow.book) === targetBook)
     .filter((flow) => flow.type === "withdraw")
     .reduce((sum, flow) => sum + flow.amount, 0);
 }
 
-function getEffectiveBankroll() {
+function getEffectiveBankroll(book = null) {
+  const targetBook = normalizeBookName(book);
+  if (targetBook) {
+    return getHouseBaseBalance(targetBook) + calcSettledProfitByBook(targetBook) + calcCashflowTotal(cashflows, targetBook);
+  }
+
   if (!Number.isFinite(baseBankroll)) {
     return null;
   }
@@ -738,6 +814,7 @@ function getEffectiveBankroll() {
 function updateBankrollDisplay() {
   const effective = getEffectiveBankroll();
   if (!Number.isFinite(effective)) {
+    renderHouseBankrolls();
     return;
   }
   bankrollInput.value = numberFormatter.format(effective);
@@ -758,6 +835,65 @@ function updateBankrollDisplay() {
     bankrollProfitIndicator.textContent = `${profitPrefix}${formatProfit(settledProfit)} lucro`;
     bankrollProfitIndicator.className = `breakdown-item ${settledProfit >= 0 ? 'positive' : 'negative'}`;
   }
+
+  renderHouseBankrolls();
+}
+
+function renderHouseBankrolls() {
+  if (!houseBankrollList) return;
+
+  const configuredBooks = Array.isArray(settings?.favorites)
+    ? settings.favorites.map((book) => normalizeBookName(book)).filter(Boolean)
+    : [];
+  const historyBooks = [
+    ...bets.map((bet) => normalizeBookName(bet.book)).filter(Boolean),
+    ...cashflows.map((flow) => normalizeBookName(flow.book)).filter(Boolean),
+  ];
+  const books = Array.from(new Set(configuredBooks.length ? configuredBooks : historyBooks));
+
+  if (!books.length) {
+    houseBankrollList.innerHTML = '<span class="muted">Nenhuma casa encontrada.</span>';
+    return;
+  }
+
+  const sortedBooks = books
+    .map((book) => ({
+      book,
+      result: calcSettledProfitByBook(book),
+    }))
+    .sort((a, b) => {
+      if (b.result !== a.result) return b.result - a.result;
+      return a.book.localeCompare(b.book, "pt-BR", { sensitivity: "base" });
+    })
+    .map((item) => item.book);
+
+  houseBankrollList.innerHTML = sortedBooks.map((book) => {
+    const baseBalance = getHouseBaseBalance(book);
+    const deposits = calcTotalDeposits(cashflows, book);
+    const withdraws = calcTotalWithdraws(cashflows, book);
+    const profit = calcSettledProfitByBook(book);
+    const resultLabel = profit >= 0 ? "lucro" : "prejuízo";
+    const highlightedResult = `${profit >= 0 ? "+" : ""}${formatProfit(profit)}`;
+    const pendingExposure = bets
+      .filter((bet) => normalizeBookName(bet.book) === book && bet.status === "pending" && !bet.isFreebet)
+      .reduce((sum, bet) => sum + bet.stake, 0);
+
+    return `
+      <article class="house-bankroll-item">
+        <div class="house-bankroll-line">
+          <strong>${book}</strong>
+          <strong class="${profit >= 0 ? "positive" : "negative"}">${highlightedResult}</strong>
+        </div>
+        <div class="house-bankroll-meta">
+          <span class="muted">Banca ${formatProfit(baseBalance)}</span>
+          <span class="positive">+${formatProfit(deposits)} dep.</span>
+          <span class="negative">-${formatProfit(withdraws)} saq.</span>
+          <span class="${profit >= 0 ? "positive" : "negative"}">${highlightedResult} ${resultLabel}</span>
+          <span class="muted">${formatProfit(pendingExposure)} pendente</span>
+        </div>
+      </article>
+    `;
+  }).join("");
 }
 
 function formatDateDisplay(value) {
@@ -1444,6 +1580,7 @@ function renderBalanceChart() {
 
 function refreshAll() {
   renderBookFilter();
+  renderBookSuggestions();
   renderCategorySelects();
   renderTable();
   renderKpis();
@@ -1571,7 +1708,7 @@ async function handleSubmit(event) {
     event: document.getElementById("bet-event").value.trim(),
     odds: oddsValue,
     stake: stakeValue,
-    book: document.getElementById("bet-book").value.trim(),
+    book: normalizeBookName(document.getElementById("bet-book").value),
     status: document.getElementById("bet-status").value,
     isFreebet: document.getElementById("bet-stake-type").value === "freebet",
     ai: getSelectedAIs("bet-ai-selector") || null,
@@ -2851,6 +2988,8 @@ betStatusSelect?.addEventListener("change", (e) => {
   const input = document.getElementById(id);
   input?.addEventListener("input", updatePotentialProfit);
 });
+
+document.getElementById("bet-book")?.addEventListener("input", updateFormInsights);
 
 bankrollInput?.addEventListener("input", handleBankrollInput);
 bookFilter?.addEventListener("change", refreshAll);

@@ -39,7 +39,8 @@ ALTER TABLE apostas
 
 -- 4. Adicionar timestamps na fluxo_caixa
 ALTER TABLE fluxo_caixa
-    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS book VARCHAR(100) NOT NULL DEFAULT '';
 
 -- 5. Adicionar updated_at na dados_extras
 ALTER TABLE dados_extras
@@ -103,5 +104,6 @@ CREATE INDEX IF NOT EXISTS idx_apostas_profile_status ON apostas (profile_id, st
 CREATE INDEX IF NOT EXISTS idx_apostas_book           ON apostas (book);
 CREATE INDEX IF NOT EXISTS idx_fluxo_profile_date     ON fluxo_caixa (profile_id, date DESC);
 CREATE INDEX IF NOT EXISTS idx_fluxo_type             ON fluxo_caixa (type);
+CREATE INDEX IF NOT EXISTS idx_fluxo_book             ON fluxo_caixa (book);
 
 SELECT '✅ Migração concluída com sucesso!' AS resultado;

@@ -8,6 +8,7 @@ function getActiveProfileId() {
 let cashflows = [];
 let editingId = null;
 let cashflowChart = null;
+let configuredHouses = [];
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -31,9 +32,147 @@ const submitButton = document.getElementById("cashflow-submit");
 const resetButton = document.getElementById("cashflow-reset");
 const cashflowBody = document.getElementById("cashflow-body");
 const typeFilter = document.getElementById("type-filter");
+const bookFilter = document.getElementById("book-filter");
 const dateFilterStart = document.getElementById("date-filter-start");
 const dateFilterEnd = document.getElementById("date-filter-end");
 const clearFiltersBtn = document.getElementById("clear-filters");
+
+function normalizeBookName(value) {
+  return String(value || "").trim();
+}
+
+function sanitizeHouseList(list) {
+  const source = Array.isArray(list) ? list : [];
+  const unique = [];
+  const seen = new Set();
+
+  source.forEach((item) => {
+    const name = normalizeBookName(item);
+    if (!name) return;
+    const key = name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push(name);
+  });
+
+  return unique;
+}
+
+function getKnownBooks() {
+  return sanitizeHouseList([
+    ...configuredHouses,
+    ...cashflows.map((flow) => normalizeBookName(flow.book)).filter(Boolean),
+  ]).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
+}
+
+function renderBookInputSuggestions() {
+  const input = document.getElementById("cashflow-book");
+  if (!input) return;
+
+  let datalist = document.getElementById("cashflow-book-suggestions");
+  if (!datalist) {
+    datalist = document.createElement("datalist");
+    datalist.id = "cashflow-book-suggestions";
+    document.body.appendChild(datalist);
+  }
+
+  input.setAttribute("list", "cashflow-book-suggestions");
+  input.setAttribute("autocomplete", "off");
+
+  const books = getKnownBooks();
+  datalist.innerHTML = "";
+  books.forEach((book) => {
+    const option = document.createElement("option");
+    option.value = book;
+    datalist.appendChild(option);
+  });
+}
+
+async function loadConfiguredHouses() {
+  try {
+    const profileId = getActiveProfileId();
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_dados_extras', profile_id: profileId })
+    });
+
+    const json = await resposta.json();
+    const raw = json?.dados?.settings_json;
+    let parsed = {};
+
+    if (typeof raw === "string" && raw.trim()) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch (erro) {
+        console.warn("settings_json inválido ao carregar casas:", erro);
+      }
+    }
+
+    configuredHouses = sanitizeHouseList(parsed?.favorites || []);
+  } catch (erro) {
+    console.error("Erro ao carregar casas configuradas:", erro);
+    configuredHouses = [];
+  }
+
+  renderBookInputSuggestions();
+}
+
+async function ensureBookInConfiguredHouses(book) {
+  const houseName = normalizeBookName(book);
+  if (!houseName) return;
+
+  const alreadyExists = configuredHouses.some((item) => item.toLowerCase() === houseName.toLowerCase());
+  if (alreadyExists) return;
+
+  const profileId = getActiveProfileId();
+  try {
+    const loadResponse = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_dados_extras', profile_id: profileId })
+    });
+    const loaded = await loadResponse.json();
+    const raw = loaded?.dados?.settings_json;
+
+    let settingsPayload = {};
+    if (typeof raw === "string" && raw.trim()) {
+      try {
+        settingsPayload = JSON.parse(raw);
+      } catch (erro) {
+        console.warn("settings_json inválido ao integrar casa:", erro);
+      }
+    }
+
+    const favorites = sanitizeHouseList(settingsPayload?.favorites || []);
+    favorites.push(houseName);
+    settingsPayload.favorites = sanitizeHouseList(favorites);
+
+    if (!settingsPayload.houseBalances || typeof settingsPayload.houseBalances !== "object" || Array.isArray(settingsPayload.houseBalances)) {
+      settingsPayload.houseBalances = {};
+    }
+
+    const saveResponse = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        acao: 'salvar_dados_extras',
+        profile_id: profileId,
+        tipo: 'settings',
+        valor: JSON.stringify(settingsPayload),
+      })
+    });
+
+    const saveJson = await saveResponse.json();
+    if (saveJson?.sucesso) {
+      configuredHouses = settingsPayload.favorites;
+      renderBookInputSuggestions();
+      renderBookFilter();
+    }
+  } catch (erro) {
+    console.error("Erro ao sincronizar casa com configurações:", erro);
+  }
+}
 
 async function loadCashflows() {
   try {
@@ -44,9 +183,11 @@ async function loadCashflows() {
       body: JSON.stringify({ acao: 'carregar_fluxo', profile_id: profileId })
     });
     const dados = await resposta.json();
-    cashflows = dados.map((flow) => ({
+    const rows = Array.isArray(dados) ? dados : [];
+    cashflows = rows.map((flow) => ({
       ...flow,
       amount: Number(flow.amount),
+      book: normalizeBookName(flow.book),
     }));
   } catch (erro) {
     console.error("Erro ao carregar fluxo:", erro);
@@ -56,23 +197,29 @@ async function loadCashflows() {
 
 // Novas funções para falar com a API
 async function salvarFluxoBD(flow) {
-  try {
-    await fetch('api.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ acao: 'salvar_fluxo', profile_id: getActiveProfileId(), fluxo: flow })
-    });
-  } catch (erro) { console.error("Erro:", erro); }
+  const resposta = await fetch('api.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ acao: 'salvar_fluxo', profile_id: getActiveProfileId(), fluxo: flow })
+  });
+
+  const json = await resposta.json();
+  if (!json?.sucesso) {
+    throw new Error(json?.erro || "Não foi possível salvar a movimentação no banco.");
+  }
 }
 
 async function excluirFluxoBD(id) {
-  try {
-    await fetch('api.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ acao: 'excluir_fluxo', profile_id: getActiveProfileId(), id: id })
-    });
-  } catch (erro) { console.error("Erro:", erro); }
+  const resposta = await fetch('api.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ acao: 'excluir_fluxo', profile_id: getActiveProfileId(), id: id })
+  });
+
+  const json = await resposta.json();
+  if (!json?.sucesso) {
+    throw new Error(json?.erro || "Não foi possível excluir a movimentação no banco.");
+  }
 }
 
 async function loadProfilesFromApi() {
@@ -149,12 +296,15 @@ function cashflowLabel(type) {
 
 function getFilteredCashflows() {
   const type = typeFilter?.value || "all";
+  const selectedBook = bookFilter?.value || "all";
   const startDate = dateFilterStart?.value ? parseDateForSort(dateFilterStart.value) : null;
   const endDate = dateFilterEnd?.value ? parseDateForSort(dateFilterEnd.value) : null;
 
   return cashflows.filter((flow) => {
     // Filtro por tipo
     const matchType = type === "all" || flow.type === type;
+    const flowBook = normalizeBookName(flow.book);
+    const matchBook = selectedBook === "all" || flowBook === selectedBook;
 
     // Filtro por data
     let matchDate = true;
@@ -168,8 +318,26 @@ function getFilteredCashflows() {
       }
     }
 
-    return matchType && matchDate;
+    return matchType && matchDate && matchBook;
   });
+}
+
+function renderBookFilter() {
+  if (!bookFilter) return;
+
+  const books = getKnownBooks();
+
+  const current = bookFilter.value || "all";
+  bookFilter.innerHTML = '<option value="all">Todas</option>';
+
+  books.forEach((book) => {
+    const option = document.createElement("option");
+    option.value = book;
+    option.textContent = book;
+    bookFilter.appendChild(option);
+  });
+
+  bookFilter.value = books.includes(current) ? current : "all";
 }
 
 function calcStats() {
@@ -210,7 +378,7 @@ function renderTable() {
   if (data.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 5;
+    cell.colSpan = 6;
     cell.textContent = "Nenhuma movimentação encontrada.";
     row.appendChild(cell);
     cashflowBody.appendChild(row);
@@ -238,6 +406,10 @@ function renderTable() {
     typeBadge.textContent = cashflowLabel(flow.type);
     tdType.appendChild(typeBadge);
     row.appendChild(tdType);
+
+    const tdBook = document.createElement("td");
+    tdBook.textContent = flow.book || "-";
+    row.appendChild(tdBook);
 
     const tdAmount = document.createElement("td");
     const signedAmount = flow.type === "withdraw" ? -Math.abs(flow.amount) : flow.amount;
@@ -427,6 +599,7 @@ function renderMonthlyLists() {
 
 function refreshAll() {
   renderStats();
+  renderBookFilter();
   renderTable();
   renderChart();
   renderMonthlyLists();
@@ -444,19 +617,32 @@ async function handleSubmit(event) {
   const rawDate = document.getElementById("cashflow-date").value.trim();
   const formattedDate = formatDateDisplay(rawDate);
   const amountValue = parseLocaleNumber(document.getElementById("cashflow-amount").value);
+  const rawBook = document.getElementById("cashflow-book").value.trim();
+
+  if (!rawDate) {
+    alert("Preencha a data.");
+    return;
+  }
+  if (!rawBook) {
+    alert("⚠️ Preencha a casa de aposta. Campo obrigatório!");
+    document.getElementById("cashflow-book").focus();
+    return;
+  }
+  if (!Number.isFinite(amountValue) || amountValue <= 0) {
+    alert("Preencha um valor válido (> 0).");
+    return;
+  }
 
   const flow = {
     id: editingId || crypto.randomUUID(),
     date: formattedDate,
     type: document.getElementById("cashflow-type").value,
     amount: amountValue,
+    book: normalizeBookName(rawBook),
     note: document.getElementById("cashflow-note").value.trim(),
   };
 
-  if (!flow.date || !Number.isFinite(flow.amount)) {
-    alert("Preencha data e valor da movimentação.");
-    return;
-  }
+  const previousCashflows = [...cashflows];
 
   if (editingId) {
     const index = cashflows.findIndex((item) => item.id === editingId);
@@ -466,7 +652,16 @@ async function handleSubmit(event) {
   } else {
     cashflows.unshift(flow);
   }
-  await salvarFluxoBD(flow);
+
+  try {
+    await salvarFluxoBD(flow);
+    await ensureBookInConfiguredHouses(flow.book);
+  } catch (erro) {
+    cashflows = previousCashflows;
+    alert(erro?.message || "Não foi possível salvar no banco. Tente novamente.");
+    return;
+  }
+
   refreshAll();
   resetForm();
 }
@@ -475,6 +670,7 @@ function startEdit(flow) {
   editingId = flow.id;
   document.getElementById("cashflow-date").value = formatDateForInput(flow.date);
   document.getElementById("cashflow-type").value = flow.type;
+  document.getElementById("cashflow-book").value = flow.book || "";
   document.getElementById("cashflow-amount").value = numberFormatter.format(flow.amount);
   document.getElementById("cashflow-note").value = flow.note || "";
   submitButton.textContent = "Atualizar movimentação";
@@ -495,10 +691,17 @@ async function handleTableClick(event) {
 
   if (button.dataset.action === "delete") {
     if (confirm("Tem certeza que deseja excluir esta movimentação?")) {
+      const previousCashflows = [...cashflows];
       cashflows = cashflows.filter((flow) => flow.id !== id);
-      
-      await excluirFluxoBD(id); 
-      
+
+      try {
+        await excluirFluxoBD(id);
+      } catch (erro) {
+        cashflows = previousCashflows;
+        alert(erro?.message || "Não foi possível excluir no banco. Tente novamente.");
+        return;
+      }
+
       refreshAll();
     }
   }
@@ -506,6 +709,7 @@ async function handleTableClick(event) {
 
 function clearFilters() {
   typeFilter.value = "all";
+  if (bookFilter) bookFilter.value = "all";
   dateFilterStart.value = "";
   dateFilterEnd.value = "";
   renderTable();
@@ -516,6 +720,7 @@ form.addEventListener("submit", handleSubmit);
 resetButton.addEventListener("click", resetForm);
 cashflowBody.addEventListener("click", handleTableClick);
 typeFilter?.addEventListener("change", renderTable);
+bookFilter?.addEventListener("change", renderTable);
 dateFilterStart?.addEventListener("change", renderTable);
 dateFilterEnd?.addEventListener("change", renderTable);
 clearFiltersBtn?.addEventListener("click", clearFilters);
@@ -563,6 +768,7 @@ profileSwitch?.addEventListener('change', (e) => {
 async function iniciarCashflow() {
   await renderProfileSwitcher();
   await loadCashflows();
+  await loadConfiguredHouses();
   refreshAll();
 }
 iniciarCashflow();

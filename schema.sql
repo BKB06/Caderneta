@@ -78,6 +78,7 @@ CREATE TABLE fluxo_caixa (
     date         VARCHAR(10)   NOT NULL COMMENT 'Formato DD/MM/AAAA',
     type         ENUM('deposit','withdraw') NOT NULL,
     amount       DECIMAL(12,2) NOT NULL,
+    book         VARCHAR(100)  NOT NULL DEFAULT '',
     note         VARCHAR(500)  DEFAULT '',
     created_at   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -94,6 +95,7 @@ CREATE TABLE fluxo_caixa (
 
 CREATE INDEX idx_fluxo_profile_date ON fluxo_caixa (profile_id, date DESC);
 CREATE INDEX idx_fluxo_type         ON fluxo_caixa (type);
+CREATE INDEX idx_fluxo_book         ON fluxo_caixa (book);
 
 
 -- =============================================================

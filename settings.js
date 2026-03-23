@@ -50,6 +50,7 @@ const defaultSettings = {
     book: true,
   },
   favorites: [],
+  houseBalances: {},
   aiOptions: [...DEFAULT_AI_OPTIONS],
   defaults: {
     status: "pending",
@@ -62,6 +63,98 @@ let settings = { ...defaultSettings };
 let profiles = [];
 let activeProfileId = null;
 let categories = [];
+let favoriteEditingIndex = null;
+let houseHistoryBets = [];
+let houseHistoryCashflows = [];
+
+function normalizeFavoriteName(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function sanitizeFavorites(list) {
+  const source = Array.isArray(list) ? list : [];
+  const unique = [];
+  const seen = new Set();
+
+  source.forEach((item) => {
+    const name = normalizeFavoriteName(item);
+    if (!name) return;
+    const key = name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push(name);
+  });
+
+  return unique;
+}
+
+function normalizeHouseBalanceKey(value) {
+  return normalizeFavoriteName(value).toLowerCase();
+}
+
+function sanitizeHouseBalances(map) {
+  if (!map || typeof map !== "object" || Array.isArray(map)) return {};
+
+  const result = {};
+  Object.entries(map).forEach(([rawKey, rawValue]) => {
+    const key = normalizeHouseBalanceKey(rawKey);
+    if (!key) return;
+    const value = Number(rawValue);
+    result[key] = Number.isFinite(value) ? value : 0;
+  });
+
+  return result;
+}
+
+function getHouseBalanceByName(name) {
+  const key = normalizeHouseBalanceKey(name);
+  const map = sanitizeHouseBalances(settings.houseBalances);
+  return Number(map[key] || 0);
+}
+
+function calcProfitFromHistoryBet(bet) {
+  const stake = Number(bet?.stake) || 0;
+  const odds = Number(bet?.odds) || 0;
+  const cashout = Number(bet?.cashout_value) || 0;
+  const isFreebet = Boolean(bet?.isFreebet || bet?.is_freebet || bet?.freebet);
+  const status = String(bet?.status || "");
+
+  if (status === "win") return stake * (odds - 1);
+  if (status === "loss") return isFreebet ? 0 : -stake;
+  if (status === "cashout") return isFreebet ? cashout : cashout - stake;
+  if (status === "void") return 0;
+  return 0;
+}
+
+function calcSettledProfitFromHistoryByBook(book) {
+  const target = normalizeFavoriteName(book);
+  if (!target) return 0;
+
+  return houseHistoryBets
+    .filter((bet) => normalizeFavoriteName(bet?.book) === target)
+    .filter((bet) => ["win", "loss", "cashout", "void"].includes(String(bet?.status || "")))
+    .reduce((sum, bet) => sum + calcProfitFromHistoryBet(bet), 0);
+}
+
+function calcCashflowTotalFromHistoryByBook(book) {
+  const target = normalizeFavoriteName(book);
+  if (!target) return 0;
+
+  return houseHistoryCashflows
+    .filter((flow) => normalizeFavoriteName(flow?.book) === target)
+    .reduce((sum, flow) => {
+      const amount = Number(flow?.amount) || 0;
+      if (flow?.type === "deposit") return sum + amount;
+      if (flow?.type === "withdraw") return sum - amount;
+      return sum;
+    }, 0);
+}
+
+function getCurrentHouseBankrollByName(book) {
+  return getHouseBalanceByName(book)
+    + calcSettledProfitFromHistoryByBook(book)
+    + calcCashflowTotalFromHistoryByBook(book);
+}
 
 function normalizeAiName(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -207,6 +300,7 @@ async function switchProfile(profileId) {
   
   // Recarregar configurações do novo perfil
   await loadSettings();
+  await syncFavoritesWithHistory();
   populateForm();
   renderProfiles();
   loadNotes();
@@ -292,7 +386,8 @@ async function loadSettings() {
       settings.display = { ...defaultSettings.display, ...saved.display };
       settings.columns = { ...defaultSettings.columns, ...saved.columns };
       settings.defaults = { ...defaultSettings.defaults, ...saved.defaults };
-      settings.favorites = saved.favorites || [];
+      settings.favorites = sanitizeFavorites(saved.favorites);
+      settings.houseBalances = sanitizeHouseBalances(saved.houseBalances);
       settings.aiOptions = sanitizeAiOptions(saved.aiOptions);
     } else {
       settings = { ...defaultSettings }; // Usa o padrão se não houver nada no BD
@@ -303,6 +398,68 @@ async function loadSettings() {
     settings = { ...defaultSettings };
     settings.aiOptions = [...DEFAULT_AI_OPTIONS];
   }
+}
+
+async function loadBooksFromHistory(profileId) {
+  if (!profileId) return [];
+
+  try {
+    const [betsResp, cashflowResp] = await Promise.all([
+      fetch('api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'carregar_apostas', profile_id: profileId })
+      }),
+      fetch('api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'carregar_fluxo', profile_id: profileId })
+      })
+    ]);
+
+    const betsJson = await betsResp.json();
+    const cashflowJson = await cashflowResp.json();
+    houseHistoryBets = Array.isArray(betsJson) ? betsJson : [];
+    houseHistoryCashflows = Array.isArray(cashflowJson) ? cashflowJson : [];
+
+    const betBooks = houseHistoryBets
+      .map((bet) => normalizeFavoriteName(bet?.book))
+      .filter(Boolean);
+
+    const cashflowBooks = houseHistoryCashflows
+      .map((flow) => normalizeFavoriteName(flow?.book))
+      .filter(Boolean);
+
+    return sanitizeFavorites([...betBooks, ...cashflowBooks]);
+  } catch (e) {
+    console.error("Erro ao carregar casas do histórico:", e);
+    houseHistoryBets = [];
+    houseHistoryCashflows = [];
+    return [];
+  }
+}
+
+async function syncFavoritesWithHistory() {
+  const historyBooks = await loadBooksFromHistory(activeProfileId);
+  if (!historyBooks.length) return;
+
+  const current = sanitizeFavorites(settings.favorites);
+  const houseBalances = sanitizeHouseBalances(settings.houseBalances);
+  const currentSet = new Set(current.map((name) => name.toLowerCase()));
+  const toAdd = historyBooks.filter((name) => !currentSet.has(name.toLowerCase()));
+
+  if (!toAdd.length) return;
+
+  settings.favorites = sanitizeFavorites([...current, ...toAdd]);
+  toAdd.forEach((name) => {
+    const key = normalizeHouseBalanceKey(name);
+    if (!(key in houseBalances)) {
+      houseBalances[key] = 0;
+    }
+  });
+  settings.houseBalances = houseBalances;
+  await saveSettings();
+  showToast(`${toAdd.length} casa(s) do histórico adicionada(s).`);
 }
 
 async function saveSettings() {
@@ -333,6 +490,12 @@ function parseLocaleNumber(value) {
 
 const numberFormatter = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const currencyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
   maximumFractionDigits: 2,
 });
 
@@ -416,32 +579,223 @@ function renderAiOptions() {
 
 function renderFavorites() {
   const container = document.getElementById("favorites-list");
+  if (!container) return;
+
+  settings.favorites = sanitizeFavorites(settings.favorites);
+  settings.houseBalances = sanitizeHouseBalances(settings.houseBalances);
   container.innerHTML = "";
 
   if (settings.favorites.length === 0) {
-    container.innerHTML = '<p class="empty-message">Nenhuma casa favorita adicionada.</p>';
+    container.innerHTML = '<p class="empty-message">Nenhuma casa cadastrada ainda.</p>';
     return;
   }
 
-  settings.favorites.forEach((fav, index) => {
+  const sortedFavorites = settings.favorites
+    .map((fav, index) => ({
+      fav,
+      index,
+      baseBalance: getHouseBalanceByName(fav),
+      currentBankroll: getCurrentHouseBankrollByName(fav),
+    }))
+    .sort((a, b) => {
+      if (b.currentBankroll !== a.currentBankroll) return b.currentBankroll - a.currentBankroll;
+      return a.fav.localeCompare(b.fav, "pt-BR", { sensitivity: "base" });
+    });
+
+  sortedFavorites.forEach(({ fav, index, baseBalance, currentBankroll }) => {
     const item = document.createElement("div");
     item.className = "favorite-item";
-    item.innerHTML = `
-      <span>${fav}</span>
-      <button type="button" class="ghost small" data-index="${index}">✕</button>
-    `;
+    const isEditing = favoriteEditingIndex === index;
+    const currentBalance = baseBalance;
+
+    if (isEditing) {
+      const escaped = String(fav).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;");
+      item.innerHTML = `
+        <div class="favorite-edit-wrap">
+          <input type="text" class="favorite-edit-input" data-edit-input="${index}" value="${escaped}" />
+          <input type="text" class="favorite-balance-input" data-balance-input="${index}" value="${numberFormatter.format(currentBalance)}" placeholder="Saldo" />
+        </div>
+        <div class="favorite-actions">
+          <button type="button" class="ghost small" data-action="save" data-index="${index}">Salvar</button>
+          <button type="button" class="ghost small" data-action="save-apply" data-index="${index}">Salvar + Aplicar</button>
+          <button type="button" class="ghost small" data-action="cancel" data-index="${index}">Cancelar</button>
+        </div>
+      `;
+    } else {
+      item.innerHTML = `
+        <div class="favorite-main">
+          <span>${fav}</span>
+          <small class="muted">Extrato: ${currencyFormatter.format(currentBankroll)} · Saldo: ${numberFormatter.format(currentBalance)}</small>
+        </div>
+        <div class="favorite-actions">
+          <button type="button" class="ghost small" data-action="edit" data-index="${index}">Editar</button>
+          <button type="button" class="ghost small danger" data-action="remove" data-index="${index}">✕</button>
+        </div>
+      `;
+    }
+
     container.appendChild(item);
   });
 
-  // Event listeners para remover
-  container.querySelectorAll("button").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      const index = parseInt(e.target.dataset.index);
-      settings.favorites.splice(index, 1);
-      saveSettings();
-      renderFavorites();
+  container.querySelectorAll("button[data-action]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      const action = e.currentTarget.dataset.action;
+      const index = Number(e.currentTarget.dataset.index);
+      if (!Number.isInteger(index)) return;
+
+      if (action === "edit") {
+        favoriteEditingIndex = index;
+        renderFavorites();
+        const input = container.querySelector(`input[data-edit-input="${index}"]`);
+        input?.focus();
+        input?.select();
+        return;
+      }
+
+      if (action === "cancel") {
+        favoriteEditingIndex = null;
+        renderFavorites();
+        return;
+      }
+
+      if (action === "remove") {
+        const removedName = settings.favorites[index];
+        settings.favorites.splice(index, 1);
+        favoriteEditingIndex = null;
+        settings.favorites = sanitizeFavorites(settings.favorites);
+        const removedKey = normalizeHouseBalanceKey(removedName);
+        delete settings.houseBalances[removedKey];
+        await saveSettings();
+        renderFavorites();
+        showToast("Casa removida.");
+        return;
+      }
+
+      if (action === "save" || action === "save-apply") {
+        const input = container.querySelector(`input[data-edit-input="${index}"]`);
+        const balanceInput = container.querySelector(`input[data-balance-input="${index}"]`);
+        const nextName = normalizeFavoriteName(input?.value || "");
+        const prevName = normalizeFavoriteName(settings.favorites[index] || "");
+        const nextBalance = parseLocaleNumber(balanceInput?.value || "0");
+
+        if (!nextName) {
+          alert("Digite o nome da casa.");
+          input?.focus();
+          return;
+        }
+
+        if (!Number.isFinite(nextBalance)) {
+          alert("Informe um saldo válido para a casa.");
+          balanceInput?.focus();
+          return;
+        }
+
+        const duplicate = settings.favorites.some((name, i) => i !== index && normalizeFavoriteName(name).toLowerCase() === nextName.toLowerCase());
+        if (duplicate) {
+          alert("Já existe uma casa com esse nome.");
+          input?.focus();
+          input?.select();
+          return;
+        }
+
+        settings.favorites[index] = nextName;
+        settings.favorites = sanitizeFavorites(settings.favorites);
+        const prevKey = normalizeHouseBalanceKey(prevName);
+        const nextKey = normalizeHouseBalanceKey(nextName);
+        if (prevKey && prevKey !== nextKey) {
+          delete settings.houseBalances[prevKey];
+        }
+        settings.houseBalances[nextKey] = nextBalance;
+        favoriteEditingIndex = null;
+        await saveSettings();
+        renderFavorites();
+
+        if (action === "save-apply" && prevName && prevName.toLowerCase() !== nextName.toLowerCase()) {
+          const ok = await renameHouseInHistory(prevName, nextName);
+          if (ok) return;
+        }
+
+        showToast("Casa renomeada!");
+      }
     });
   });
+
+  container.querySelectorAll("input[data-edit-input]").forEach((input) => {
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const index = Number(e.currentTarget.dataset.editInput);
+        container.querySelector(`button[data-action="save"][data-index="${index}"]`)?.click();
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        const index = Number(e.currentTarget.dataset.editInput);
+        container.querySelector(`button[data-action="cancel"][data-index="${index}"]`)?.click();
+      }
+    });
+  });
+}
+
+async function renameHouseInHistory(oldName, newName) {
+  try {
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        acao: 'renomear_casa_historico',
+        profile_id: activeProfileId,
+        old_name: oldName,
+        new_name: newName,
+      })
+    });
+
+    const json = await resposta.json();
+    if (!json?.sucesso) {
+      alert(json?.erro || 'Não foi possível aplicar a renomeação no histórico.');
+      return false;
+    }
+
+    const apostas = Number(json.apostas_atualizadas || 0);
+    const fluxos = Number(json.fluxos_atualizados || 0);
+    await loadBooksFromHistory(activeProfileId);
+    showToast(`Renomeação aplicada: ${apostas} apostas e ${fluxos} fluxos atualizados.`);
+    return true;
+  } catch (e) {
+    console.error('Erro ao renomear casa no histórico:', e);
+    alert('Falha de comunicação ao aplicar renomeação no histórico.');
+    return false;
+  }
+}
+
+function addFavorite() {
+  const input = document.getElementById("new-favorite");
+  const value = normalizeFavoriteName(input?.value || "");
+
+  if (!value) {
+    alert("Digite o nome da casa.");
+    input?.focus();
+    return;
+  }
+
+  const exists = sanitizeFavorites(settings.favorites).some((item) => item.toLowerCase() === value.toLowerCase());
+  if (exists) {
+    alert("Essa casa já está cadastrada.");
+    input?.focus();
+    input?.select();
+    return;
+  }
+
+  settings.favorites.push(value);
+  settings.favorites = sanitizeFavorites(settings.favorites);
+  const balanceKey = normalizeHouseBalanceKey(value);
+  if (!(balanceKey in settings.houseBalances)) {
+    settings.houseBalances[balanceKey] = 0;
+  }
+  favoriteEditingIndex = null;
+  saveSettings();
+  renderFavorites();
+  if (input) input.value = "";
+  showToast("Casa adicionada!");
 }
 
 function collectSettings() {
@@ -552,22 +906,12 @@ document.getElementById("new-profile-name").addEventListener("keypress", (e) => 
 });
 
 // Add favorite
-document.getElementById("add-favorite-btn").addEventListener("click", () => {
-  const input = document.getElementById("new-favorite");
-  const value = input.value.trim();
-  if (value && !settings.favorites.includes(value)) {
-    settings.favorites.push(value);
-    saveSettings();
-    renderFavorites();
-    input.value = "";
-    showToast("Casa adicionada!");
-  }
-});
+document.getElementById("add-favorite-btn").addEventListener("click", addFavorite);
 
 document.getElementById("new-favorite").addEventListener("keypress", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
-    document.getElementById("add-favorite-btn").click();
+    addFavorite();
   }
 });
 
@@ -673,6 +1017,8 @@ document.getElementById("import-file").addEventListener("change", (e) => {
       }
       if (data.settings) {
         settings = { ...defaultSettings, ...data.settings };
+        settings.favorites = sanitizeFavorites(data.settings.favorites);
+        settings.houseBalances = sanitizeHouseBalances(data.settings.houseBalances);
         settings.aiOptions = sanitizeAiOptions(data.settings.aiOptions);
         saveSettings();
         populateForm();
@@ -917,11 +1263,7 @@ async function saveCategory(cat) {
     const resposta = await fetch('api.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        acao: 'salvar_categoria',
-        profile_id: activeProfileId,
-        categoria: cat
-      })
+      body: JSON.stringify({ acao: 'salvar_categoria', profile_id: activeProfileId, categoria: cat })
     });
     const resultado = await resposta.json();
     return resultado.sucesso;
@@ -936,11 +1278,7 @@ async function deleteCategory(id) {
     const resposta = await fetch('api.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        acao: 'excluir_categoria',
-        profile_id: activeProfileId,
-        id: id
-      })
+      body: JSON.stringify({ acao: 'excluir_categoria', profile_id: activeProfileId, id })
     });
     const resultado = await resposta.json();
     return resultado.sucesso;
@@ -1062,6 +1400,7 @@ document.getElementById("user-notes")?.addEventListener("input", () => {
 async function inicializarPaginaConfiguracoes() {
   await loadProfiles();
   await loadSettings(); // Agora espera o BD responder!
+  await syncFavoritesWithHistory();
   populateForm();
   renderProfiles();
   setupAutoSave();

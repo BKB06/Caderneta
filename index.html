@@ -180,7 +180,8 @@
                 </label>
                 <label>
                   Casa de aposta
-                  <input type="text" id="bet-book" placeholder="Bet365" required />
+                  <input type="text" id="bet-book" list="book-datalist" autocomplete="off" placeholder="Bet365" required />
+                  <datalist id="book-datalist"></datalist>
                 </label>
                 <label>
                   Categoria
@@ -254,6 +255,15 @@
                   <span class="breakdown-item positive" id="bankroll-deposits">+R$ 0,00 depósitos</span>
                   <span class="breakdown-item negative" id="bankroll-withdraws">-R$ 0,00 saques</span>
                   <span class="breakdown-item" id="bankroll-profit-indicator">R$ 0,00 lucro</span>
+                </div>
+                <div class="house-bankroll-panel" id="house-bankroll-panel">
+                  <div class="house-bankroll-header">
+                    <strong>Banca por casa</strong>
+                    <small class="muted">Baseada nas movimentações e apostas da própria casa</small>
+                  </div>
+                  <div class="house-bankroll-list" id="house-bankroll-list">
+                    <span class="muted">Nenhuma casa encontrada.</span>
+                  </div>
                 </div>
                 <div class="progress">
                   <div class="progress-bar" id="bankroll-progress"></div>
@@ -502,6 +512,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script type="module" src="./app.js?v=20260315-6"></script>
+    <script type="module" src="./app.js?v=20260322-1"></script>
   </body>
 </html>

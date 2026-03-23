@@ -651,6 +651,49 @@ button.ghost {
   background: rgba(248, 113, 113, 0.1);
 }
 
+.house-bankroll-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.house-bankroll-header {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.house-bankroll-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.house-bankroll-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.house-bankroll-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.house-bankroll-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
 .progress {
   height: 10px;
   background: rgba(255, 255, 255, 0.08);
@@ -1628,6 +1671,32 @@ tr:hover td {
 
 .favorite-item span {
   font-size: 0.9rem;
+}
+
+.favorite-main {
+  display: grid;
+  gap: 2px;
+}
+
+.favorite-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.favorite-edit-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.favorite-edit-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: 8px;
+  width: 100%;
+}
+
+.favorite-balance-input {
+  min-width: 0;
 }
 
 .add-favorite {

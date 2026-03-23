@@ -1,11 +1,8 @@
 <?php
 // =============================================================
-// api.php — Backend da Caderneta de Apostas (versão corrigida)
-// Correções: SQL Injection, validação, REPLACE→ON DUPLICATE KEY,
-//            display_errors desabilitado, prepared statements em 100%
+// api.php — Backend da Caderneta de Apostas
 // =============================================================
 
-// Erros vão para log, nunca para o output (evita expor dados internos)
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 error_reporting(E_ALL);
@@ -18,13 +15,11 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ---------------------------------------------------------
-// HELPERS
-// ---------------------------------------------------------
+function responder(array $payload): void {
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    exit;
+}
 
-/**
- * Garante que o profile_id existe na tabela perfis (via prepared statement).
- */
 function ensureProfileExists(mysqli $conn, string $profile_id): void {
     $stmt = $conn->prepare("INSERT IGNORE INTO perfis (id, name) VALUES (?, 'Perfil Principal')");
     $stmt->bind_param("s", $profile_id);
@@ -32,9 +27,6 @@ function ensureProfileExists(mysqli $conn, string $profile_id): void {
     $stmt->close();
 }
 
-/**
- * Garante que existe tabela de ownership por sessão.
- */
 function ensureProfileAccessTable(mysqli $conn): void {
     static $initialized = false;
     if ($initialized) {
@@ -56,9 +48,6 @@ function ensureProfileAccessTable(mysqli $conn): void {
     $initialized = true;
 }
 
-/**
- * Víncula profile_id à sessão atual e impede acesso cruzado.
- */
 function ensureAuthorizedProfile(mysqli $conn, string $profile_id): void {
     ensureProfileAccessTable($conn);
     ensureProfileExists($conn, $profile_id);
@@ -81,8 +70,6 @@ function ensureAuthorizedProfile(mysqli $conn, string $profile_id): void {
     }
 
     if (!hash_equals((string)$row['session_id'], $currentSessionId)) {
-        // Sessão mudou (ex: XAMPP reiniciado). Como é aplicação local,
-        // atualizamos a sessão em vez de bloquear o acesso.
         $stmt = $conn->prepare("UPDATE profile_access SET session_id = ? WHERE profile_id = ?");
         $stmt->bind_param("ss", $currentSessionId, $profile_id);
         $stmt->execute();
@@ -90,9 +77,6 @@ function ensureAuthorizedProfile(mysqli $conn, string $profile_id): void {
     }
 }
 
-/**
- * Garante que a linha de dados_extras existe para o perfil.
- */
 function ensureDadosExtrasExists(mysqli $conn, string $profile_id): void {
     $stmt = $conn->prepare("INSERT IGNORE INTO dados_extras (profile_id) VALUES (?)");
     $stmt->bind_param("s", $profile_id);
@@ -100,9 +84,6 @@ function ensureDadosExtrasExists(mysqli $conn, string $profile_id): void {
     $stmt->close();
 }
 
-/**
- * Retorna um profile_id sanitizado (nunca vazio).
- */
 function getProfileId(array $dados): string {
     $profile_id = !empty($dados['profile_id'])
         ? trim((string)$dados['profile_id'])
@@ -115,54 +96,73 @@ function getProfileId(array $dados): string {
     return $profile_id;
 }
 
-/**
- * Responde com JSON e encerra o script.
- */
-function responder(array $payload): void {
-    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
-    exit;
+function fluxoHasBookColumn(mysqli $conn): bool {
+    static $hasBookColumn = null;
+
+    if ($hasBookColumn !== null) {
+        return $hasBookColumn;
+    }
+
+    $result = $conn->query("SHOW COLUMNS FROM fluxo_caixa LIKE 'book'");
+    $hasBookColumn = ($result && $result->num_rows > 0);
+    if ($result) {
+        $result->free();
+    }
+
+    if ($hasBookColumn) {
+        return true;
+    }
+
+    // Best-effort para ambientes sem migration aplicada.
+    $conn->query("ALTER TABLE fluxo_caixa ADD COLUMN book VARCHAR(100) NOT NULL DEFAULT '' AFTER amount");
+    $conn->query("CREATE INDEX idx_fluxo_caixa_book ON fluxo_caixa (book)");
+
+    $result = $conn->query("SHOW COLUMNS FROM fluxo_caixa LIKE 'book'");
+    $hasBookColumn = ($result && $result->num_rows > 0);
+    if ($result) {
+        $result->free();
+    }
+
+    return $hasBookColumn;
 }
 
-// ---------------------------------------------------------
-// LEITURA DO INPUT
-// ---------------------------------------------------------
-$dados = json_decode(file_get_contents("php://input"), true);
-
+$dados = json_decode(file_get_contents('php://input'), true);
 if (!is_array($dados)) {
     responder(["sucesso" => false, "erro" => "Payload JSON inválido."]);
 }
 
 $acao = $dados['acao'] ?? '';
-
-// Lista de ações permitidas (whitelist)
-$acoes_permitidas = [
+$acoesPermitidas = [
     'carregar_perfis',
     'salvar_perfil',
     'excluir_perfil',
-    'salvar_aposta', 'carregar_apostas', 'excluir_aposta',
-    'salvar_fluxo', 'carregar_fluxo', 'excluir_fluxo',
-    'salvar_dados_extras', 'carregar_dados_extras',
-    'salvar_categoria', 'carregar_categorias', 'excluir_categoria',
-    'salvar_casino', 'carregar_casino', 'excluir_casino'
+    'salvar_aposta',
+    'carregar_apostas',
+    'excluir_aposta',
+    'salvar_fluxo',
+    'carregar_fluxo',
+    'excluir_fluxo',
+    'renomear_casa_historico',
+    'salvar_dados_extras',
+    'carregar_dados_extras',
+    'salvar_categoria',
+    'carregar_categorias',
+    'excluir_categoria',
+    'salvar_casino',
+    'carregar_casino',
+    'excluir_casino',
 ];
 
-if (!in_array($acao, $acoes_permitidas, true)) {
+if (!in_array($acao, $acoesPermitidas, true)) {
     responder(["sucesso" => false, "erro" => "Ação não reconhecida."]);
 }
 
-// ---------------------------------------------------------
-// 1. AÇÃO: CARREGAR PERFIS DA SESSÃO
-// ---------------------------------------------------------
 if ($acao === 'carregar_perfis') {
     ensureProfileAccessTable($conn);
 
-    $sessionId = session_id();
-
-    // Retorna todos os perfis (app local, usuário único).
-    // O filtro por session_id causava perda de perfis ao reiniciar o XAMPP.
     $result = $conn->query("SELECT id, name FROM perfis ORDER BY created_at ASC");
-
     $perfis = [];
+
     if ($result) {
         while ($row = $result->fetch_assoc()) {
             $perfis[] = $row;
@@ -179,22 +179,17 @@ if ($acao === 'carregar_perfis') {
         $stmt->close();
 
         $stmt = $conn->prepare("INSERT IGNORE INTO profile_access (profile_id, session_id) VALUES (?, ?)");
+        $sessionId = session_id();
         $stmt->bind_param("ss", $defaultId, $sessionId);
         $stmt->execute();
         $stmt->close();
 
-        $perfis[] = [
-            'id' => $defaultId,
-            'name' => $defaultName,
-        ];
+        $perfis[] = ['id' => $defaultId, 'name' => $defaultName];
     }
 
     echo json_encode($perfis, JSON_UNESCAPED_UNICODE);
 }
 
-// ---------------------------------------------------------
-// 2. AÇÃO: SALVAR OU ATUALIZAR PERFIL
-// ---------------------------------------------------------
 elseif ($acao === 'salvar_perfil') {
     $perfil = $dados['perfil'] ?? null;
     if (!is_array($perfil)) {
@@ -218,8 +213,6 @@ elseif ($acao === 'salvar_perfil') {
         responder(["sucesso" => false, "erro" => "ID de perfil inválido."]);
     }
 
-    $sessionId = session_id();
-
     $stmt = $conn->prepare("SELECT id FROM perfis WHERE id = ? LIMIT 1");
     $stmt->bind_param("s", $id);
     $stmt->execute();
@@ -240,6 +233,7 @@ elseif ($acao === 'salvar_perfil') {
         $stmt->close();
 
         $stmt = $conn->prepare("INSERT INTO profile_access (profile_id, session_id) VALUES (?, ?)");
+        $sessionId = session_id();
         $stmt->bind_param("ss", $id, $sessionId);
         $stmt->execute();
         $stmt->close();
@@ -247,26 +241,18 @@ elseif ($acao === 'salvar_perfil') {
 
     responder([
         "sucesso" => true,
-        "perfil" => ["id" => $id, "name" => $name]
+        "perfil" => ["id" => $id, "name" => $name],
     ]);
 }
 
-// ---------------------------------------------------------
-// 3. AÇÃO: EXCLUIR PERFIL
-// ---------------------------------------------------------
 elseif ($acao === 'excluir_perfil') {
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
 
-    $sessionId = session_id();
-    $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM profile_access WHERE session_id = ?");
-    $stmt->bind_param("s", $sessionId);
-    $stmt->execute();
-    $result = $stmt->get_result();
+    $result = $conn->query("SELECT COUNT(*) AS total FROM perfis");
     $row = $result ? $result->fetch_assoc() : null;
-    $stmt->close();
-
     $total = (int)($row['total'] ?? 0);
+
     if ($total <= 1) {
         responder(["sucesso" => false, "erro" => "Você precisa manter pelo menos um perfil."]);
     }
@@ -284,9 +270,6 @@ elseif ($acao === 'excluir_perfil') {
     responder(["sucesso" => true]);
 }
 
-// ---------------------------------------------------------
-// 4. AÇÃO: SALVAR OU ATUALIZAR UMA APOSTA
-// ---------------------------------------------------------
 elseif ($acao === 'salvar_aposta') {
     $aposta = $dados['aposta'] ?? null;
     if (!is_array($aposta)) {
@@ -295,19 +278,18 @@ elseif ($acao === 'salvar_aposta') {
 
     $profile_id = getProfileId($dados);
 
-    // Validações do lado do servidor
-    $id     = trim($aposta['id'] ?? '');
-    $date   = trim($aposta['date'] ?? '');
-    $event  = trim($aposta['event'] ?? '');
-    $odds   = floatval($aposta['odds'] ?? 0);
-    $stake  = floatval($aposta['stake'] ?? 0);
-    $book   = trim($aposta['book'] ?? '');
-    $ai     = !empty($aposta['ai']) ? trim($aposta['ai']) : null;
-    $status = $aposta['status'] ?? 'pending';
+    $id = trim((string)($aposta['id'] ?? ''));
+    $date = trim((string)($aposta['date'] ?? ''));
+    $event = trim((string)($aposta['event'] ?? ''));
+    $odds = floatval($aposta['odds'] ?? 0);
+    $stake = floatval($aposta['stake'] ?? 0);
+    $book = trim((string)($aposta['book'] ?? ''));
+    $ai = !empty($aposta['ai']) ? trim((string)$aposta['ai']) : null;
+    $status = (string)($aposta['status'] ?? 'pending');
     $isFreebet = !empty($aposta['isFreebet']) ? 1 : 0;
-    $category = !empty($aposta['category']) ? trim($aposta['category']) : null;
+    $category = !empty($aposta['category']) ? trim((string)$aposta['category']) : null;
+    $cashoutValue = ($status === 'cashout' && isset($aposta['cashout_value'])) ? floatval($aposta['cashout_value']) : null;
 
-    // Validação de campos obrigatórios
     if ($id === '' || $date === '' || $event === '' || $book === '') {
         responder(["sucesso" => false, "erro" => "Campos obrigatórios em falta (id, date, event, book)."]);
     }
@@ -318,56 +300,49 @@ elseif ($acao === 'salvar_aposta') {
         responder(["sucesso" => false, "erro" => "Stake deve ser maior que 0."]);
     }
 
-    // Validar status contra whitelist
-    $status_permitidos = ['pending', 'win', 'loss', 'void', 'cashout'];
-    if (!in_array($status, $status_permitidos, true)) {
+    $statusPermitidos = ['pending', 'win', 'loss', 'void', 'cashout'];
+    if (!in_array($status, $statusPermitidos, true)) {
         $status = 'pending';
     }
 
-    $cashout_value = ($status === 'cashout' && isset($aposta['cashout_value'])) ? floatval($aposta['cashout_value']) : null;
-
-    // Garantir que o perfil existe e pertence à sessão atual
     ensureAuthorizedProfile($conn, $profile_id);
 
-    // INSERT ... ON DUPLICATE KEY UPDATE (em vez de REPLACE INTO)
-    $stmt = $conn->prepare("
-        INSERT INTO apostas (id, profile_id, date, event, odds, stake, book, ai, status, is_freebet, category, cashout_value)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-            date = VALUES(date),
-            event = VALUES(event),
-            odds = VALUES(odds),
-            stake = VALUES(stake),
-            book = VALUES(book),
-            ai = VALUES(ai),
-            status = VALUES(status),
-            is_freebet = VALUES(is_freebet),
-            category = VALUES(category),
-            cashout_value = VALUES(cashout_value)
-    ");
+    $stmt = $conn->prepare("\n        INSERT INTO apostas (id, profile_id, date, event, odds, stake, book, ai, status, is_freebet, category, cashout_value)\n        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n        ON DUPLICATE KEY UPDATE\n            date = VALUES(date),\n            event = VALUES(event),\n            odds = VALUES(odds),\n            stake = VALUES(stake),\n            book = VALUES(book),\n            ai = VALUES(ai),\n            status = VALUES(status),\n            is_freebet = VALUES(is_freebet),\n            category = VALUES(category),\n            cashout_value = VALUES(cashout_value)\n    ");
 
-    $stmt->bind_param("ssssddsssisd",
-        $id, $profile_id, $date, $event,
-        $odds, $stake, $book,
-        $ai, $status, $isFreebet, $category,
-        $cashout_value
+    if (!$stmt) {
+        responder(["sucesso" => false, "erro" => "Erro ao preparar statement da aposta."]);
+    }
+
+    $stmt->bind_param(
+        "ssssddsssisd",
+        $id,
+        $profile_id,
+        $date,
+        $event,
+        $odds,
+        $stake,
+        $book,
+        $ai,
+        $status,
+        $isFreebet,
+        $category,
+        $cashoutValue
     );
 
     if ($stmt->execute()) {
+        $stmt->close();
         responder(["sucesso" => true, "mensagem" => "Aposta salva na base de dados!"]);
-    } else {
-        responder(["sucesso" => false, "erro" => "Erro ao salvar aposta."]);
     }
+
+    $erroStmt = $stmt->error;
+    $stmt->close();
+    responder(["sucesso" => false, "erro" => "Erro ao salvar aposta.", "detalhe" => $erroStmt]);
 }
 
-// ---------------------------------------------------------
-// 3. AÇÃO: CARREGAR TODAS AS APOSTAS DE UM PERFIL
-// ---------------------------------------------------------
 elseif ($acao === 'carregar_apostas') {
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
 
-    // Prepared statement — elimina SQL Injection
     $stmt = $conn->prepare("SELECT * FROM apostas WHERE profile_id = ? ORDER BY date DESC");
     $stmt->bind_param("s", $profile_id);
     $stmt->execute();
@@ -376,12 +351,10 @@ elseif ($acao === 'carregar_apostas') {
     $apostas = [];
     if ($result) {
         while ($row = $result->fetch_assoc()) {
-            // Compatibilidade: o JS espera 'isFreebet' (camelCase)
-            $row['isFreebet'] = (bool)($row['is_freebet'] ?? $row['isFreebet'] ?? false);
+            $row['isFreebet'] = (bool)($row['is_freebet'] ?? false);
             unset($row['is_freebet']);
-            $row['odds']  = (float)$row['odds'];
+            $row['odds'] = (float)$row['odds'];
             $row['stake'] = (float)$row['stake'];
-            $row['category'] = $row['category'] ?? null;
             $row['cashout_value'] = isset($row['cashout_value']) ? (float)$row['cashout_value'] : null;
             $apostas[] = $row;
         }
@@ -391,89 +364,11 @@ elseif ($acao === 'carregar_apostas') {
     echo json_encode($apostas, JSON_UNESCAPED_UNICODE);
 }
 
-// ---------------------------------------------------------
-// 4. AÇÃO: SALVAR OU ATUALIZAR FLUXO DE CAIXA
-// ---------------------------------------------------------
-elseif ($acao === 'salvar_fluxo') {
-    $fluxo = $dados['fluxo'] ?? null;
-    if (!is_array($fluxo)) {
-        responder(["sucesso" => false, "erro" => "Dados do fluxo ausentes."]);
-    }
-
-    $profile_id = getProfileId($dados);
-
-    $id     = trim($fluxo['id'] ?? '');
-    $date   = trim($fluxo['date'] ?? '');
-    $type   = $fluxo['type'] ?? '';
-    $amount = floatval($fluxo['amount'] ?? 0);
-    $note   = trim($fluxo['note'] ?? '');
-
-    // Validações
-    if ($id === '' || $date === '') {
-        responder(["sucesso" => false, "erro" => "Campos obrigatórios em falta (id, date)."]);
-    }
-    if (!in_array($type, ['deposit', 'withdraw'], true)) {
-        responder(["sucesso" => false, "erro" => "Tipo deve ser 'deposit' ou 'withdraw'."]);
-    }
-    if ($amount <= 0) {
-        responder(["sucesso" => false, "erro" => "Valor deve ser maior que 0."]);
-    }
-
-    ensureAuthorizedProfile($conn, $profile_id);
-
-    $stmt = $conn->prepare("
-        INSERT INTO fluxo_caixa (id, profile_id, date, type, amount, note)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-            date = VALUES(date),
-            type = VALUES(type),
-            amount = VALUES(amount),
-            note = VALUES(note)
-    ");
-
-    $stmt->bind_param("ssssds",
-        $id, $profile_id, $date, $type,
-        $amount, $note
-    );
-
-    if ($stmt->execute()) {
-        responder(["sucesso" => true]);
-    } else {
-        responder(["sucesso" => false, "erro" => "Erro ao salvar fluxo."]);
-    }
-}
-
-// ---------------------------------------------------------
-// 5. AÇÃO: CARREGAR FLUXO DE CAIXA
-// ---------------------------------------------------------
-elseif ($acao === 'carregar_fluxo') {
-    $profile_id = getProfileId($dados);
-    ensureAuthorizedProfile($conn, $profile_id);
-
-    $stmt = $conn->prepare("SELECT * FROM fluxo_caixa WHERE profile_id = ? ORDER BY date DESC");
-    $stmt->bind_param("s", $profile_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    $fluxos = [];
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $row['amount'] = (float)$row['amount'];
-            $fluxos[] = $row;
-        }
-    }
-    $stmt->close();
-
-    echo json_encode($fluxos, JSON_UNESCAPED_UNICODE);
-}
-
-// ---------------------------------------------------------
-// 6. AÇÃO: EXCLUIR APOSTA
-// ---------------------------------------------------------
 elseif ($acao === 'excluir_aposta') {
-    $id = trim($dados['id'] ?? '');
+    $id = trim((string)($dados['id'] ?? ''));
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
+
     if ($id === '') {
         responder(["sucesso" => false, "erro" => "ID da aposta ausente."]);
     }
@@ -486,13 +381,100 @@ elseif ($acao === 'excluir_aposta') {
     responder(["sucesso" => true, "mensagem" => "Aposta excluída com sucesso."]);
 }
 
-// ---------------------------------------------------------
-// 7. AÇÃO: EXCLUIR FLUXO DE CAIXA
-// ---------------------------------------------------------
-elseif ($acao === 'excluir_fluxo') {
-    $id = trim($dados['id'] ?? '');
+elseif ($acao === 'salvar_fluxo') {
+    $fluxo = $dados['fluxo'] ?? null;
+    if (!is_array($fluxo)) {
+        responder(["sucesso" => false, "erro" => "Dados de fluxo ausentes."]);
+    }
+
+    $profile_id = getProfileId($dados);
+
+    $id = trim((string)($fluxo['id'] ?? ''));
+    $date = trim((string)($fluxo['date'] ?? ''));
+    $type = trim((string)($fluxo['type'] ?? ''));
+    $amount = floatval($fluxo['amount'] ?? 0);
+    $book = trim((string)($fluxo['book'] ?? ''));
+    $note = trim((string)($fluxo['note'] ?? ''));
+
+    if ($id === '' || $date === '') {
+        responder(["sucesso" => false, "erro" => "Campos obrigatórios em falta (id, date)."]);
+    }
+    if ($book === '') {
+        responder(["sucesso" => false, "erro" => "⚠️ Casa de aposta é OBRIGATÓRIA. Não pode ser vazia."]);
+    }
+    if (!in_array($type, ['deposit', 'withdraw'], true)) {
+        responder(["sucesso" => false, "erro" => "Tipo deve ser 'deposit' ou 'withdraw'."]);
+    }
+    if ($amount <= 0) {
+        responder(["sucesso" => false, "erro" => "Valor deve ser maior que 0."]);
+    }
+
+    ensureAuthorizedProfile($conn, $profile_id);
+
+    $hasBookColumn = fluxoHasBookColumn($conn);
+
+    if ($hasBookColumn) {
+        $stmt = $conn->prepare("\n            INSERT INTO fluxo_caixa (id, profile_id, date, type, amount, book, note)\n            VALUES (?, ?, ?, ?, ?, ?, ?)\n            ON DUPLICATE KEY UPDATE\n                date = VALUES(date),\n                type = VALUES(type),\n                amount = VALUES(amount),\n                book = VALUES(book),\n                note = VALUES(note)\n        ");
+
+        if (!$stmt) {
+            responder(["sucesso" => false, "erro" => "Erro ao preparar statement do fluxo."]);
+        }
+
+        $stmt->bind_param("ssssdss", $id, $profile_id, $date, $type, $amount, $book, $note);
+    } else {
+        $stmt = $conn->prepare("\n            INSERT INTO fluxo_caixa (id, profile_id, date, type, amount, note)\n            VALUES (?, ?, ?, ?, ?, ?)\n            ON DUPLICATE KEY UPDATE\n                date = VALUES(date),\n                type = VALUES(type),\n                amount = VALUES(amount),\n                note = VALUES(note)\n        ");
+
+        if (!$stmt) {
+            responder(["sucesso" => false, "erro" => "Erro ao preparar statement do fluxo."]);
+        }
+
+        $stmt->bind_param("ssssds", $id, $profile_id, $date, $type, $amount, $note);
+    }
+
+    if ($stmt->execute()) {
+        $stmt->close();
+        responder(["sucesso" => true]);
+    }
+
+    $erroStmt = $stmt->error;
+    $stmt->close();
+    responder(["sucesso" => false, "erro" => "Erro ao salvar fluxo.", "detalhe" => $erroStmt]);
+}
+
+elseif ($acao === 'carregar_fluxo') {
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
+
+    $hasBookColumn = fluxoHasBookColumn($conn);
+
+    if ($hasBookColumn) {
+        $stmt = $conn->prepare("SELECT * FROM fluxo_caixa WHERE profile_id = ? ORDER BY date DESC");
+    } else {
+        $stmt = $conn->prepare("SELECT id, profile_id, date, type, amount, '' AS book, note, created_at FROM fluxo_caixa WHERE profile_id = ? ORDER BY date DESC");
+    }
+
+    $stmt->bind_param("s", $profile_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    $fluxos = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $row['amount'] = (float)$row['amount'];
+            $row['book'] = $row['book'] ?? '';
+            $fluxos[] = $row;
+        }
+    }
+    $stmt->close();
+
+    echo json_encode($fluxos, JSON_UNESCAPED_UNICODE);
+}
+
+elseif ($acao === 'excluir_fluxo') {
+    $id = trim((string)($dados['id'] ?? ''));
+    $profile_id = getProfileId($dados);
+    ensureAuthorizedProfile($conn, $profile_id);
+
     if ($id === '') {
         responder(["sucesso" => false, "erro" => "ID do fluxo ausente."]);
     }
@@ -505,46 +487,85 @@ elseif ($acao === 'excluir_fluxo') {
     responder(["sucesso" => true]);
 }
 
-// ---------------------------------------------------------
-// 8. AÇÃO: SALVAR DADOS EXTRAS (settings, goals, notes, bankroll)
-// ---------------------------------------------------------
+elseif ($acao === 'renomear_casa_historico') {
+    $profile_id = getProfileId($dados);
+    ensureAuthorizedProfile($conn, $profile_id);
+
+    $old_name = trim((string)($dados['old_name'] ?? ''));
+    $new_name = trim((string)($dados['new_name'] ?? ''));
+
+    if ($old_name === '' || $new_name === '') {
+        responder(["sucesso" => false, "erro" => "Informe os nomes antigo e novo da casa."]);
+    }
+
+    if ($old_name === $new_name) {
+        responder([
+            "sucesso" => true,
+            "mensagem" => "Nenhuma alteração necessária.",
+            "apostas_atualizadas" => 0,
+            "fluxos_atualizados" => 0,
+        ]);
+    }
+
+    $stmt = $conn->prepare("UPDATE apostas SET book = ? WHERE profile_id = ? AND book = ?");
+    $stmt->bind_param("sss", $new_name, $profile_id, $old_name);
+    $stmt->execute();
+    $apostasAtualizadas = $stmt->affected_rows;
+    $stmt->close();
+
+    $fluxosAtualizados = 0;
+    if (fluxoHasBookColumn($conn)) {
+        $stmt = $conn->prepare("UPDATE fluxo_caixa SET book = ? WHERE profile_id = ? AND book = ?");
+        $stmt->bind_param("sss", $new_name, $profile_id, $old_name);
+        $stmt->execute();
+        $fluxosAtualizados = $stmt->affected_rows;
+        $stmt->close();
+    }
+
+    responder([
+        "sucesso" => true,
+        "mensagem" => "Casa renomeada no histórico.",
+        "apostas_atualizadas" => max(0, (int)$apostasAtualizadas),
+        "fluxos_atualizados" => max(0, (int)$fluxosAtualizados),
+    ]);
+}
+
 elseif ($acao === 'salvar_dados_extras') {
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
-    $tipo  = $dados['tipo'] ?? '';
+
+    $tipo = (string)($dados['tipo'] ?? '');
     $valor = $dados['valor'] ?? '';
 
-    // Whitelist de tipos permitidos — previne crash e acesso a colunas indevidas
-    $tipos_permitidos = ['settings', 'goals', 'notes', 'bankroll'];
-    if (!in_array($tipo, $tipos_permitidos, true)) {
+    $tiposPermitidos = ['settings', 'goals', 'notes', 'bankroll'];
+    if (!in_array($tipo, $tiposPermitidos, true)) {
         responder(["sucesso" => false, "erro" => "Tipo inválido. Permitidos: settings, goals, notes, bankroll."]);
     }
 
-    // Mapeamento tipo → coluna (seguro pois $tipo já está validado pela whitelist)
     $colunas = [
         'settings' => 'settings_json',
-        'goals'    => 'goals_json',
-        'notes'    => 'notes',
+        'goals' => 'goals_json',
+        'notes' => 'notes',
         'bankroll' => 'bankroll',
     ];
     $coluna = $colunas[$tipo];
 
     ensureDadosExtrasExists($conn, $profile_id);
 
-    // Como a coluna vem de whitelist hardcoded, é seguro interpolar aqui
+    $valorStr = is_string($valor) ? $valor : json_encode($valor, JSON_UNESCAPED_UNICODE);
     $stmt = $conn->prepare("UPDATE dados_extras SET $coluna = ? WHERE profile_id = ?");
-    $stmt->bind_param("ss", $valor, $profile_id);
+    $stmt->bind_param("ss", $valorStr, $profile_id);
 
     if ($stmt->execute()) {
+        $stmt->close();
         responder(["sucesso" => true]);
-    } else {
-        responder(["sucesso" => false, "erro" => "Erro ao salvar dados extras."]);
     }
+
+    $erroStmt = $stmt->error;
+    $stmt->close();
+    responder(["sucesso" => false, "erro" => "Erro ao salvar dados extras.", "detalhe" => $erroStmt]);
 }
 
-// ---------------------------------------------------------
-// 9. AÇÃO: CARREGAR DADOS EXTRAS
-// ---------------------------------------------------------
 elseif ($acao === 'carregar_dados_extras') {
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
@@ -554,54 +575,46 @@ elseif ($acao === 'carregar_dados_extras') {
     $stmt->execute();
     $result = $stmt->get_result();
 
-    if ($result && $row = $result->fetch_assoc()) {
+    if ($result && ($row = $result->fetch_assoc())) {
+        $stmt->close();
         responder(["sucesso" => true, "dados" => $row]);
-    } else {
-        responder(["sucesso" => false, "erro" => "Nenhum dado encontrado"]);
     }
+
+    $stmt->close();
+    responder(["sucesso" => false, "erro" => "Nenhum dado encontrado"]);
 }
 
-// ---------------------------------------------------------
-// 10. AÇÃO: SALVAR CATEGORIA
-// ---------------------------------------------------------
 elseif ($acao === 'salvar_categoria') {
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
+
     $cat = $dados['categoria'] ?? null;
     if (!is_array($cat)) {
         responder(["sucesso" => false, "erro" => "Dados da categoria ausentes."]);
     }
 
-    $id   = trim($cat['id'] ?? '');
-    $name = trim($cat['name'] ?? '');
-    $icon = trim($cat['icon'] ?? '🏅');
+    $id = trim((string)($cat['id'] ?? ''));
+    $name = trim((string)($cat['name'] ?? ''));
+    $icon = trim((string)($cat['icon'] ?? '*'));
     $sort_order = intval($cat['sort_order'] ?? 0);
 
     if ($id === '' || $name === '') {
         responder(["sucesso" => false, "erro" => "Campos obrigatórios em falta (id, name)."]);
     }
 
-    $stmt = $conn->prepare("
-        INSERT INTO categorias (id, profile_id, name, icon, sort_order)
-        VALUES (?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-            name = VALUES(name),
-            icon = VALUES(icon),
-            sort_order = VALUES(sort_order)
-    ");
-
+    $stmt = $conn->prepare("\n        INSERT INTO categorias (id, profile_id, name, icon, sort_order)\n        VALUES (?, ?, ?, ?, ?)\n        ON DUPLICATE KEY UPDATE\n            name = VALUES(name),\n            icon = VALUES(icon),\n            sort_order = VALUES(sort_order)\n    ");
     $stmt->bind_param("ssssi", $id, $profile_id, $name, $icon, $sort_order);
 
     if ($stmt->execute()) {
+        $stmt->close();
         responder(["sucesso" => true, "mensagem" => "Categoria salva!"]);
-    } else {
-        responder(["sucesso" => false, "erro" => "Erro ao salvar categoria."]);
     }
+
+    $erroStmt = $stmt->error;
+    $stmt->close();
+    responder(["sucesso" => false, "erro" => "Erro ao salvar categoria.", "detalhe" => $erroStmt]);
 }
 
-// ---------------------------------------------------------
-// 11. AÇÃO: CARREGAR CATEGORIAS
-// ---------------------------------------------------------
 elseif ($acao === 'carregar_categorias') {
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
@@ -622,37 +635,32 @@ elseif ($acao === 'carregar_categorias') {
     echo json_encode($categorias, JSON_UNESCAPED_UNICODE);
 }
 
-// ---------------------------------------------------------
-// 12. AÇÃO: EXCLUIR CATEGORIA
-// ---------------------------------------------------------
 elseif ($acao === 'excluir_categoria') {
-    $id = trim($dados['id'] ?? '');
+    $id = trim((string)($dados['id'] ?? ''));
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
+
     if ($id === '') {
         responder(["sucesso" => false, "erro" => "ID da categoria ausente."]);
     }
 
-    // Buscar nome da categoria antes de excluir
     $stmt = $conn->prepare("SELECT name FROM categorias WHERE id = ? AND profile_id = ?");
     $stmt->bind_param("ss", $id, $profile_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $catName = null;
-    if ($result && $row = $result->fetch_assoc()) {
+    if ($result && ($row = $result->fetch_assoc())) {
         $catName = $row['name'];
     }
     $stmt->close();
 
-    // Limpar categoria das apostas que a usavam
-    if ($catName) {
+    if ($catName !== null) {
         $stmt = $conn->prepare("UPDATE apostas SET category = NULL WHERE profile_id = ? AND category = ?");
         $stmt->bind_param("ss", $profile_id, $catName);
         $stmt->execute();
         $stmt->close();
     }
 
-    // Excluir categoria
     $stmt = $conn->prepare("DELETE FROM categorias WHERE id = ? AND profile_id = ?");
     $stmt->bind_param("ss", $id, $profile_id);
     $stmt->execute();
@@ -661,9 +669,6 @@ elseif ($acao === 'excluir_categoria') {
     responder(["sucesso" => true, "mensagem" => "Categoria excluída com sucesso."]);
 }
 
-// ---------------------------------------------------------
-// 13. AÇÃO: SALVAR OU ATUALIZAR GANHO DE CASSINO
-// ---------------------------------------------------------
 elseif ($acao === 'salvar_casino') {
     $casino = $dados['casino'] ?? null;
     if (!is_array($casino)) {
@@ -672,14 +677,17 @@ elseif ($acao === 'salvar_casino') {
 
     $profile_id = getProfileId($dados);
 
-    $id         = trim($casino['id'] ?? '');
-    $date       = trim($casino['date'] ?? '');
-    $game       = trim($casino['game'] ?? '');
-    $platform   = trim($casino['platform'] ?? '');
+    $id = trim((string)($casino['id'] ?? ''));
+    $date = trim((string)($casino['date'] ?? ''));
+    $game = trim((string)($casino['game'] ?? ''));
+    $platform = trim((string)($casino['platform'] ?? ''));
     $bet_amount = floatval($casino['bet_amount'] ?? 0);
     $win_amount = floatval($casino['win_amount'] ?? 0);
-    $ais        = !empty($casino['ais']) ? trim($casino['ais']) : null;
-    $note       = trim($casino['note'] ?? '');
+    $is_free = !empty($casino['is_free']) ? 1 : 0;
+    $free_spins = isset($casino['free_spins']) && $casino['free_spins'] !== '' ? intval($casino['free_spins']) : null;
+    $spin_bet = isset($casino['spin_bet']) && $casino['spin_bet'] !== '' ? floatval($casino['spin_bet']) : null;
+    $ais = !empty($casino['ais']) ? trim((string)$casino['ais']) : null;
+    $note = trim((string)($casino['note'] ?? ''));
 
     if ($id === '' || $date === '' || $game === '') {
         responder(["sucesso" => false, "erro" => "Campos obrigatórios em falta (id, date, game)."]);
@@ -687,35 +695,38 @@ elseif ($acao === 'salvar_casino') {
 
     ensureAuthorizedProfile($conn, $profile_id);
 
-    $stmt = $conn->prepare("
-        INSERT INTO ganhos_casino (id, profile_id, date, game, platform, bet_amount, win_amount, ais, note)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-            date = VALUES(date),
-            game = VALUES(game),
-            platform = VALUES(platform),
-            bet_amount = VALUES(bet_amount),
-            win_amount = VALUES(win_amount),
-            ais = VALUES(ais),
-            note = VALUES(note)
-    ");
+    $stmt = $conn->prepare("\n        INSERT INTO ganhos_casino (id, profile_id, date, game, platform, bet_amount, win_amount, is_free, free_spins, spin_bet, ais, note)\n        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n        ON DUPLICATE KEY UPDATE\n            date = VALUES(date),\n            game = VALUES(game),\n            platform = VALUES(platform),\n            bet_amount = VALUES(bet_amount),\n            win_amount = VALUES(win_amount),\n            is_free = VALUES(is_free),\n            free_spins = VALUES(free_spins),\n            spin_bet = VALUES(spin_bet),\n            ais = VALUES(ais),\n            note = VALUES(note)\n    ");
 
-    $stmt->bind_param("sssssddss",
-        $id, $profile_id, $date, $game,
-        $platform, $bet_amount, $win_amount,
-        $ais, $note
+    if (!$stmt) {
+        responder(["sucesso" => false, "erro" => "Erro ao preparar statement do cassino."]);
+    }
+
+    $stmt->bind_param(
+        "sssssddiidss",
+        $id,
+        $profile_id,
+        $date,
+        $game,
+        $platform,
+        $bet_amount,
+        $win_amount,
+        $is_free,
+        $free_spins,
+        $spin_bet,
+        $ais,
+        $note
     );
 
     if ($stmt->execute()) {
+        $stmt->close();
         responder(["sucesso" => true, "mensagem" => "Registro de cassino salvo!"]);
-    } else {
-        responder(["sucesso" => false, "erro" => "Erro ao salvar registro de cassino."]);
     }
+
+    $erroStmt = $stmt->error;
+    $stmt->close();
+    responder(["sucesso" => false, "erro" => "Erro ao salvar registro de cassino.", "detalhe" => $erroStmt]);
 }
 
-// ---------------------------------------------------------
-// 14. AÇÃO: CARREGAR GANHOS DE CASSINO
-// ---------------------------------------------------------
 elseif ($acao === 'carregar_casino') {
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
@@ -730,6 +741,9 @@ elseif ($acao === 'carregar_casino') {
         while ($row = $result->fetch_assoc()) {
             $row['bet_amount'] = (float)$row['bet_amount'];
             $row['win_amount'] = (float)$row['win_amount'];
+            $row['is_free'] = (int)($row['is_free'] ?? 0);
+            $row['free_spins'] = isset($row['free_spins']) ? (int)$row['free_spins'] : null;
+            $row['spin_bet'] = isset($row['spin_bet']) ? (float)$row['spin_bet'] : null;
             $registros[] = $row;
         }
     }
@@ -738,13 +752,11 @@ elseif ($acao === 'carregar_casino') {
     echo json_encode($registros, JSON_UNESCAPED_UNICODE);
 }
 
-// ---------------------------------------------------------
-// 15. AÇÃO: EXCLUIR GANHO DE CASSINO
-// ---------------------------------------------------------
 elseif ($acao === 'excluir_casino') {
-    $id = trim($dados['id'] ?? '');
+    $id = trim((string)($dados['id'] ?? ''));
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
+
     if ($id === '') {
         responder(["sucesso" => false, "erro" => "ID do registro ausente."]);
     }
