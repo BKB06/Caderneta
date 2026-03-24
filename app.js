@@ -880,46 +880,89 @@ function renderHouseBankrolls() {
   }
 
   const sortedBooks = books
-    .map((book) => ({
-      book,
-      result: calcSettledProfitByBook(book),
-    }))
+    .map((book) => {
+      const deposits = calcTotalDeposits(cashflows, book);
+      const withdraws = calcTotalWithdraws(cashflows, book);
+      const betProfit = calcSettledProfitByBook(book);
+      const casinoProfit = calcCasinoProfitByBook(book);
+      const pendingExposure = bets
+        .filter((bet) => normalizeBookName(bet.book) === book && bet.status === "pending" && !bet.isFreebet)
+        .reduce((sum, bet) => sum + bet.stake, 0);
+      const movementTotal = deposits - withdraws;
+      const availableNoBase = movementTotal + betProfit - pendingExposure;
+      const profit = betProfit + casinoProfit;
+      return {
+        book,
+        available: availableNoBase,
+        result: profit,
+      };
+    })
     .sort((a, b) => {
-      if (b.result !== a.result) return b.result - a.result;
+      if (b.available !== a.available) return b.available - a.available;
       return a.book.localeCompare(b.book, "pt-BR", { sensitivity: "base" });
     })
     .map((item) => item.book);
 
   houseBankrollList.innerHTML = sortedBooks.map((book) => {
-    const baseBalance = getHouseBaseBalance(book);
-    const houseBankroll = getEffectiveBankroll(book);
     const deposits = calcTotalDeposits(cashflows, book);
     const withdraws = calcTotalWithdraws(cashflows, book);
     const betProfit = calcSettledProfitByBook(book);
     const casinoProfit = calcCasinoProfitByBook(book);
     const profit = betProfit + casinoProfit;
-    const resultLabel = profit >= 0 ? "lucro" : "prejuízo";
     const highlightedResult = `${profit >= 0 ? "+" : ""}${formatProfit(profit)}`;
     const pendingExposure = bets
       .filter((bet) => normalizeBookName(bet.book) === book && bet.status === "pending" && !bet.isFreebet)
       .reduce((sum, bet) => sum + bet.stake, 0);
+    const settledStake = bets
+      .filter((bet) => normalizeBookName(bet.book) === book)
+      .filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void")
+      .reduce((sum, bet) => sum + (Number(bet.stake) || 0), 0);
+    const casinoSessionsCount = casinoSessions
+      .filter((session) => normalizeBookName(session.platform) === book)
+      .length;
+    const movementTotal = deposits - withdraws;
+    const availableNoBase = movementTotal + betProfit - pendingExposure;
+    const pendingText = pendingExposure > 0 ? `-${formatProfit(pendingExposure)} em aberto` : "Sem pendências";
+    const casinoSessionText = casinoSessionsCount === 0
+      ? "nenhuma sessão"
+      : `${casinoSessionsCount} ${casinoSessionsCount === 1 ? "sessão" : "sessões"}`;
 
     return `
-      <article class="house-bankroll-item">
-        <div class="house-bankroll-line">
-          <strong>${book}</strong>
-          <strong class="${profit >= 0 ? "positive" : "negative"}">${highlightedResult}</strong>
+      <article class="house-bankroll-item house-bankroll-item--detailed">
+        <div class="house-bankroll-line house-bankroll-line--detailed">
+          <div>
+            <strong>${book}</strong>
+            <small class="muted">Lucro total do período</small>
+          </div>
+          <div class="house-result-top">
+            <strong class="${profit >= 0 ? "positive" : "negative"}">${highlightedResult}</strong>
+            <small class="muted">apostas + cassino</small>
+          </div>
         </div>
-        <div class="house-bankroll-meta">
-          <span class="muted">Banca ${formatProfit(houseBankroll)}</span>
-          <span class="muted">Base ${formatProfit(baseBalance)}</span>
-          <span class="positive">+${formatProfit(deposits)} dep.</span>
-          <span class="negative">-${formatProfit(withdraws)} saq.</span>
-          <span class="muted">Apostas ${formatProfit(betProfit)}</span>
-          <span class="muted">Cassino ${formatProfit(casinoProfit)}</span>
-          <span class="${profit >= 0 ? "positive" : "negative"}">${highlightedResult} ${resultLabel}</span>
-          <span class="muted">${formatProfit(pendingExposure)} pendente</span>
+
+        <div class="house-bankroll-grid">
+          <div class="house-metric-block">
+            <span class="house-metric-label">Banca disponível</span>
+            <strong class="${availableNoBase >= 0 ? "positive" : "negative"}">${formatProfit(availableNoBase)}</strong>
+            <small class="${pendingExposure > 0 ? "negative" : "muted"}">${pendingText}</small>
+          </div>
+          <div class="house-metric-block">
+            <span class="house-metric-label">Movimentações</span>
+            <strong>${formatProfit(movementTotal)}</strong>
+            <small><span class="positive">+${formatProfit(deposits)} dep.</span> · <span class="negative">-${formatProfit(withdraws)} saq.</span></small>
+          </div>
+          <div class="house-metric-block">
+            <span class="house-metric-label">Apostas</span>
+            <strong class="${betProfit >= 0 ? "positive" : "negative"}">${betProfit >= 0 ? "+" : ""}${formatProfit(betProfit)}</strong>
+            <small class="muted">${formatProfit(settledStake)} apostados</small>
+          </div>
+          <div class="house-metric-block">
+            <span class="house-metric-label">Cassino</span>
+            <strong class="${casinoProfit >= 0 ? "positive" : "negative"}">${casinoProfit >= 0 ? "+" : ""}${formatProfit(casinoProfit)}</strong>
+            <small class="muted">${casinoSessionText}</small>
+          </div>
         </div>
+
       </article>
     `;
   }).join("");
@@ -3004,6 +3047,43 @@ quickNotesTextarea?.addEventListener("input", () => {
 
 form?.addEventListener("submit", handleSubmit);
 resetButton?.addEventListener("click", resetForm);
+
+const resetAllBtn = document.getElementById("reset-all-btn");
+resetAllBtn?.addEventListener("click", async () => {
+  if (!confirm("⚠️ Tem certeza que deseja resetar TODOS os dados? Isso é irreversível!")) {
+    return;
+  }
+  if (!confirm("Último aviso: Todas as apostas, fluxos e sessões de cassino serão deletadas permanentemente. Continuar?")) {
+    return;
+  }
+
+  try {
+    const profileId = getActiveProfileId();
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'limpar_tudo', profile_id: profileId })
+    });
+    const dados = await resposta.json();
+    if (dados.sucesso) {
+      bets = [];
+      cashflows = [];
+      casinoSessions = [];
+      baseBankroll = null;
+      updateBankrollDisplay();
+      renderTable();
+      updateKPIs();
+      renderCalendar();
+      alert("✓ Todos os dados foram resetados com sucesso!");
+    } else {
+      alert("Erro ao resetar: " + (dados.erro || "Desconhecido"));
+    }
+  } catch (erro) {
+    console.error("Erro ao resetar tudo:", erro);
+    alert("Erro de comunicação ao resetar dados.");
+  }
+});
+
 
 // Toggle cashout value field visibility
 const betStatusSelect = document.getElementById("bet-status");

@@ -151,6 +151,7 @@ $acoesPermitidas = [
     'salvar_casino',
     'carregar_casino',
     'excluir_casino',
+    'limpar_tudo',
 ];
 
 if (!in_array($acao, $acoesPermitidas, true)) {
@@ -771,6 +772,36 @@ elseif ($acao === 'excluir_casino') {
     $stmt->close();
 
     responder(["sucesso" => true, "mensagem" => "Registro de cassino excluído."]);
+}
+
+elseif ($acao === 'limpar_tudo') {
+    $profile_id = getProfileId($dados);
+    ensureAuthorizedProfile($conn, $profile_id);
+
+    $conn->begin_transaction();
+
+    try {
+        $stmt = $conn->prepare("DELETE FROM apostas WHERE profile_id = ?");
+        $stmt->bind_param("s", $profile_id);
+        $stmt->execute();
+        $stmt->close();
+
+        $stmt = $conn->prepare("DELETE FROM fluxo_caixa WHERE profile_id = ?");
+        $stmt->bind_param("s", $profile_id);
+        $stmt->execute();
+        $stmt->close();
+
+        $stmt = $conn->prepare("DELETE FROM ganhos_casino WHERE profile_id = ?");
+        $stmt->bind_param("s", $profile_id);
+        $stmt->execute();
+        $stmt->close();
+
+        $conn->commit();
+        responder(["sucesso" => true, "mensagem" => "Todos os dados foram resetados com sucesso."]);
+    } catch (Exception $e) {
+        $conn->rollback();
+        responder(["sucesso" => false, "erro" => "Erro ao resetar dados: " . $e->getMessage()]);
+    }
 }
 
 $conn->close();
