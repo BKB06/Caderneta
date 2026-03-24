@@ -101,6 +101,7 @@ const modalClose = document.getElementById("modal-close");
 
 let bets = [];
 let cashflows = [];
+let casinoSessions = [];
 let editingId = null;
 let deletePendingId = null;
 let balanceChart = null;
@@ -227,6 +228,29 @@ async function loadCashflows() {
   } catch (erro) {
     console.error("Erro ao carregar fluxo na página principal:", erro);
     cashflows = [];
+  }
+}
+
+async function loadCasinoSessions() {
+  try {
+    const profileId = getActiveProfileId();
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_casino', profile_id: profileId })
+    });
+    const dados = await resposta.json();
+    const list = Array.isArray(dados) ? dados : [];
+
+    casinoSessions = list.map((session) => ({
+      ...session,
+      platform: normalizeBookName(session.platform),
+      bet_amount: Number(session.bet_amount) || 0,
+      win_amount: Number(session.win_amount) || 0,
+    }));
+  } catch (erro) {
+    console.error("Erro ao carregar sessões de cassino na página principal:", erro);
+    casinoSessions = [];
   }
 }
 
@@ -641,18 +665,6 @@ function calcPotentialProfit(stake, odds) {
   return stake * (odds - 1);
 }
 
-function calcKelly(winRate, odds, bankroll) {
-  const b = odds - 1;
-  const p = winRate / 100;
-  const q = 1 - p;
-  if (!Number.isFinite(b) || b <= 0 || !Number.isFinite(bankroll) || bankroll <= 0) {
-    return { fraction: 0, suggested: 0 };
-  }
-  const fraction = (p * b - q) / b;
-  const suggested = Math.max(0, fraction) * bankroll;
-  return { fraction: fraction * 100, suggested };
-}
-
 function getSettledBetsByMonth(dateRef) {
   return bets.filter((bet) => {
     if (bet.status !== "win" && bet.status !== "loss" && bet.status !== "cashout" && bet.status !== "void") {
@@ -710,28 +722,12 @@ function formatDeltaText(deltaValue, suffix, monthLabel) {
 }
 
 function updateFormInsights() {
-  const kellyEl = document.getElementById("kelly-hint");
   const alertEl = document.getElementById("bankroll-alert");
   const selectedBook = normalizeBookName(document.getElementById("bet-book")?.value || "");
   const bankrollScope = selectedBook ? `na ${selectedBook}` : "na banca geral";
   const stake = parseLocaleNumber(document.getElementById("bet-stake")?.value || "");
   const odds = parseLocaleNumber(document.getElementById("bet-odds")?.value || "");
   const bankroll = selectedBook ? getEffectiveBankroll(selectedBook) : getEffectiveBankroll();
-
-  if (kellyEl) {
-    const settled = bets.filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void");
-    const wins = settled.filter((bet) => bet.status === "win" || bet.status === "cashout").length;
-    const winRate = settled.length ? (wins / settled.length) * 100 : 0;
-
-    if (Number.isFinite(stake) && Number.isFinite(odds) && Number.isFinite(bankroll) && bankroll > 0 && winRate > 0) {
-      const kelly = calcKelly(winRate, odds, bankroll);
-      kellyEl.textContent = `Kelly sugere ${formatProfit(kelly.suggested)} (${numberFormatter.format(Math.max(0, kelly.fraction))}% ${bankrollScope}, banca ${formatProfit(bankroll)}).`;
-      kellyEl.classList.add("visible");
-    } else {
-      kellyEl.classList.remove("visible");
-      kellyEl.textContent = "";
-    }
-  }
 
   if (alertEl) {
     const maxStakePct = Number(settings?.display?.maxStakePct ?? 5);
@@ -765,6 +761,27 @@ function calcSettledProfitByBook(book, list = bets) {
     .filter((bet) => normalizeBookName(bet.book) === targetBook)
     .filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void")
     .reduce((sum, bet) => sum + calcProfit(bet), 0);
+}
+
+function calcCasinoProfit(list = casinoSessions) {
+  return list.reduce((sum, session) => {
+    const bet = Number(session.bet_amount) || 0;
+    const win = Number(session.win_amount) || 0;
+    return sum + (win - bet);
+  }, 0);
+}
+
+function calcCasinoProfitByBook(book, list = casinoSessions) {
+  const targetBook = normalizeBookName(book);
+  if (!targetBook) return calcCasinoProfit(list);
+
+  return list
+    .filter((session) => normalizeBookName(session.platform) === targetBook)
+    .reduce((sum, session) => {
+      const bet = Number(session.bet_amount) || 0;
+      const win = Number(session.win_amount) || 0;
+      return sum + (win - bet);
+    }, 0);
 }
 
 function calcCashflowTotal(list = cashflows, book = null) {
@@ -802,13 +819,16 @@ function calcTotalWithdraws(list = cashflows, book = null) {
 function getEffectiveBankroll(book = null) {
   const targetBook = normalizeBookName(book);
   if (targetBook) {
-    return getHouseBaseBalance(targetBook) + calcSettledProfitByBook(targetBook) + calcCashflowTotal(cashflows, targetBook);
+    return getHouseBaseBalance(targetBook)
+      + calcSettledProfitByBook(targetBook)
+      + calcCashflowTotal(cashflows, targetBook)
+      + calcCasinoProfitByBook(targetBook);
   }
 
   if (!Number.isFinite(baseBankroll)) {
     return null;
   }
-  return baseBankroll + calcSettledProfit() + calcCashflowTotal();
+  return baseBankroll + calcSettledProfit() + calcCashflowTotal() + calcCasinoProfit();
 }
 
 function updateBankrollDisplay() {
@@ -823,6 +843,8 @@ function updateBankrollDisplay() {
   const totalDeposits = calcTotalDeposits();
   const totalWithdraws = calcTotalWithdraws();
   const settledProfit = calcSettledProfit();
+  const casinoProfit = calcCasinoProfit();
+  const combinedProfit = settledProfit + casinoProfit;
   
   if (bankrollDeposits) {
     bankrollDeposits.textContent = `+${formatProfit(totalDeposits)} depósitos`;
@@ -831,9 +853,9 @@ function updateBankrollDisplay() {
     bankrollWithdraws.textContent = `-${formatProfit(totalWithdraws)} saques`;
   }
   if (bankrollProfitIndicator) {
-    const profitPrefix = settledProfit >= 0 ? '+' : '';
-    bankrollProfitIndicator.textContent = `${profitPrefix}${formatProfit(settledProfit)} lucro`;
-    bankrollProfitIndicator.className = `breakdown-item ${settledProfit >= 0 ? 'positive' : 'negative'}`;
+    const profitPrefix = combinedProfit >= 0 ? '+' : '';
+    bankrollProfitIndicator.textContent = `${profitPrefix}${formatProfit(combinedProfit)} lucro`;
+    bankrollProfitIndicator.className = `breakdown-item ${combinedProfit >= 0 ? 'positive' : 'negative'}`;
   }
 
   renderHouseBankrolls();
@@ -848,6 +870,7 @@ function renderHouseBankrolls() {
   const historyBooks = [
     ...bets.map((bet) => normalizeBookName(bet.book)).filter(Boolean),
     ...cashflows.map((flow) => normalizeBookName(flow.book)).filter(Boolean),
+    ...casinoSessions.map((session) => normalizeBookName(session.platform)).filter(Boolean),
   ];
   const books = Array.from(new Set(configuredBooks.length ? configuredBooks : historyBooks));
 
@@ -869,9 +892,12 @@ function renderHouseBankrolls() {
 
   houseBankrollList.innerHTML = sortedBooks.map((book) => {
     const baseBalance = getHouseBaseBalance(book);
+    const houseBankroll = getEffectiveBankroll(book);
     const deposits = calcTotalDeposits(cashflows, book);
     const withdraws = calcTotalWithdraws(cashflows, book);
-    const profit = calcSettledProfitByBook(book);
+    const betProfit = calcSettledProfitByBook(book);
+    const casinoProfit = calcCasinoProfitByBook(book);
+    const profit = betProfit + casinoProfit;
     const resultLabel = profit >= 0 ? "lucro" : "prejuízo";
     const highlightedResult = `${profit >= 0 ? "+" : ""}${formatProfit(profit)}`;
     const pendingExposure = bets
@@ -885,9 +911,12 @@ function renderHouseBankrolls() {
           <strong class="${profit >= 0 ? "positive" : "negative"}">${highlightedResult}</strong>
         </div>
         <div class="house-bankroll-meta">
-          <span class="muted">Banca ${formatProfit(baseBalance)}</span>
+          <span class="muted">Banca ${formatProfit(houseBankroll)}</span>
+          <span class="muted">Base ${formatProfit(baseBalance)}</span>
           <span class="positive">+${formatProfit(deposits)} dep.</span>
           <span class="negative">-${formatProfit(withdraws)} saq.</span>
+          <span class="muted">Apostas ${formatProfit(betProfit)}</span>
+          <span class="muted">Cassino ${formatProfit(casinoProfit)}</span>
           <span class="${profit >= 0 ? "positive" : "negative"}">${highlightedResult} ${resultLabel}</span>
           <span class="muted">${formatProfit(pendingExposure)} pendente</span>
         </div>
@@ -2450,6 +2479,7 @@ async function init() {
   await renderProfileSwitcher();
   await loadBets();
   await loadCashflows();
+  await loadCasinoSessions();
   await loadCategories();
   loadSettings(); // Podes deixar este normal para já
   await loadBankrollBase(); // <-- Adiciona o await

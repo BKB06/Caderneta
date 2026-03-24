@@ -1,11 +1,136 @@
 ﻿const ACTIVE_PROFILE_KEY = "caderneta.activeProfile.v1";
 const THEME_KEY = "caderneta.theme";
+const CASINO_VIEW_STATE_KEY = "caderneta.casino.viewState.v1";
+const CASINO_VIEW_STATE_FALLBACK_KEY = "caderneta.casino.viewState.persist.v1";
 
 let casinoRecords = [];
 let sessionMode = "normal";
 let activeHistoryFilter = "all";
 let activePeriodFilter = "all";
 let casinoChart = null;
+
+function saveCasinoViewState() {
+  const payload = {
+    updatedAt: Date.now(),
+    sessionMode,
+    activeHistoryFilter,
+    activePeriodFilter,
+    form: {
+      date: document.getElementById("casino-date")?.value || "",
+      game: document.getElementById("casino-game")?.value || "",
+      platform: document.getElementById("casino-platform")?.value || "",
+      betAmount: document.getElementById("casino-bet-amount")?.value || "",
+      winAmount: document.getElementById("casino-win-amount")?.value || "",
+      freeSpins: document.getElementById("casino-free-spins")?.value || "",
+      spinBet: document.getElementById("casino-spin-bet")?.value || "",
+      quickResult: document.getElementById("casino-quick-result")?.value || "",
+      note: document.getElementById("casino-note")?.value || "",
+    },
+    filters: {
+      startDate: document.getElementById("casino-date-start")?.value || "",
+      endDate: document.getElementById("casino-date-end")?.value || "",
+      period: document.getElementById("period-filter")?.value || "all",
+    },
+    simulator: {
+      sessionsWeek: document.getElementById("sim-sessions-week")?.value || "",
+      weeks: document.getElementById("sim-weeks")?.value || "",
+      open: document.getElementById("sim-body")?.classList.contains("open") || false,
+    },
+  };
+
+  sessionStorage.setItem(CASINO_VIEW_STATE_KEY, JSON.stringify(payload));
+  localStorage.setItem(CASINO_VIEW_STATE_FALLBACK_KEY, JSON.stringify(payload));
+}
+
+function restoreCasinoViewState() {
+  const rawSession = sessionStorage.getItem(CASINO_VIEW_STATE_KEY);
+  const rawFallback = localStorage.getItem(CASINO_VIEW_STATE_FALLBACK_KEY);
+
+  let parsedSession = null;
+  let parsedFallback = null;
+
+  if (rawSession) {
+    try {
+      parsedSession = JSON.parse(rawSession);
+    } catch {
+      parsedSession = null;
+    }
+  }
+
+  if (rawFallback) {
+    try {
+      parsedFallback = JSON.parse(rawFallback);
+    } catch {
+      parsedFallback = null;
+    }
+  }
+
+  const sessionUpdated = Number(parsedSession?.updatedAt) || 0;
+  const fallbackUpdated = Number(parsedFallback?.updatedAt) || 0;
+  const parsed = sessionUpdated >= fallbackUpdated ? parsedSession : parsedFallback;
+  if (!parsed) return false;
+
+  const mode = parsed?.sessionMode === "free" ? "free" : "normal";
+  setSessionMode(mode, false);
+
+  const form = parsed?.form || {};
+  const filters = parsed?.filters || {};
+  const simulator = parsed?.simulator || {};
+
+  const dateInput = document.getElementById("casino-date");
+  const gameInput = document.getElementById("casino-game");
+  const platformInput = document.getElementById("casino-platform");
+  const betInput = document.getElementById("casino-bet-amount");
+  const winInput = document.getElementById("casino-win-amount");
+  const freeSpinsInput = document.getElementById("casino-free-spins");
+  const spinBetInput = document.getElementById("casino-spin-bet");
+  const quickInput = document.getElementById("casino-quick-result");
+  const noteInput = document.getElementById("casino-note");
+
+  if (dateInput) dateInput.value = form.date || getTodayInputDate();
+  if (gameInput) gameInput.value = form.game || "";
+  if (platformInput) platformInput.value = form.platform || "";
+  if (betInput && mode === "normal") betInput.value = form.betAmount || "";
+  if (winInput) winInput.value = form.winAmount || "";
+  if (freeSpinsInput) freeSpinsInput.value = form.freeSpins || "";
+  if (spinBetInput) spinBetInput.value = form.spinBet || "";
+  if (quickInput) quickInput.value = form.quickResult || "";
+  if (noteInput) noteInput.value = form.note || "";
+
+  activeHistoryFilter = ["all", "pos", "neg", "free"].includes(parsed?.activeHistoryFilter)
+    ? parsed.activeHistoryFilter
+    : "all";
+  activePeriodFilter = ["all", "week", "month"].includes(parsed?.activePeriodFilter)
+    ? parsed.activePeriodFilter
+    : "all";
+
+  const periodFilter = document.getElementById("period-filter");
+  if (periodFilter) periodFilter.value = filters.period || activePeriodFilter;
+
+  const startDate = document.getElementById("casino-date-start");
+  const endDate = document.getElementById("casino-date-end");
+  if (startDate) startDate.value = filters.startDate || "";
+  if (endDate) endDate.value = filters.endDate || "";
+
+  document.querySelectorAll(".history-pill").forEach((pill) => {
+    pill.classList.toggle("active", pill.dataset.filter === activeHistoryFilter);
+  });
+
+  const simWeek = document.getElementById("sim-sessions-week");
+  const simWeeks = document.getElementById("sim-weeks");
+  if (simWeek && simulator.sessionsWeek) simWeek.value = simulator.sessionsWeek;
+  if (simWeeks && simulator.weeks) simWeeks.value = simulator.weeks;
+
+  const simBody = document.getElementById("sim-body");
+  const simIndicator = document.getElementById("sim-toggle-indicator");
+  if (simBody && simIndicator) {
+    simBody.classList.toggle("open", Boolean(simulator.open));
+    simIndicator.textContent = simBody.classList.contains("open") ? "▲ recolher" : "▼ expandir";
+  }
+
+  recalcRealtime();
+  return true;
+}
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -306,7 +431,7 @@ function getRealtimeEls() {
   };
 }
 
-function setSessionMode(mode) {
+function setSessionMode(mode, shouldPersist = true) {
   sessionMode = mode === "free" ? "free" : "normal";
 
   const btnNormal = document.getElementById("btn-mode-normal");
@@ -345,6 +470,10 @@ function setSessionMode(mode) {
   if (realtime.perSpinRow) realtime.perSpinRow.style.display = sessionMode === "free" ? "flex" : "none";
 
   recalcRealtime();
+
+  if (shouldPersist) {
+    saveCasinoViewState();
+  }
 }
 
 function applyQuickResult() {
@@ -856,6 +985,7 @@ function clearForm() {
   }
 
   recalcRealtime();
+  saveCasinoViewState();
 }
 
 async function loadCasino() {
@@ -888,6 +1018,7 @@ function filterHistory(type) {
     pill.classList.toggle("active", pill.dataset.filter === type);
   });
   renderHistory(type);
+  saveCasinoViewState();
 }
 
 function toggleSimulator() {
@@ -901,6 +1032,8 @@ function toggleSimulator() {
   if (body.classList.contains("open")) {
     runSimulator();
   }
+
+  saveCasinoViewState();
 }
 
 function runSimulator() {
@@ -926,6 +1059,7 @@ function handlePeriodChange() {
   const periodFilter = document.getElementById("period-filter");
   activePeriodFilter = periodFilter?.value || "all";
   refreshCasinoView();
+  saveCasinoViewState();
 }
 
 function setupHistoryActions() {
@@ -940,7 +1074,7 @@ function setupHistoryActions() {
 window.setSessionMode = setSessionMode;
 window.filterHistory = filterHistory;
 window.toggleSimulator = toggleSimulator;
-
+window.runSimulator = runSimulator;
 window.addEventListener("DOMContentLoaded", async () => {
   initTheme();
   setupSidebarDrawer();
@@ -950,11 +1084,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   await renderProfileSwitcher();
   setupProfileSwitchSync();
 
-  const dateInput = document.getElementById("casino-date");
-  if (dateInput) dateInput.value = getTodayInputDate();
-
-  setSessionMode("normal");
-  recalcRealtime();
+  const restored = restoreCasinoViewState();
+  if (!restored) {
+    const dateInput = document.getElementById("casino-date");
+    if (dateInput) dateInput.value = getTodayInputDate();
+    setSessionMode("normal");
+    recalcRealtime();
+  }
 
   document.getElementById("casino-form")?.addEventListener("submit", saveSession);
   document.getElementById("casino-reset")?.addEventListener("click", clearForm);
@@ -978,8 +1114,40 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("sim-sessions-week")?.addEventListener("input", runSimulator);
   document.getElementById("sim-weeks")?.addEventListener("input", runSimulator);
 
+  [
+    "casino-date",
+    "casino-game",
+    "casino-platform",
+    "casino-bet-amount",
+    "casino-win-amount",
+    "casino-free-spins",
+    "casino-spin-bet",
+    "casino-quick-result",
+    "casino-note",
+    "casino-date-start",
+    "casino-date-end",
+    "period-filter",
+    "sim-sessions-week",
+    "sim-weeks",
+  ].forEach((id) => {
+    const element = document.getElementById(id);
+    if (!element) return;
+    element.addEventListener("input", saveCasinoViewState);
+    element.addEventListener("change", saveCasinoViewState);
+  });
+
+  window.addEventListener("beforeunload", saveCasinoViewState);
+  window.addEventListener("pagehide", saveCasinoViewState);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      saveCasinoViewState();
+    }
+  });
+
   setupHistoryActions();
 
   await loadCasino();
+  filterHistory(activeHistoryFilter);
+  saveCasinoViewState();
   runSimulator();
 });

@@ -14,9 +14,6 @@ function getBankrollKey(profileId) {
 function getSettingsKey(profileId) {
   return `caderneta.settings.${profileId}`;
 }
-function getNotesKey(profileId) {
-  return `caderneta.notes.${profileId}`;
-}
 
 const defaultSettings = {
   profile: {
@@ -303,7 +300,6 @@ async function switchProfile(profileId) {
   await syncFavoritesWithHistory();
   populateForm();
   renderProfiles();
-  loadNotes();
   
   showToast(`Trocado para: ${profile.name}`);
   return true;
@@ -1055,43 +1051,14 @@ document.getElementById("clear-data").addEventListener("click", () => {
       localStorage.removeItem(getStorageKey(activeProfileId));
       localStorage.removeItem(getCashflowKey(activeProfileId));
       localStorage.removeItem(getBankrollKey(activeProfileId));
-      localStorage.removeItem(getNotesKey(activeProfileId));
       localStorage.setItem(getSettingsKey(activeProfileId), JSON.stringify(defaultSettings));
       settings = { ...defaultSettings };
       populateForm();
       renderProfiles();
-      loadNotes();
       showToast("Dados do perfil foram apagados.");
     }
   }
 });
-
-// Anotações
-function loadNotes() {
-  const notesTextarea = document.getElementById("user-notes");
-  const notesStatus = document.getElementById("notes-status");
-  if (!notesTextarea || !activeProfileId) return;
-  
-  const saved = localStorage.getItem(getNotesKey(activeProfileId));
-  notesTextarea.value = saved || "";
-  if (notesStatus) notesStatus.textContent = "";
-}
-
-function saveNotes() {
-  const notesTextarea = document.getElementById("user-notes");
-  const notesStatus = document.getElementById("notes-status");
-  if (!notesTextarea || !activeProfileId) return;
-  
-  localStorage.setItem(getNotesKey(activeProfileId), notesTextarea.value);
-  if (notesStatus) {
-    notesStatus.textContent = "✓ Salvo";
-    notesStatus.className = "notes-status saved";
-    setTimeout(() => {
-      notesStatus.textContent = "";
-      notesStatus.className = "notes-status";
-    }, 2000);
-  }
-}
 
 // ========================
 // CONFIGURAÇÃO DA API GEMINI
@@ -1378,24 +1345,6 @@ document.getElementById("new-category-name")?.addEventListener("keypress", (e) =
   }
 });
 
-// Event listeners para anotações
-document.getElementById("save-notes-btn")?.addEventListener("click", saveNotes);
-
-// Auto-save anotações ao digitar (debounce)
-let notesTimeout = null;
-document.getElementById("user-notes")?.addEventListener("input", () => {
-  const notesStatus = document.getElementById("notes-status");
-  if (notesStatus) {
-    notesStatus.textContent = "Digitando...";
-    notesStatus.className = "notes-status";
-  }
-  
-  clearTimeout(notesTimeout);
-  notesTimeout = setTimeout(() => {
-    saveNotes();
-  }, 1000);
-});
-
 // Init Async
 async function inicializarPaginaConfiguracoes() {
   await loadProfiles();
@@ -1404,7 +1353,6 @@ async function inicializarPaginaConfiguracoes() {
   populateForm();
   renderProfiles();
   setupAutoSave();
-  loadNotes();
   loadGeminiApiKey();
   await loadCategories();
   if (categories.length === 0) {

@@ -314,7 +314,7 @@ elseif ($acao === 'salvar_aposta') {
     }
 
     $stmt->bind_param(
-        "ssssddsssisd",
+        "sssssddissss",
         $id,
         $profile_id,
         $date,
@@ -694,28 +694,34 @@ elseif ($acao === 'salvar_casino') {
     }
 
     ensureAuthorizedProfile($conn, $profile_id);
-
+    error_log("CASINO DEBUG: id=$id date=$date game=$game");
+    error_log("CASINO TABLE EXISTS: " . ($conn->query("SHOW TABLES LIKE 'ganhos_casino'")->num_rows > 0 ? "SIM" : "NÃO"));
     $stmt = $conn->prepare("\n        INSERT INTO ganhos_casino (id, profile_id, date, game, platform, bet_amount, win_amount, is_free, free_spins, spin_bet, ais, note)\n        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n        ON DUPLICATE KEY UPDATE\n            date = VALUES(date),\n            game = VALUES(game),\n            platform = VALUES(platform),\n            bet_amount = VALUES(bet_amount),\n            win_amount = VALUES(win_amount),\n            is_free = VALUES(is_free),\n            free_spins = VALUES(free_spins),\n            spin_bet = VALUES(spin_bet),\n            ais = VALUES(ais),\n            note = VALUES(note)\n    ");
-
+    if (!$stmt) {
+    error_log("CASINO PREPARE ERROR: " . $conn->error);
+    responder(["sucesso" => false, "erro" => "Prepare falhou: " . $conn->error]);
+    }
     if (!$stmt) {
         responder(["sucesso" => false, "erro" => "Erro ao preparar statement do cassino."]);
     }
+    $free_spins_val = ($free_spins !== null) ? $free_spins : null;
+$spin_bet_val   = ($spin_bet !== null)   ? $spin_bet   : null;
 
-    $stmt->bind_param(
-        "sssssddiidss",
-        $id,
-        $profile_id,
-        $date,
-        $game,
-        $platform,
-        $bet_amount,
-        $win_amount,
-        $is_free,
-        $free_spins,
-        $spin_bet,
-        $ais,
-        $note
-    );
+$stmt->bind_param(
+    "sssssddssss",    // ← 9=s, 10=s (era ii e d)
+    $id,
+    $profile_id,
+    $date,
+    $game,
+    $platform,
+    $bet_amount,
+    $win_amount,
+    $is_free,
+    $free_spins_val,  // ← _val
+    $spin_bet_val,    // ← _val
+    $ais,
+    $note
+);
 
     if ($stmt->execute()) {
         $stmt->close();
