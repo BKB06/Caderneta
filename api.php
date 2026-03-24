@@ -314,7 +314,7 @@ elseif ($acao === 'salvar_aposta') {
     }
 
     $stmt->bind_param(
-        "sssssddissss",
+        "ssssddsssisd",
         $id,
         $profile_id,
         $date,
@@ -704,24 +704,22 @@ elseif ($acao === 'salvar_casino') {
     if (!$stmt) {
         responder(["sucesso" => false, "erro" => "Erro ao preparar statement do cassino."]);
     }
-    $free_spins_val = ($free_spins !== null) ? $free_spins : null;
-$spin_bet_val   = ($spin_bet !== null)   ? $spin_bet   : null;
-
-$stmt->bind_param(
-    "sssssddssss",    // ← 9=s, 10=s (era ii e d)
-    $id,
-    $profile_id,
-    $date,
-    $game,
-    $platform,
-    $bet_amount,
-    $win_amount,
-    $is_free,
-    $free_spins_val,  // ← _val
-    $spin_bet_val,    // ← _val
-    $ais,
-    $note
-);
+   
+    $stmt->bind_param(
+        "sssssddiidss",
+        $id,
+        $profile_id,
+        $date,
+        $game,
+        $platform,
+        $bet_amount,
+        $win_amount,
+        $is_free,
+        $free_spins,
+        $spin_bet,
+        $ais,
+        $note
+    );
 
     if ($stmt->execute()) {
         $stmt->close();
