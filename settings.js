@@ -63,6 +63,7 @@ let categories = [];
 let favoriteEditingIndex = null;
 let houseHistoryBets = [];
 let houseHistoryCashflows = [];
+let houseHistoryCasino = [];
 
 function normalizeFavoriteName(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -147,10 +148,38 @@ function calcCashflowTotalFromHistoryByBook(book) {
     }, 0);
 }
 
-function getCurrentHouseBankrollByName(book) {
-  return getHouseBalanceByName(book)
+function calcCasinoProfitFromHistoryByBook(book) {
+  const target = normalizeFavoriteName(book);
+  if (!target) return 0;
+
+  return houseHistoryCasino
+    .filter((session) => normalizeFavoriteName(session?.platform) === target)
+    .reduce((sum, session) => {
+      const bet = Number(session?.bet_amount) || 0;
+      const win = Number(session?.win_amount) || 0;
+      return sum + (win - bet);
+    }, 0);
+}
+
+function calcPendingExposureFromHistoryByBook(book) {
+  const target = normalizeFavoriteName(book);
+  if (!target) return 0;
+
+  return houseHistoryBets
+    .filter((bet) => normalizeFavoriteName(bet?.book) === target)
+    .filter((bet) => String(bet?.status || "") === "pending")
+    .filter((bet) => !Boolean(bet?.isFreebet || bet?.is_freebet || bet?.freebet))
+    .reduce((sum, bet) => sum + (Number(bet?.stake) || 0), 0);
+}
+
+function getHouseResultByName(book) {
+  return calcSettledProfitFromHistoryByBook(book) + calcCasinoProfitFromHistoryByBook(book);
+}
+
+function getHouseAvailableByName(book) {
+  return calcCashflowTotalFromHistoryByBook(book)
     + calcSettledProfitFromHistoryByBook(book)
-    + calcCashflowTotalFromHistoryByBook(book);
+    - calcPendingExposureFromHistoryByBook(book);
 }
 
 function normalizeAiName(value) {
@@ -400,7 +429,7 @@ async function loadBooksFromHistory(profileId) {
   if (!profileId) return [];
 
   try {
-    const [betsResp, cashflowResp] = await Promise.all([
+    const [betsResp, cashflowResp, casinoResp] = await Promise.all([
       fetch('api.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -410,13 +439,20 @@ async function loadBooksFromHistory(profileId) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ acao: 'carregar_fluxo', profile_id: profileId })
+      }),
+      fetch('api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'carregar_casino', profile_id: profileId })
       })
     ]);
 
     const betsJson = await betsResp.json();
     const cashflowJson = await cashflowResp.json();
+    const casinoJson = await casinoResp.json();
     houseHistoryBets = Array.isArray(betsJson) ? betsJson : [];
     houseHistoryCashflows = Array.isArray(cashflowJson) ? cashflowJson : [];
+    houseHistoryCasino = Array.isArray(casinoJson) ? casinoJson : [];
 
     const betBooks = houseHistoryBets
       .map((bet) => normalizeFavoriteName(bet?.book))
@@ -426,11 +462,16 @@ async function loadBooksFromHistory(profileId) {
       .map((flow) => normalizeFavoriteName(flow?.book))
       .filter(Boolean);
 
-    return sanitizeFavorites([...betBooks, ...cashflowBooks]);
+    const casinoBooks = houseHistoryCasino
+      .map((session) => normalizeFavoriteName(session?.platform))
+      .filter(Boolean);
+
+    return sanitizeFavorites([...betBooks, ...cashflowBooks, ...casinoBooks]);
   } catch (e) {
     console.error("Erro ao carregar casas do histórico:", e);
     houseHistoryBets = [];
     houseHistoryCashflows = [];
+    houseHistoryCasino = [];
     return [];
   }
 }
@@ -591,14 +632,15 @@ function renderFavorites() {
       fav,
       index,
       baseBalance: getHouseBalanceByName(fav),
-      currentBankroll: getCurrentHouseBankrollByName(fav),
+      houseResult: getHouseResultByName(fav),
+      houseAvailable: getHouseAvailableByName(fav),
     }))
     .sort((a, b) => {
-      if (b.currentBankroll !== a.currentBankroll) return b.currentBankroll - a.currentBankroll;
+      if (b.houseAvailable !== a.houseAvailable) return b.houseAvailable - a.houseAvailable;
       return a.fav.localeCompare(b.fav, "pt-BR", { sensitivity: "base" });
     });
 
-  sortedFavorites.forEach(({ fav, index, baseBalance, currentBankroll }) => {
+  sortedFavorites.forEach(({ fav, index, baseBalance, houseResult, houseAvailable }) => {
     const item = document.createElement("div");
     item.className = "favorite-item";
     const isEditing = favoriteEditingIndex === index;
@@ -609,7 +651,7 @@ function renderFavorites() {
       item.innerHTML = `
         <div class="favorite-edit-wrap">
           <input type="text" class="favorite-edit-input" data-edit-input="${index}" value="${escaped}" />
-          <input type="text" class="favorite-balance-input" data-balance-input="${index}" value="${numberFormatter.format(currentBalance)}" placeholder="Saldo" />
+          <input type="text" class="favorite-balance-input" data-balance-input="${index}" value="${numberFormatter.format(currentBalance)}" placeholder="Saldo inicial" />
         </div>
         <div class="favorite-actions">
           <button type="button" class="ghost small" data-action="save" data-index="${index}">Salvar</button>
@@ -621,7 +663,7 @@ function renderFavorites() {
       item.innerHTML = `
         <div class="favorite-main">
           <span>${fav}</span>
-          <small class="muted">Extrato: ${currencyFormatter.format(currentBankroll)} · Saldo: ${numberFormatter.format(currentBalance)}</small>
+          <small class="muted">Resultado: ${currencyFormatter.format(houseResult)} · Disponível: ${currencyFormatter.format(houseAvailable)} · Saldo inicial: ${numberFormatter.format(currentBalance)}</small>
         </div>
         <div class="favorite-actions">
           <button type="button" class="ghost small" data-action="edit" data-index="${index}">Editar</button>
@@ -681,7 +723,7 @@ function renderFavorites() {
         }
 
         if (!Number.isFinite(nextBalance)) {
-          alert("Informe um saldo válido para a casa.");
+          alert("Informe um saldo inicial válido para a casa.");
           balanceInput?.focus();
           return;
         }
@@ -1105,6 +1147,12 @@ function showApiStatus(message, type) {
 }
 
 async function resolveGeminiModel(apiKey) {
+  const isTextModelCandidate = (modelName) => {
+    const shortName = String(modelName || "").replace("models/", "").toLowerCase();
+    // Evita modelos focados em audio/tts para chamadas textuais de generateContent.
+    return shortName && !shortName.includes("tts") && !shortName.includes("audio");
+  };
+
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
@@ -1117,8 +1165,8 @@ async function resolveGeminiModel(apiKey) {
     const models = Array.isArray(data.models) ? data.models : [];
     
     // Filtrar modelos que suportam generateContent
-    const generative = models.filter((m) =>
-      m.supportedGenerationMethods?.includes("generateContent")
+    const generative = models.filter(
+      (m) => m.supportedGenerationMethods?.includes("generateContent") && isTextModelCandidate(m.name)
     );
 
     // Ordem de preferência — do mais capaz para o fallback.
@@ -1134,11 +1182,19 @@ async function resolveGeminiModel(apiKey) {
     ];
 
     for (const pref of preferred) {
-      const match = generative.find((m) => {
+      const exact = generative.find((m) => (m.name || "").replace("models/", "") === pref);
+      if (exact) return exact.name;
+    }
+
+    for (const pref of preferred) {
+      const versioned = generative.find((m) => {
         const shortName = (m.name || "").replace("models/", "");
-        return shortName === pref || shortName.startsWith(pref + "-");
+        if (!shortName.startsWith(pref + "-")) return false;
+        // Evita casar sub-familias quando estamos buscando o modelo base.
+        if (pref === "gemini-2.0-flash" && shortName.startsWith("gemini-2.0-flash-lite")) return false;
+        return true;
       });
-      if (match) return match.name;
+      if (versioned) return versioned.name;
     }
 
     // Qualquer modelo que suporte generateContent

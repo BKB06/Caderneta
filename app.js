@@ -191,6 +191,7 @@ async function loadBets() {
       
       bets = dados.map((bet) => ({
         ...bet,
+        id: String(bet.id ?? ""),
         stake: Number(bet.stake),
         odds: Number(bet.odds),
         book: normalizeBookName(bet.book),
@@ -889,7 +890,7 @@ function renderHouseBankrolls() {
         .filter((bet) => normalizeBookName(bet.book) === book && bet.status === "pending" && !bet.isFreebet)
         .reduce((sum, bet) => sum + bet.stake, 0);
       const movementTotal = deposits - withdraws;
-      const availableNoBase = movementTotal + betProfit - pendingExposure;
+      const availableNoBase = movementTotal + betProfit + casinoProfit - pendingExposure;
       const profit = betProfit + casinoProfit;
       return {
         book,
@@ -917,11 +918,15 @@ function renderHouseBankrolls() {
       .filter((bet) => normalizeBookName(bet.book) === book)
       .filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void")
       .reduce((sum, bet) => sum + (Number(bet.stake) || 0), 0);
+    const pendingBetStake = bets
+      .filter((bet) => normalizeBookName(bet.book) === book)
+      .filter((bet) => bet.status === "pending" && !bet.isFreebet)
+      .reduce((sum, bet) => sum + (Number(bet.stake) || 0), 0);
     const casinoSessionsCount = casinoSessions
       .filter((session) => normalizeBookName(session.platform) === book)
       .length;
     const movementTotal = deposits - withdraws;
-    const availableNoBase = movementTotal + betProfit - pendingExposure;
+    const availableNoBase = movementTotal + betProfit + casinoProfit - pendingExposure;
     const pendingText = pendingExposure > 0 ? `-${formatProfit(pendingExposure)} em aberto` : "Sem pendências";
     const casinoSessionText = casinoSessionsCount === 0
       ? "nenhuma sessão"
@@ -954,7 +959,7 @@ function renderHouseBankrolls() {
           <div class="house-metric-block">
             <span class="house-metric-label">Apostas</span>
             <strong class="${betProfit >= 0 ? "positive" : "negative"}">${betProfit >= 0 ? "+" : ""}${formatProfit(betProfit)}</strong>
-            <small class="muted">${formatProfit(settledStake)} apostados</small>
+            <small class="${pendingBetStake > 0 ? "negative" : "muted"}">${pendingBetStake > 0 ? `${formatProfit(-pendingBetStake)} em aberto` : `${formatProfit(settledStake)} apostados`}</small>
           </div>
           <div class="house-metric-block">
             <span class="house-metric-label">Cassino</span>
@@ -1327,12 +1332,14 @@ function renderTable() {
             <button type="button" class="quick-action red" data-action="resolve-loss" data-id="${bet.id}">✗ Red</button>
             <button type="button" class="quick-action cash" data-action="toggle-cash" data-id="${bet.id}">$ Cash</button>
             <button type="button" class="quick-action" data-action="edit" data-id="${bet.id}">...</button>
+            <button type="button" class="quick-action red" data-action="delete" data-id="${bet.id}">Excluir</button>
             <div class="inline-cashout" id="cashout-inline-${bet.id}" style="display:none;">
               <input type="text" inputmode="decimal" placeholder="Valor" id="cashout-value-${bet.id}" />
               <button type="button" class="quick-action" data-action="confirm-cash" data-id="${bet.id}">Confirmar</button>
             </div>
           ` : `
             <button type="button" class="quick-action" data-action="edit" data-id="${bet.id}">...</button>
+            <button type="button" class="quick-action red" data-action="delete" data-id="${bet.id}">Excluir</button>
           `}
         </td>
       `;
@@ -1360,6 +1367,7 @@ function renderTable() {
             <button type="button" class="quick-action cash" data-action="toggle-cash" data-id="${bet.id}">$ Cash</button>
           ` : ""}
           <button type="button" class="quick-action" data-action="edit" data-id="${bet.id}">...</button>
+          <button type="button" class="quick-action red" data-action="delete" data-id="${bet.id}">Excluir</button>
         </div>
         ${bet.status === "pending" ? `
           <div class="inline-cashout" id="cashout-inline-mobile-${bet.id}" style="display:none;">
@@ -1847,7 +1855,8 @@ function startEdit(bet) {
 }
 
 async function resolveAposta(id, novoStatus, cashoutValue = null) {
-  const aposta = bets.find((b) => b.id === id);
+  const apostaId = String(id ?? "");
+  const aposta = bets.find((b) => String(b.id) === apostaId);
   if (!aposta) return;
 
   const payload = { ...aposta, status: novoStatus };
@@ -1882,17 +1891,17 @@ async function handleTableClick(event) {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
 
-  const id = button.dataset.id;
+  const id = String(button.dataset.id ?? "");
   const action = button.dataset.action;
 
   if (action === "edit") {
-    const bet = bets.find((item) => item.id === id);
+    const bet = bets.find((item) => String(item.id) === id);
     if (bet) startEdit(bet);
     return;
   }
 
   if (action === "delete") {
-    const bet = bets.find((item) => item.id === id);
+    const bet = bets.find((item) => String(item.id) === id);
     if (bet) showDeleteConfirmation(bet);
     return;
   }
@@ -2643,7 +2652,7 @@ deleteModal?.addEventListener('click', (e) => {
 deleteModalConfirm?.addEventListener('click', async () => {
   if (deletePendingId) {
     const idToDelete = deletePendingId;
-    bets = bets.filter((bet) => bet.id !== idToDelete);
+    bets = bets.filter((bet) => String(bet.id) !== String(idToDelete));
     saveBets();
     await excluirApostaBD(idToDelete);
     refreshAll();
@@ -3564,7 +3573,16 @@ async function extractBetWithTesseract(imageUrl) {
 // ---- OCR COM GEMINI (OPCIONAL, MAIS PRECISO) ----
 async function resolveGeminiModel(apiKey) {
   const saved = localStorage.getItem("caderneta.gemini.model");
-  if (saved) return saved;
+  const isTextModelCandidate = (modelName) => {
+    const shortName = String(modelName || "").replace("models/", "").toLowerCase();
+    // Evita modelos focados em audio/tts para chamadas textuais de generateContent.
+    return shortName && !shortName.includes("tts") && !shortName.includes("audio");
+  };
+
+  if (saved && isTextModelCandidate(saved)) return saved;
+  if (saved && !isTextModelCandidate(saved)) {
+    localStorage.removeItem("caderneta.gemini.model");
+  }
 
   try {
     const response = await fetch(
@@ -3574,8 +3592,8 @@ async function resolveGeminiModel(apiKey) {
     if (!response.ok) return null;
     const data = await response.json();
     const models = Array.isArray(data.models) ? data.models : [];
-    const generative = models.filter((m) =>
-      m.supportedGenerationMethods?.includes("generateContent")
+    const generative = models.filter(
+      (m) => m.supportedGenerationMethods?.includes("generateContent") && isTextModelCandidate(m.name)
     );
     // Ordered from most capable/preferred to fallback.
     // Use exact-then-versioned matching so "gemini-2.0-flash" does not accidentally
@@ -3589,14 +3607,19 @@ async function resolveGeminiModel(apiKey) {
       "gemini-pro",
     ];
     for (const pref of preferred) {
-      const match = generative.find((m) => {
+      const exact = generative.find((m) => (m.name || "").replace("models/", "") === pref);
+      if (exact) return exact.name;
+    }
+
+    for (const pref of preferred) {
+      const versioned = generative.find((m) => {
         const shortName = (m.name || "").replace("models/", "");
-        // Exact match or versioned variant (e.g. pref + "-001", pref + "-exp")
-        // but not a "sub-family" match (e.g. "gemini-2.0-flash" must not match
-        // "gemini-2.0-flash-lite" when we are looking for "gemini-2.0-flash").
-        return shortName === pref || shortName.startsWith(pref + "-");
+        if (!shortName.startsWith(pref + "-")) return false;
+        // Evita casar sub-familias quando estamos buscando o modelo base.
+        if (pref === "gemini-2.0-flash" && shortName.startsWith("gemini-2.0-flash-lite")) return false;
+        return true;
       });
-      if (match) return match.name;
+      if (versioned) return versioned.name;
     }
     return generative[0]?.name || null;
   } catch (err) {

@@ -432,7 +432,7 @@ textarea {
 .prefix,
 .suffix {
   font-size: 0.8rem;
-  color: var(--accent);
+  color: inherit;
   white-space: nowrap;
   font-weight: 600;
 }
