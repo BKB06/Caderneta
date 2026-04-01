@@ -56,6 +56,7 @@ const form = document.getElementById("bet-form");
 const potentialProfitEl = document.getElementById("potential-profit");
 const betsBody = document.getElementById("bets-body");
 const betsMobileList = document.getElementById("bets-mobile-list");
+const finalizedBetsList = document.getElementById("finalized-bets-list");
 const resetButton = document.getElementById("reset-button");
 const submitButton = document.getElementById("submit-button");
 
@@ -1125,6 +1126,7 @@ function renderTable() {
             </div>
           ` : `
             <button type="button" class="quick-action" data-action="edit" data-id="${bet.id}">...</button>
+            <button type="button" class="quick-action danger" data-action="delete" data-id="${bet.id}">Apagar</button>
           `}
         </td>
       `;
@@ -1152,6 +1154,7 @@ function renderTable() {
             <button type="button" class="quick-action cash" data-action="toggle-cash" data-id="${bet.id}">$ Cash</button>
           ` : ""}
           <button type="button" class="quick-action" data-action="edit" data-id="${bet.id}">...</button>
+          ${bet.status !== "pending" ? `<button type="button" class="quick-action danger" data-action="delete" data-id="${bet.id}">Apagar</button>` : ""}
         </div>
         ${bet.status === "pending" ? `
           <div class="inline-cashout" id="cashout-inline-mobile-${bet.id}" style="display:none;">
@@ -2778,9 +2781,12 @@ function renderFinalizedBets() {
             <span class="fbet-status-badge ${bet.status}">${statusLabel(bet.status)}</span>
           </div>
         </div>
-        <div class="fbet-money">
-          <span class="fbet-profit ${profitClass}">${formatProfit(profit)}</span>
-          <span class="fbet-stake">stake ${currencyFormatter.format(stakeValue)}</span>
+        <div class="fbet-side">
+          <div class="fbet-money">
+            <span class="fbet-profit ${profitClass}">${formatProfit(profit)}</span>
+            <span class="fbet-stake">stake ${currencyFormatter.format(stakeValue)}</span>
+          </div>
+          <button type="button" class="quick-action danger" data-action="delete" data-id="${bet.id}">Apagar</button>
         </div>
       </div>
     `;
@@ -2866,6 +2872,7 @@ clearDateFilter?.addEventListener("click", () => {
 });
 betsBody?.addEventListener("click", handleTableClick);
 betsMobileList?.addEventListener("click", handleTableClick);
+finalizedBetsList?.addEventListener("click", handleTableClick);
 document.getElementById("bets-table-head")?.addEventListener("click", handleTableSortClick);
 
 const aiSelector = document.getElementById("bet-ai-selector");

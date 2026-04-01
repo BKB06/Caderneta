@@ -3,7 +3,9 @@
 -- MySQL 8.0+ / MariaDB 10.3+
 -- =============================================================
 
-CREATE DATABASE IF NOT EXISTS caderneta_apostas
+DROP DATABASE IF EXISTS caderneta_apostas;
+
+CREATE DATABASE caderneta_apostas
   DEFAULT CHARACTER SET utf8mb4
   DEFAULT COLLATE utf8mb4_unicode_ci;
 
