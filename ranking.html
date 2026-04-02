@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ranking - Caderneta de Apostas</title>
-    <link rel="stylesheet" href="./styles.css?v=20260315-3" />
+    <link rel="stylesheet" href="./styles.css?v=20260402-1" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -44,6 +44,19 @@
 
         <main class="page-content">
           <div class="app-grid">
+            <section class="panel full">
+              <div class="filters-bar" style="margin-bottom:0;">
+                <label>
+                  Boost
+                  <select id="ranking-boost-filter">
+                    <option value="all">Todas</option>
+                    <option value="boost">Com boost</option>
+                    <option value="no-boost">Sem boost</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
             <section class="panel full">
               <div class="panel-header"><h2>Recordes Gerais</h2><p>Suas melhores e piores apostas.</p></div>
               <div class="ranking-list">
@@ -106,7 +119,7 @@
     <nav class="bottom-nav"><a href="./index.html">Apostas</a><a href="./casino.html">Cassino</a><a href="./ranking.html" class="active">Ranking</a><a href="./settings.html">Mais</a></nav>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="./ranking.js?v=20260315-2"></script>
+    <script src="./ranking.js?v=20260402-1"></script>
     <script>
       (function () {
         const THEME_KEY = "caderneta.theme";

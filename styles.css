@@ -376,6 +376,95 @@ button.small {
   grid-column: 1 / -1;
 }
 
+.form-grid label.boost-toggle-card {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 168, 0, 0.38);
+  background: linear-gradient(140deg, rgba(255, 170, 0, 0.12), rgba(255, 170, 0, 0.04));
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.boost-toggle-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+.boost-toggle-indicator {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 184, 0, 0.72);
+  background: rgba(18, 24, 44, 0.72);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.boost-toggle-indicator::after {
+  content: "";
+  width: 8px;
+  height: 5px;
+  border-left: 2px solid #1f232d;
+  border-bottom: 2px solid #1f232d;
+  transform: rotate(-45deg) scale(0);
+  transform-origin: center;
+  transition: transform 0.16s ease;
+}
+
+.boost-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.boost-toggle-copy strong {
+  font-size: 1.02rem;
+  line-height: 1.1;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.boost-toggle-copy small {
+  font-size: 0.8rem;
+  line-height: 1.2;
+  color: var(--text-muted);
+  max-width: 320px;
+}
+
+.boost-toggle-card:hover {
+  border-color: rgba(255, 188, 44, 0.62);
+  background: linear-gradient(140deg, rgba(255, 174, 24, 0.16), rgba(255, 174, 24, 0.06));
+}
+
+.boost-toggle-input:focus-visible + .boost-toggle-indicator {
+  box-shadow: 0 0 0 3px rgba(255, 182, 40, 0.26);
+}
+
+.boost-toggle-input:checked + .boost-toggle-indicator {
+  background: #f9b317;
+  border-color: #f9b317;
+}
+
+.boost-toggle-input:checked + .boost-toggle-indicator::after {
+  transform: rotate(-45deg) scale(1);
+}
+
+.boost-toggle-input:checked ~ .boost-toggle-copy strong {
+  color: var(--text);
+}
+
 input,
 select,
 textarea {
@@ -3360,6 +3449,12 @@ th {
   font-size: 0.7rem;
   font-weight: 600;
   line-height: 1.1;
+}
+
+.stake-type-badge.boost {
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  color: color-mix(in srgb, var(--primary) 85%, var(--text) 15%);
 }
 
 .bet-card-actions {

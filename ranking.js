@@ -67,6 +67,7 @@ async function loadProfilesFromApi() {
 let bets = [];
 let bookDistributionChart = null;
 let bookProfitChart = null;
+const rankingBoostFilter = document.getElementById('ranking-boost-filter');
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -107,6 +108,7 @@ async function loadBets() {
         stake: Number(bet.stake),
         odds: Number(bet.odds),
         isFreebet: Boolean(bet.isFreebet || bet.freebet),
+        isBoost: Boolean(bet.isBoost || bet.is_boost || bet.boost),
       };
     });
   } catch (erro) {
@@ -145,11 +147,27 @@ function calcProfit(bet) {
   return 0;
 }
 
+function getRankingBoostFilterValue() {
+  return rankingBoostFilter?.value || 'all';
+}
+
+function getFilteredRankingBets() {
+  const filter = getRankingBoostFilterValue();
+  if (filter === 'boost') {
+    return bets.filter((bet) => Boolean(bet.isBoost));
+  }
+  if (filter === 'no-boost') {
+    return bets.filter((bet) => !Boolean(bet.isBoost));
+  }
+  return bets;
+}
+
 function calcRankingStats() {
-  const settled = bets.filter((bet) => bet.status === 'win' || bet.status === 'loss');
-  const wins = bets.filter((bet) => bet.status === 'win');
-  const losses = bets.filter((bet) => bet.status === 'loss');
-  const pending = bets.filter((bet) => bet.status === 'pending');
+  const filteredBets = getFilteredRankingBets();
+  const settled = filteredBets.filter((bet) => bet.status === 'win' || bet.status === 'loss');
+  const wins = filteredBets.filter((bet) => bet.status === 'win');
+  const losses = filteredBets.filter((bet) => bet.status === 'loss');
+  const pending = filteredBets.filter((bet) => bet.status === 'pending');
 
   // Maior lucro em uma única aposta
   let maxProfitBet = null;
@@ -200,7 +218,7 @@ function calcRankingStats() {
   const avgStake = settled.length ? settled.reduce((sum, bet) => sum + bet.stake, 0) / settled.length : 0;
 
   return {
-    totalBets: bets.length,
+    totalBets: filteredBets.length,
     totalGreens: wins.length,
     totalReds: losses.length,
     totalPending: pending.length,
@@ -220,10 +238,11 @@ function calcRankingStats() {
 }
 
 function calcStatsByBook() {
-  const books = Array.from(new Set(bets.map((bet) => bet.book))).sort();
+  const filteredBets = getFilteredRankingBets();
+  const books = Array.from(new Set(filteredBets.map((bet) => bet.book))).sort();
   
   return books.map((book) => {
-    const bookBets = bets.filter((bet) => bet.book === book);
+    const bookBets = filteredBets.filter((bet) => bet.book === book);
     const settled = bookBets.filter((bet) => bet.status === 'win' || bet.status === 'loss');
     const wins = bookBets.filter((bet) => bet.status === 'win');
     const losses = bookBets.filter((bet) => bet.status === 'loss');
@@ -245,7 +264,7 @@ function calcStatsByBook() {
 }
 
 function getTopProfits(count = 5) {
-  return bets
+  return getFilteredRankingBets()
     .filter((bet) => bet.status === 'win')
     .map((bet) => ({ ...bet, profit: calcProfit(bet) }))
     .sort((a, b) => b.profit - a.profit)
@@ -253,7 +272,7 @@ function getTopProfits(count = 5) {
 }
 
 function getTopLosses(count = 5) {
-  return bets
+  return getFilteredRankingBets()
     .filter((bet) => bet.status === 'loss')
     .map((bet) => ({ ...bet, profit: calcProfit(bet) }))
     .sort((a, b) => a.profit - b.profit)
@@ -434,7 +453,17 @@ function renderBookTable() {
 function renderCharts() {
   const byBook = calcStatsByBook();
 
-  if (byBook.length === 0) return;
+  if (byBook.length === 0) {
+    if (bookDistributionChart) {
+      bookDistributionChart.destroy();
+      bookDistributionChart = null;
+    }
+    if (bookProfitChart) {
+      bookProfitChart.destroy();
+      bookProfitChart = null;
+    }
+    return;
+  }
 
   const colors = [
     '#7c5cff', '#2dd4bf', '#f59e0b', '#ec4899', '#22c55e',
@@ -523,9 +552,10 @@ function renderAIRankingPage() {
   const container = document.getElementById('ai-ranking-grid-page');
   const tableBody = document.getElementById('ai-ranking-table');
   if (!container && !tableBody) return;
+  const filteredBets = getFilteredRankingBets();
 
   const configuredAiNames = getConfiguredAiNames();
-  const usedAiNames = bets.reduce((acc, bet) => {
+  const usedAiNames = filteredBets.reduce((acc, bet) => {
     getAiNamesFromBet(bet).forEach((name) => acc.push(name));
     return acc;
   }, []);
@@ -542,7 +572,7 @@ function renderAIRankingPage() {
   });
 
   const aiStats = aiNames.map(name => {
-    const aiBets = bets.filter((b) => {
+    const aiBets = filteredBets.filter((b) => {
       if (b.status !== 'win' && b.status !== 'loss') return false;
       const names = getAiNamesFromBet(b);
       return names.includes(name);
@@ -601,6 +631,10 @@ function renderAIRankingPage() {
 async function init() {
   await renderProfileSwitcher();
   await loadBets(); // Agora espera que as apostas cheguem do BD
+  refreshRankingView();
+}
+
+function refreshRankingView() {
   renderRecords();
   renderStats();
   renderTopLists();
@@ -648,5 +682,7 @@ profileSwitch?.addEventListener('change', (e) => {
     window.location.reload();
   }
 });
+
+rankingBoostFilter?.addEventListener('change', refreshRankingView);
 
 init();

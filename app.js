@@ -69,6 +69,7 @@ const bankrollWithdraws = document.getElementById("bankroll-withdraws");
 const bankrollProfitIndicator = document.getElementById("bankroll-profit-indicator");
 const bookFilter = document.getElementById("book-filter");
 const statusFilter = document.getElementById("status-filter");
+const boostFilter = document.getElementById("boost-filter");
 
 const kpiProfit = document.getElementById("kpi-profit");
 const kpiWinrate = document.getElementById("kpi-winrate");
@@ -181,6 +182,7 @@ async function loadBets() {
         stake: Number(bet.stake),
         odds: Number(bet.odds),
         isFreebet: Boolean(bet.isFreebet || bet.freebet),
+          isBoost: Boolean(bet.isBoost || bet.is_boost || bet.boost),
         cashout_value: bet.cashout_value != null ? Number(bet.cashout_value) : null
       }));
       
@@ -1004,6 +1006,7 @@ function getFilteredBets() {
   const startDate = dateFilterStart?.value ? parseDateForSort(dateFilterStart.value) : null;
   const endDate = dateFilterEnd?.value ? parseDateForSort(dateFilterEnd.value) : null;
   const categoryFilter = document.getElementById("category-filter")?.value || "all";
+  const boostFilterValue = boostFilter?.value || "all";
 
   return bets.filter((bet) => {
     // Filtro por casa
@@ -1043,8 +1046,26 @@ function getFilteredBets() {
       }
     }
 
-    return matchBook && matchStatus && matchDate && matchCategory;
+    let matchBoost = true;
+    if (boostFilterValue === "boost") {
+      matchBoost = Boolean(bet.isBoost);
+    } else if (boostFilterValue === "no-boost") {
+      matchBoost = !Boolean(bet.isBoost);
+    }
+
+    return matchBook && matchStatus && matchDate && matchCategory && matchBoost;
   });
+}
+
+function getBoostScopedBets() {
+  const boostFilterValue = boostFilter?.value || "all";
+  if (boostFilterValue === "boost") {
+    return bets.filter((bet) => Boolean(bet.isBoost));
+  }
+  if (boostFilterValue === "no-boost") {
+    return bets.filter((bet) => !Boolean(bet.isBoost));
+  }
+  return bets;
 }
 
 function renderBookFilter() {
@@ -1100,6 +1121,8 @@ function renderTable() {
     const potentialProfit = calcPotentialProfit(bet.stake, bet.odds);
     const statusClass = `status-badge ${bet.status}`;
     const freebetBadge = bet.isFreebet ? '<span class="stake-type-badge">Grátis</span>' : "";
+    const boostBadge = bet.isBoost ? '<span class="stake-type-badge boost">Boost</span>' : "";
+    const stakeBadges = `${freebetBadge}${boostBadge}`;
 
     if (betsBody) {
       const row = document.createElement("tr");
@@ -1107,7 +1130,7 @@ function renderTable() {
         <td>${bet.date}</td>
         <td><strong>${bet.event}</strong></td>
         <td>${numberFormatter.format(bet.odds)}x</td>
-        <td><div class="stake-cell">${formatStake(bet.stake)}${freebetBadge}</div></td>
+        <td><div class="stake-cell">${formatStake(bet.stake)}${stakeBadges}</div></td>
         <td><span class="${statusClass}">${statusLabel(bet.status)}</span></td>
         <td>${formatProfit(profit)}</td>
         <td>${formatProfit(potentialProfit)}</td>
@@ -1145,7 +1168,7 @@ function renderTable() {
           <span>${numberFormatter.format(bet.odds)}x Odd</span>
           <span>${formatStake(bet.stake)} Stake</span>
           <span>${formatProfit(potentialProfit)} Potencial</span>
-          ${freebetBadge}
+          ${stakeBadges}
         </div>
         <div class="bet-card-actions">
           ${bet.status === "pending" ? `
@@ -1182,8 +1205,8 @@ function statusLabel(status) {
 }
 
 function renderKpis() {
-  // Painel de Inteligência sempre mostra TODAS as apostas, independente dos filtros do histórico
-  const allSettled = bets.filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void");
+  const scopedBets = getBoostScopedBets();
+  const allSettled = scopedBets.filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void");
   const totalStake = allSettled.reduce((sum, bet) => sum + bet.stake, 0);
   const totalProfit = allSettled.reduce((sum, bet) => sum + calcProfit(bet), 0);
   const wins = allSettled.filter((bet) => bet.status === "win" || bet.status === "cashout").length;
@@ -1200,8 +1223,7 @@ function renderKpis() {
   // Ticket médio (stake média)
   const avgStake = allSettled.length > 0 ? totalStake / allSettled.length : 0;
 
-  // Sequência atual (usa todas as apostas)
-  const currentStreak = calcCurrentStreak(bets);
+  const currentStreak = calcCurrentStreak(scopedBets);
 
   kpiProfit.textContent = formatProfit(totalProfit);
   kpiWinrate.textContent = percentFormatter.format(winrate);
@@ -1355,8 +1377,7 @@ function renderBalanceChart() {
     ? "rgba(45, 212, 191, 0.20)"
     : "rgba(124, 92, 255, 0.20)";
 
-  // Gráfico sempre mostra TODAS as apostas finalizadas
-  const data = bets
+  const data = getBoostScopedBets()
     .filter((bet) => bet.status === "win" || bet.status === "loss" || bet.status === "cashout" || bet.status === "void")
     .slice()
     .sort((a, b) => {
@@ -1475,8 +1496,9 @@ function renderMiniProfitChart() {
 
   const now = new Date();
   const byDay = new Map();
+  const scopedBets = getBoostScopedBets();
 
-  bets.forEach((bet) => {
+  scopedBets.forEach((bet) => {
     const date = parseDateForSort(bet.date);
     if (!date || date.getMonth() !== now.getMonth() || date.getFullYear() !== now.getFullYear()) {
       return;
@@ -1577,6 +1599,7 @@ async function handleSubmit(event) {
     book: document.getElementById("bet-book").value.trim(),
     status: document.getElementById("bet-status").value,
     isFreebet: document.getElementById("bet-stake-type").value === "freebet",
+    isBoost: document.getElementById("bet-is-boost")?.checked === true,
     ai: getSelectedAIs("bet-ai-selector") || null,
     category: document.getElementById("bet-category").value || null,
     cashout_value: null,
@@ -1621,6 +1644,8 @@ function startEdit(bet) {
   document.getElementById("bet-book").value = bet.book;
   document.getElementById("bet-status").value = bet.status;
   document.getElementById("bet-stake-type").value = bet.isFreebet ? "freebet" : "regular";
+  const boostInput = document.getElementById("bet-is-boost");
+  if (boostInput) boostInput.checked = Boolean(bet.isBoost);
   setSelectedAIs("bet-ai-selector", bet.ai || "");
   document.getElementById("bet-category").value = bet.category || "";
   
@@ -2451,9 +2476,10 @@ deleteModalConfirm?.addEventListener('click', async () => {
   const container = document.getElementById('ai-ranking-grid');
   if (!container) return;
 
+  const scopedBets = getBoostScopedBets();
   const settledStatuses = new Set(['win', 'loss', 'cashout', 'void']);
   const configuredAiNames = sanitizeAiOptions(settings?.aiOptions);
-  const usedAiNames = bets.reduce((acc, bet) => {
+  const usedAiNames = scopedBets.reduce((acc, bet) => {
     if (!bet.ai) return acc;
     bet.ai
       .split(',')
@@ -2476,7 +2502,7 @@ deleteModalConfirm?.addEventListener('click', async () => {
   });
   
   const aiStats = aiNames.map(name => {
-    const aiBets = bets.filter(b => {
+    const aiBets = scopedBets.filter(b => {
         if (!b.ai || !settledStatuses.has(b.status)) return false;
         const aisList = b.ai
           .split(',')
@@ -2526,12 +2552,13 @@ deleteModalConfirm?.addEventListener('click', async () => {
 function renderWeekdayPerformance() {
   const container = document.getElementById('weekday-grid');
   if (!container) return;
+  const scopedBets = getBoostScopedBets();
 
   const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'S\u00e1b'];
   const dayFullNames = ['Domingo', 'Segunda', 'Ter\u00e7a', 'Quarta', 'Quinta', 'Sexta', 'S\u00e1bado'];
 
   const dayStats = dayNames.map((_, index) => {
-    const dayBets = bets.filter(b => {
+    const dayBets = scopedBets.filter(b => {
       if (b.status !== 'win' && b.status !== 'loss' && b.status !== 'cashout' && b.status !== 'void') return false;
       const betDate = parseDateForSort(b.date);
       if (!betDate) return false;
@@ -2744,6 +2771,12 @@ function renderFinalizedBets() {
   if (!container) return;
 
   const settled = bets
+        .filter((bet) => {
+          const boostFilterValue = boostFilter?.value || "all";
+          if (boostFilterValue === "boost") return Boolean(bet.isBoost);
+          if (boostFilterValue === "no-boost") return !Boolean(bet.isBoost);
+          return true;
+        })
     .filter(b => b.status === 'win' || b.status === 'loss' || b.status === 'cashout' || b.status === 'void')
     .slice()
     .sort((a, b) => {
@@ -2863,6 +2896,7 @@ bookFilter?.addEventListener("change", refreshAll);
 statusFilter?.addEventListener("change", refreshAll);
 betSearchInput?.addEventListener("input", refreshAll);
 document.getElementById("category-filter")?.addEventListener("change", refreshAll);
+boostFilter?.addEventListener("change", refreshAll);
 dateFilterStart?.addEventListener("change", refreshAll);
 dateFilterEnd?.addEventListener("change", refreshAll);
 clearDateFilter?.addEventListener("click", () => {

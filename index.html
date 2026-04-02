@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Caderneta de Apostas</title>
-    <link rel="stylesheet" href="./styles.css?v=20260315-3" />
+    <link rel="stylesheet" href="./styles.css?v=20260402-1" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -167,6 +167,14 @@
                     <option value="regular">Normal (stake retorna)</option>
                     <option value="freebet">Aposta grátis (stake não retorna)</option>
                   </select>
+                </label>
+                <label class="full boost-toggle-card" for="bet-is-boost">
+                  <input type="checkbox" id="bet-is-boost" class="boost-toggle-input" />
+                  <span class="boost-toggle-indicator" aria-hidden="true"></span>
+                  <span class="boost-toggle-copy">
+                    <strong>⚡ Boost / Odd Aumentada</strong>
+                    <small>Marque se esta aposta tem odd turbinada ou boost da casa</small>
+                  </span>
                 </label>
                 <label>
                   Status
@@ -342,6 +350,14 @@
                   <option value="all">Todas</option>
                 </select>
               </label>
+              <label>
+                Boost
+                <select id="boost-filter">
+                  <option value="all">Todas</option>
+                  <option value="boost">Com boost</option>
+                  <option value="no-boost">Sem boost</option>
+                </select>
+              </label>
               <button type="button" class="ghost small" id="clear-date-filter">Limpar</button>
             </div>
             <div class="shortcut-legend" aria-label="Atalhos disponíveis">
@@ -502,6 +518,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script type="module" src="./app.js?v=20260315-6"></script>
+    <script type="module" src="./app.js?v=20260402-1"></script>
   </body>
 </html>

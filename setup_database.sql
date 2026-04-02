@@ -44,6 +44,7 @@ CREATE TABLE apostas (
     ai             VARCHAR(500)  DEFAULT NULL COMMENT 'CSV list of AIs',
     status         ENUM('pending','win','loss','void','cashout') NOT NULL DEFAULT 'pending',
     is_freebet     TINYINT(1)    NOT NULL DEFAULT 0,
+    is_boost       TINYINT(1)    NOT NULL DEFAULT 0,
     category       VARCHAR(100)  DEFAULT NULL,
     cashout_value  DECIMAL(12,2) DEFAULT NULL,
     created_at     TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -61,6 +62,7 @@ CREATE TABLE apostas (
 CREATE INDEX idx_apostas_profile_date   ON apostas (profile_id, date DESC);
 CREATE INDEX idx_apostas_profile_status ON apostas (profile_id, status);
 CREATE INDEX idx_apostas_book           ON apostas (book);
+CREATE INDEX idx_apostas_boost          ON apostas (is_boost);
 CREATE INDEX idx_apostas_category       ON apostas (category);
 
 -- =============================================================

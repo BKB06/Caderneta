@@ -101,6 +101,28 @@ function ensureDadosExtrasExists(mysqli $conn, string $profile_id): void {
 }
 
 /**
+ * Garante coluna de boost na tabela apostas para compatibilidade retroativa.
+ */
+function ensureApostasBoostColumn(mysqli $conn): void {
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    $result = $conn->query("SHOW COLUMNS FROM apostas LIKE 'is_boost'");
+    $exists = $result && $result->num_rows > 0;
+    if ($result) {
+        $result->free();
+    }
+
+    if (!$exists) {
+        $conn->query("ALTER TABLE apostas ADD COLUMN is_boost TINYINT(1) NOT NULL DEFAULT 0 AFTER is_freebet");
+    }
+
+    $checked = true;
+}
+
+/**
  * Retorna um profile_id sanitizado (nunca vazio).
  */
 function getProfileId(array $dados): string {
@@ -305,6 +327,7 @@ elseif ($acao === 'salvar_aposta') {
     $ai     = !empty($aposta['ai']) ? trim($aposta['ai']) : null;
     $status = $aposta['status'] ?? 'pending';
     $isFreebet = !empty($aposta['isFreebet']) ? 1 : 0;
+    $isBoost = !empty($aposta['isBoost']) ? 1 : 0;
     $category = !empty($aposta['category']) ? trim($aposta['category']) : null;
 
     // Validação de campos obrigatórios
@@ -328,11 +351,12 @@ elseif ($acao === 'salvar_aposta') {
 
     // Garantir que o perfil existe e pertence à sessão atual
     ensureAuthorizedProfile($conn, $profile_id);
+    ensureApostasBoostColumn($conn);
 
     // INSERT ... ON DUPLICATE KEY UPDATE (em vez de REPLACE INTO)
     $stmt = $conn->prepare("
-        INSERT INTO apostas (id, profile_id, date, event, odds, stake, book, ai, status, is_freebet, category, cashout_value)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO apostas (id, profile_id, date, event, odds, stake, book, ai, status, is_freebet, is_boost, category, cashout_value)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             date = VALUES(date),
             event = VALUES(event),
@@ -342,14 +366,15 @@ elseif ($acao === 'salvar_aposta') {
             ai = VALUES(ai),
             status = VALUES(status),
             is_freebet = VALUES(is_freebet),
+            is_boost = VALUES(is_boost),
             category = VALUES(category),
             cashout_value = VALUES(cashout_value)
     ");
 
-    $stmt->bind_param("ssssddsssisd",
+    $stmt->bind_param("ssssddsssiisd",
         $id, $profile_id, $date, $event,
         $odds, $stake, $book,
-        $ai, $status, $isFreebet, $category,
+        $ai, $status, $isFreebet, $isBoost, $category,
         $cashout_value
     );
 
@@ -366,6 +391,7 @@ elseif ($acao === 'salvar_aposta') {
 elseif ($acao === 'carregar_apostas') {
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
+    ensureApostasBoostColumn($conn);
 
     // Prepared statement — elimina SQL Injection
     $stmt = $conn->prepare("SELECT * FROM apostas WHERE profile_id = ? ORDER BY date DESC");
@@ -379,6 +405,8 @@ elseif ($acao === 'carregar_apostas') {
             // Compatibilidade: o JS espera 'isFreebet' (camelCase)
             $row['isFreebet'] = (bool)($row['is_freebet'] ?? $row['isFreebet'] ?? false);
             unset($row['is_freebet']);
+            $row['isBoost'] = (bool)($row['is_boost'] ?? $row['isBoost'] ?? false);
+            unset($row['is_boost']);
             $row['odds']  = (float)$row['odds'];
             $row['stake'] = (float)$row['stake'];
             $row['category'] = $row['category'] ?? null;
