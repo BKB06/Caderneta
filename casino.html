@@ -1,8 +1,22 @@
 ﻿<!DOCTYPE html>
-<html lang="pt-BR" class="dark">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function () {
+        const key = "caderneta.theme";
+        const html = document.documentElement;
+        const saved = localStorage.getItem(key);
+        const preferredDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = (saved === "dark" || saved === "light" || saved === "light-azulado" || saved === "light-bege")
+          ? saved
+          : (preferredDark ? "dark" : "light-azulado");
+
+        html.classList.remove("light", "dark", "light-azulado", "light-bege");
+        html.classList.add(theme);
+      })();
+    </script>
     <title>Cassino - Caderneta de Apostas</title>
     <link rel="stylesheet" href="./styles.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -21,6 +35,10 @@
         align-items: center;
         gap: 12px;
         width: 100%;
+      }
+
+      .topbar-layout > * {
+        min-width: 0;
       }
 
       .topbar-center {
@@ -94,6 +112,12 @@
 
       .kpi-strip.casino-kpi-grid {
         grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .casino-duo-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
       }
 
       .casino-entry-grid {
@@ -340,11 +364,23 @@
       }
 
       @media (max-width: 767px) {
+        .main-area {
+          overflow-x: hidden;
+        }
+
         .kpi-strip.casino-kpi-grid {
           grid-template-columns: 1fr 1fr;
         }
 
         .kpi-hero-section {
+          grid-template-columns: 1fr;
+        }
+
+        .topbar-center select {
+          max-width: 100%;
+        }
+
+        .casino-duo-grid {
           grid-template-columns: 1fr;
         }
 
@@ -576,7 +612,7 @@
             </aside>
           </section>
 
-          <section class="app-grid" style="grid-template-columns: 1fr 1fr;">
+          <section class="app-grid casino-duo-grid">
             <section class="panel">
               <div class="panel-header"><h2>Top jogos</h2></div>
               <div id="casino-top-games" class="mini-rank"></div>
