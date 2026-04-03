@@ -1554,8 +1554,8 @@ function renderKpiDeltas() {
 
   const map = [
     { metric: "profit", id: "kpi-profit-delta", suffix: "%" },
-    { metric: "winrate", id: "kpi-winrate-delta", suffix: "pp" },
-    { metric: "roi", id: "kpi-roi-delta", suffix: "pp" },
+    { metric: "winrate", id: "kpi-winrate-delta", suffix: "%" },
+    { metric: "roi", id: "kpi-roi-delta", suffix: "%" },
     { metric: "avgOdd", id: "kpi-avg-odd-delta", suffix: "x" },
   ];
 
