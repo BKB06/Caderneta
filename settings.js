@@ -392,7 +392,7 @@ function renderAiOptions() {
     item.className = "favorite-item";
     item.innerHTML = `
       <span>${name}</span>
-      <button type="button" class="ghost small" data-ai-index="${index}" title="Remover IA">✕</button>
+      <button type="button" class="ghost small" data-ai-index="${index}" title="Remover opção">✕</button>
     `;
     container.appendChild(item);
   });
@@ -400,7 +400,7 @@ function renderAiOptions() {
   container.querySelectorAll("button[data-ai-index]").forEach((btn) => {
     btn.addEventListener("click", async (e) => {
       if (settings.aiOptions.length <= 1) {
-        alert("Você precisa manter pelo menos 1 IA na lista.");
+        alert("Você precisa manter pelo menos 1 opção na lista.");
         return;
       }
       const index = Number(e.currentTarget.dataset.aiIndex);
@@ -409,7 +409,7 @@ function renderAiOptions() {
       settings.aiOptions = sanitizeAiOptions(settings.aiOptions);
       await saveSettings();
       renderAiOptions();
-      showToast("IA removida!");
+      showToast("Opção removida!");
     });
   });
 }
@@ -577,13 +577,13 @@ document.getElementById("add-ai-btn")?.addEventListener("click", async () => {
   const value = normalizeAiName(input?.value);
 
   if (!value) {
-    alert("Digite um nome de IA.");
+    alert("Digite um nome para quem sugeriu.");
     return;
   }
 
   const exists = sanitizeAiOptions(settings.aiOptions).some((ai) => ai.toLowerCase() === value.toLowerCase());
   if (exists) {
-    alert("Essa IA já está na lista.");
+    alert("Essa opção já está na lista.");
     return;
   }
 
@@ -591,7 +591,7 @@ document.getElementById("add-ai-btn")?.addEventListener("click", async () => {
   await saveSettings();
   renderAiOptions();
   if (input) input.value = "";
-  showToast("IA adicionada!");
+  showToast("Opção adicionada!");
 });
 
 document.getElementById("new-ai-name")?.addEventListener("keypress", (e) => {

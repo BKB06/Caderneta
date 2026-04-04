@@ -41,7 +41,7 @@ CREATE TABLE apostas (
     odds           DECIMAL(8,3)  NOT NULL,
     stake          DECIMAL(12,2) NOT NULL,
     book           VARCHAR(100)  NOT NULL DEFAULT '',
-    ai             VARCHAR(500)  DEFAULT NULL COMMENT 'CSV list of AIs',
+    quem_sugeriu   VARCHAR(500)  DEFAULT NULL COMMENT 'CSV com nomes de quem sugeriu',
     status         ENUM('pending','win','loss','void','cashout') NOT NULL DEFAULT 'pending',
     is_freebet     TINYINT(1)    NOT NULL DEFAULT 0,
     is_boost       TINYINT(1)    NOT NULL DEFAULT 0,

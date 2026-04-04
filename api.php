@@ -123,6 +123,38 @@ function ensureApostasBoostColumn(mysqli $conn): void {
 }
 
 /**
+ * Garante coluna quem_sugeriu na tabela apostas (migra ai legado quando existir).
+ */
+function ensureApostasQuemSugeriuColumn(mysqli $conn): void {
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    $resultNew = $conn->query("SHOW COLUMNS FROM apostas LIKE 'quem_sugeriu'");
+    $hasNew = $resultNew && $resultNew->num_rows > 0;
+    if ($resultNew) {
+        $resultNew->free();
+    }
+
+    if (!$hasNew) {
+        $resultOld = $conn->query("SHOW COLUMNS FROM apostas LIKE 'ai'");
+        $hasOld = $resultOld && $resultOld->num_rows > 0;
+        if ($resultOld) {
+            $resultOld->free();
+        }
+
+        if ($hasOld) {
+            $conn->query("ALTER TABLE apostas CHANGE COLUMN ai quem_sugeriu VARCHAR(500) DEFAULT NULL COMMENT 'CSV com nomes de quem sugeriu'");
+        } else {
+            $conn->query("ALTER TABLE apostas ADD COLUMN quem_sugeriu VARCHAR(500) DEFAULT NULL COMMENT 'CSV com nomes de quem sugeriu' AFTER book");
+        }
+    }
+
+    $checked = true;
+}
+
+/**
  * Retorna um profile_id sanitizado (nunca vazio).
  */
 function getProfileId(array $dados): string {
@@ -324,7 +356,9 @@ elseif ($acao === 'salvar_aposta') {
     $odds   = floatval($aposta['odds'] ?? 0);
     $stake  = floatval($aposta['stake'] ?? 0);
     $book   = trim($aposta['book'] ?? '');
-    $ai     = !empty($aposta['ai']) ? trim($aposta['ai']) : null;
+    $quem_sugeriu = !empty($aposta['quem_sugeriu'])
+        ? trim($aposta['quem_sugeriu'])
+        : (!empty($aposta['ai']) ? trim($aposta['ai']) : null);
     $status = $aposta['status'] ?? 'pending';
     $isFreebet = !empty($aposta['isFreebet']) ? 1 : 0;
     $isBoost = !empty($aposta['isBoost']) ? 1 : 0;
@@ -352,10 +386,11 @@ elseif ($acao === 'salvar_aposta') {
     // Garantir que o perfil existe e pertence à sessão atual
     ensureAuthorizedProfile($conn, $profile_id);
     ensureApostasBoostColumn($conn);
+    ensureApostasQuemSugeriuColumn($conn);
 
     // INSERT ... ON DUPLICATE KEY UPDATE (em vez de REPLACE INTO)
     $stmt = $conn->prepare("
-        INSERT INTO apostas (id, profile_id, date, event, odds, stake, book, ai, status, is_freebet, is_boost, category, cashout_value)
+        INSERT INTO apostas (id, profile_id, date, event, odds, stake, book, quem_sugeriu, status, is_freebet, is_boost, category, cashout_value)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             date = VALUES(date),
@@ -363,7 +398,7 @@ elseif ($acao === 'salvar_aposta') {
             odds = VALUES(odds),
             stake = VALUES(stake),
             book = VALUES(book),
-            ai = VALUES(ai),
+            quem_sugeriu = VALUES(quem_sugeriu),
             status = VALUES(status),
             is_freebet = VALUES(is_freebet),
             is_boost = VALUES(is_boost),
@@ -374,7 +409,7 @@ elseif ($acao === 'salvar_aposta') {
     $stmt->bind_param("ssssddsssiisd",
         $id, $profile_id, $date, $event,
         $odds, $stake, $book,
-        $ai, $status, $isFreebet, $isBoost, $category,
+        $quem_sugeriu, $status, $isFreebet, $isBoost, $category,
         $cashout_value
     );
 
@@ -392,6 +427,7 @@ elseif ($acao === 'carregar_apostas') {
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
     ensureApostasBoostColumn($conn);
+    ensureApostasQuemSugeriuColumn($conn);
 
     // Prepared statement — elimina SQL Injection
     $stmt = $conn->prepare("SELECT * FROM apostas WHERE profile_id = ? ORDER BY date DESC");
@@ -407,6 +443,8 @@ elseif ($acao === 'carregar_apostas') {
             unset($row['is_freebet']);
             $row['isBoost'] = (bool)($row['is_boost'] ?? $row['isBoost'] ?? false);
             unset($row['is_boost']);
+            $row['quem_sugeriu'] = $row['quem_sugeriu'] ?? ($row['ai'] ?? null);
+            $row['ai'] = $row['quem_sugeriu'];
             $row['odds']  = (float)$row['odds'];
             $row['stake'] = (float)$row['stake'];
             $row['category'] = $row['category'] ?? null;

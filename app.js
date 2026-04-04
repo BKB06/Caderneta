@@ -2439,7 +2439,7 @@ function showDeleteConfirmation(bet) {
       <span>Odd: <strong>${numberFormatter.format(bet.odds)}x</strong></span>
       <span>Stake: <strong>${formatStake(bet.stake)}</strong></span>
       <span>Casa: <strong>${bet.book}</strong></span>
-      ${bet.ai ? `<span>IAs: <strong>${bet.ai.split(",").join(", ")}</strong></span>` : ''}
+      ${bet.ai ? `<span>Quem sugeriu: <strong>${bet.ai.split(",").join(", ")}</strong></span>` : ''}
     </div>
   `;
   deleteModal.style.display = 'flex';
@@ -3474,8 +3474,8 @@ async function handleCouponImport(file) {
     
     if (apiKey) {
       // Tentar Gemini primeiro (mais preciso)
-      showImportStatus("🤖 Analisando com Gemini AI...", "info");
-      showProgress(50, "Enviando para IA...");
+      showImportStatus("🤖 Analisando com Gemini...", "info");
+      showProgress(50, "Enviando para análise...");
       
       const base64 = await fileToBase64(file);
       betData = await extractBetWithGemini(base64, file.type);
@@ -3484,7 +3484,7 @@ async function handleCouponImport(file) {
         showProgress(100, "Concluído!");
         hideProgress();
         fillFormWithBetData(betData);
-        showImportStatus("✅ Dados extraídos com Gemini AI! Revise e salve.", "success");
+        showImportStatus("✅ Dados extraídos com Gemini! Revise e salve.", "success");
         return;
       }
       
