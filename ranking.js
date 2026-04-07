@@ -65,6 +65,7 @@ async function loadProfilesFromApi() {
 }
 
 let bets = [];
+let balanceRanking = [];
 let bookDistributionChart = null;
 let bookProfitChart = null;
 const rankingBoostFilter = document.getElementById('ranking-boost-filter');
@@ -630,7 +631,8 @@ function renderAIRankingPage() {
 
 async function init() {
   await renderProfileSwitcher();
-  await loadBets(); // Agora espera que as apostas cheguem do BD
+  await loadBets();
+  await loadBalanceRanking();
   refreshRankingView();
 }
 
@@ -641,6 +643,85 @@ function refreshRankingView() {
   renderBookTable();
   renderCharts();
   renderAIRankingPage();
+  renderBalanceRanking();
+}
+
+async function loadBalanceRanking() {
+  try {
+    const profileId = getActiveProfileId();
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'ranking_saldo_casas', profile_id: profileId })
+    });
+    const dados = await resposta.json();
+    balanceRanking = Array.isArray(dados) ? dados : [];
+  } catch (erro) {
+    console.error('Erro ao carregar ranking de saldo:', erro);
+    balanceRanking = [];
+  }
+}
+
+function renderBalanceRanking() {
+  const podium = document.getElementById('balance-ranking-podium');
+  const tableBody = document.getElementById('balance-ranking-body');
+  if (!podium && !tableBody) return;
+
+  if (balanceRanking.length === 0) {
+    if (podium) podium.innerHTML = '<p class="empty-message">Nenhuma movimentação registrada com casa de apostas.</p>';
+    if (tableBody) {
+      tableBody.innerHTML = '<tr><td colspan="6">Nenhum dado disponível.</td></tr>';
+    }
+    return;
+  }
+
+  const medals = ['🥇', '🥈', '🥉'];
+  const maxBalance = Math.max(...balanceRanking.map(c => Math.abs(c.balance)), 1);
+
+  // Podium cards
+  if (podium) {
+    podium.innerHTML = balanceRanking.map((casa, i) => {
+      const barWidth = Math.min(Math.abs(casa.balance) / maxBalance * 100, 100);
+      const isPositive = casa.balance >= 0;
+      return `
+        <div class="balance-ranking-card ${i === 0 ? 'first' : ''} ${isPositive ? 'positive' : 'negative'}">
+          <div class="balance-ranking-header">
+            <span class="balance-medal">${medals[i] || (i + 1)}</span>
+            <strong class="balance-house-name">${casa.book}</strong>
+          </div>
+          <div class="balance-value" style="color: ${isPositive ? 'var(--success)' : 'var(--danger)'}">
+            ${formatProfit(casa.balance)}
+          </div>
+          <div class="balance-bar-track">
+            <div class="balance-bar-fill ${isPositive ? 'green' : 'red'}" style="width: ${barWidth}%"></div>
+          </div>
+          <div class="balance-breakdown">
+            <span class="balance-detail">↑ ${formatProfit(casa.deposits)}</span>
+            <span class="balance-detail">↓ ${formatProfit(casa.withdraws)}</span>
+            <span class="balance-detail">💰 ${formatProfit(casa.profit)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Table
+  if (tableBody) {
+    tableBody.innerHTML = balanceRanking.map((casa, i) => {
+      const medal = medals[i] || `${i + 1}`;
+      const isPositive = casa.balance >= 0;
+      return `
+        <tr>
+          <td>${medal}</td>
+          <td><strong>${casa.book}</strong></td>
+          <td style="color: var(--success)">${formatProfit(casa.deposits)}</td>
+          <td style="color: var(--danger)">${formatProfit(casa.withdraws)}</td>
+          <td style="color: ${casa.profit >= 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: 600">${formatProfit(casa.profit)}</td>
+          <td style="color: ${isPositive ? 'var(--success)' : 'var(--danger)'}; font-weight: 700; font-size: 1.05em">${formatProfit(casa.balance)}</td>
+        </tr>
+      `;
+    }).join('');
+  }
 }
 
 // Profile Switcher

@@ -155,6 +155,29 @@ function ensureApostasQuemSugeriuColumn(mysqli $conn): void {
 }
 
 /**
+ * Garante coluna book na tabela fluxo_caixa para rastrear casa de apostas.
+ */
+function ensureFluxoBookColumn(mysqli $conn): void {
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    $result = $conn->query("SHOW COLUMNS FROM fluxo_caixa LIKE 'book'");
+    $exists = $result && $result->num_rows > 0;
+    if ($result) {
+        $result->free();
+    }
+
+    if (!$exists) {
+        $conn->query("ALTER TABLE fluxo_caixa ADD COLUMN book VARCHAR(100) NOT NULL DEFAULT '' AFTER note");
+        $conn->query("CREATE INDEX idx_fluxo_book ON fluxo_caixa (book)");
+    }
+
+    $checked = true;
+}
+
+/**
  * Retorna um profile_id sanitizado (nunca vazio).
  */
 function getProfileId(array $dados): string {
@@ -197,7 +220,8 @@ $acoes_permitidas = [
     'salvar_fluxo', 'carregar_fluxo', 'excluir_fluxo',
     'salvar_dados_extras', 'carregar_dados_extras',
     'salvar_categoria', 'carregar_categorias', 'excluir_categoria',
-    'salvar_casino', 'carregar_casino', 'excluir_casino'
+    'salvar_casino', 'carregar_casino', 'excluir_casino',
+    'ranking_saldo_casas'
 ];
 
 if (!in_array($acao, $acoes_permitidas, true)) {
@@ -473,6 +497,7 @@ elseif ($acao === 'salvar_fluxo') {
     $type   = $fluxo['type'] ?? '';
     $amount = floatval($fluxo['amount'] ?? 0);
     $note   = trim($fluxo['note'] ?? '');
+    $book   = trim($fluxo['book'] ?? '');
 
     // Validações
     if ($id === '' || $date === '') {
@@ -484,22 +509,27 @@ elseif ($acao === 'salvar_fluxo') {
     if ($amount <= 0) {
         responder(["sucesso" => false, "erro" => "Valor deve ser maior que 0."]);
     }
+    if ($book === '') {
+        responder(["sucesso" => false, "erro" => "Casa de apostas é obrigatória."]);
+    }
 
     ensureAuthorizedProfile($conn, $profile_id);
+    ensureFluxoBookColumn($conn);
 
     $stmt = $conn->prepare("
-        INSERT INTO fluxo_caixa (id, profile_id, date, type, amount, note)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO fluxo_caixa (id, profile_id, date, type, amount, note, book)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             date = VALUES(date),
             type = VALUES(type),
             amount = VALUES(amount),
-            note = VALUES(note)
+            note = VALUES(note),
+            book = VALUES(book)
     ");
 
-    $stmt->bind_param("ssssds",
+    $stmt->bind_param("ssssdss",
         $id, $profile_id, $date, $type,
-        $amount, $note
+        $amount, $note, $book
     );
 
     if ($stmt->execute()) {
@@ -515,6 +545,7 @@ elseif ($acao === 'salvar_fluxo') {
 elseif ($acao === 'carregar_fluxo') {
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
+    ensureFluxoBookColumn($conn);
 
     $stmt = $conn->prepare("SELECT * FROM fluxo_caixa WHERE profile_id = ? ORDER BY date DESC");
     $stmt->bind_param("s", $profile_id);
@@ -525,6 +556,7 @@ elseif ($acao === 'carregar_fluxo') {
     if ($result) {
         while ($row = $result->fetch_assoc()) {
             $row['amount'] = (float)$row['amount'];
+            $row['book'] = $row['book'] ?? '';
             $fluxos[] = $row;
         }
     }
@@ -821,6 +853,105 @@ elseif ($acao === 'excluir_casino') {
     $stmt->close();
 
     responder(["sucesso" => true, "mensagem" => "Registro de cassino excluído."]);
+}
+
+// ---------------------------------------------------------
+// 16. AÇÃO: RANKING DE SALDO POR CASA
+// ---------------------------------------------------------
+elseif ($acao === 'ranking_saldo_casas') {
+    $profile_id = getProfileId($dados);
+    ensureAuthorizedProfile($conn, $profile_id);
+    ensureFluxoBookColumn($conn);
+    ensureApostasBoostColumn($conn);
+
+    // Depósitos e saques por casa
+    $stmt = $conn->prepare("
+        SELECT book,
+               SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END) AS total_deposits,
+               SUM(CASE WHEN type = 'withdraw' THEN amount ELSE 0 END) AS total_withdraws
+        FROM fluxo_caixa
+        WHERE profile_id = ? AND book != ''
+        GROUP BY book
+    ");
+    $stmt->bind_param("s", $profile_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    $casas = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $casas[$row['book']] = [
+                'book' => $row['book'],
+                'deposits' => (float)$row['total_deposits'],
+                'withdraws' => (float)$row['total_withdraws'],
+                'profit' => 0.0,
+                'bets_count' => 0,
+                'wins' => 0,
+                'losses' => 0,
+            ];
+        }
+    }
+    $stmt->close();
+
+    // Lucro das apostas por casa
+    $stmt = $conn->prepare("
+        SELECT book, status, odds, stake, is_freebet, is_boost, cashout_value
+        FROM apostas
+        WHERE profile_id = ? AND status IN ('win', 'loss', 'cashout', 'void')
+    ");
+    $stmt->bind_param("s", $profile_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $book = $row['book'];
+            if (!isset($casas[$book])) {
+                $casas[$book] = [
+                    'book' => $book,
+                    'deposits' => 0.0,
+                    'withdraws' => 0.0,
+                    'profit' => 0.0,
+                    'bets_count' => 0,
+                    'wins' => 0,
+                    'losses' => 0,
+                ];
+            }
+
+            $casas[$book]['bets_count']++;
+            $status = $row['status'];
+            $odds = (float)$row['odds'];
+            $stake = (float)$row['stake'];
+            $isFreebet = (bool)$row['is_freebet'];
+
+            if ($status === 'win') {
+                $casas[$book]['wins']++;
+                $casas[$book]['profit'] += $stake * ($odds - 1);
+            } elseif ($status === 'loss') {
+                $casas[$book]['losses']++;
+                if (!$isFreebet) {
+                    $casas[$book]['profit'] -= $stake;
+                }
+            } elseif ($status === 'cashout') {
+                $cashoutVal = (float)($row['cashout_value'] ?? 0);
+                $casas[$book]['profit'] += $isFreebet ? $cashoutVal : ($cashoutVal - $stake);
+            }
+        }
+    }
+    $stmt->close();
+
+    // Calcular saldo e ordenar
+    $ranking = array_values($casas);
+    foreach ($ranking as &$casa) {
+        $casa['balance'] = $casa['deposits'] - $casa['withdraws'] + $casa['profit'];
+    }
+    unset($casa);
+
+    usort($ranking, function($a, $b) {
+        return $b['balance'] <=> $a['balance'];
+    });
+
+    echo json_encode($ranking, JSON_UNESCAPED_UNICODE);
 }
 
 $conn->close();

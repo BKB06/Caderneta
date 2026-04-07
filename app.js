@@ -1498,12 +1498,18 @@ function renderMiniProfitChart() {
   const byDay = new Map();
   const scopedBets = getBoostScopedBets();
 
+  // Filter by selected book
+  const selectedBook = bookFilter?.value || "all";
+
   scopedBets.forEach((bet) => {
     const date = parseDateForSort(bet.date);
     if (!date || date.getMonth() !== now.getMonth() || date.getFullYear() !== now.getFullYear()) {
       return;
     }
     if (bet.status !== "win" && bet.status !== "loss" && bet.status !== "cashout" && bet.status !== "void") {
+      return;
+    }
+    if (selectedBook !== "all" && bet.book !== selectedBook) {
       return;
     }
 
@@ -1515,16 +1521,50 @@ function renderMiniProfitChart() {
   const labels = Array.from(byDay.keys()).sort((a, b) => a - b).map((day) => String(day));
   const values = labels.map((day) => byDay.get(Number(day)) || 0);
 
+  // Calculate summary stats
+  const monthTotal = values.reduce((sum, v) => sum + v, 0);
+  const bestDay = values.length > 0 ? Math.max(...values) : 0;
+  const worstDay = values.length > 0 ? Math.min(...values) : 0;
+
+  // Update summary cards
+  const monthTotalEl = document.getElementById("chart-month-total");
+  const bestDayEl = document.getElementById("chart-best-day");
+  const worstDayEl = document.getElementById("chart-worst-day");
+
+  if (monthTotalEl) {
+    monthTotalEl.textContent = (monthTotal >= 0 ? "+" : "") + formatProfit(monthTotal);
+    monthTotalEl.className = "chart-summary-value " + (monthTotal >= 0 ? "positive" : "negative");
+  }
+  if (bestDayEl) {
+    bestDayEl.textContent = "+" + formatProfit(bestDay);
+    bestDayEl.className = "chart-summary-value positive";
+  }
+  if (worstDayEl) {
+    worstDayEl.textContent = formatProfit(worstDay);
+    worstDayEl.className = "chart-summary-value negative";
+  }
+
   if (!labels.length) {
     labels.push("-");
     values.push(0);
   }
 
+  const isDark = document.documentElement.classList.contains("dark");
+  const tickColor = isDark ? "rgba(245, 247, 255, 0.5)" : "rgba(30, 40, 60, 0.5)";
+  const gridColor = isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.06)";
+
   const dataset = {
     label: "Lucro diário",
     data: values,
-    backgroundColor: values.map((v) => (v >= 0 ? "rgba(34, 197, 94, 0.55)" : "rgba(255, 107, 107, 0.55)")),
-    borderRadius: 4,
+    backgroundColor: values.map((v) =>
+      v >= 0 ? "rgba(34, 197, 94, 0.65)" : "rgba(239, 68, 68, 0.65)"
+    ),
+    borderColor: values.map((v) =>
+      v >= 0 ? "#22c55e" : "#ef4444"
+    ),
+    borderWidth: 1,
+    borderRadius: 6,
+    borderSkipped: false,
   };
 
   if (miniProfitChart) {
@@ -1539,10 +1579,47 @@ function renderMiniProfitChart() {
     data: { labels, datasets: [dataset] },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } },
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: isDark ? "rgba(20, 22, 35, 0.95)" : "rgba(255, 255, 255, 0.95)",
+          titleColor: isDark ? "#f5f7ff" : "#1e2840",
+          bodyColor: isDark ? "#f5f7ff" : "#1e2840",
+          borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)",
+          borderWidth: 1,
+          padding: 12,
+          cornerRadius: 8,
+          displayColors: false,
+          callbacks: {
+            title: (items) => `Dia ${items[0].label}`,
+            label: (item) => {
+              const val = item.raw;
+              return `${val >= 0 ? "+" : ""}${formatProfit(val)}`;
+            },
+          },
+        },
+      },
       scales: {
-        x: { grid: { display: false } },
-        y: { grid: { display: false }, beginAtZero: true },
+        x: {
+          grid: { display: false },
+          ticks: {
+            color: tickColor,
+            font: { size: 11, weight: "500" },
+          },
+        },
+        y: {
+          grid: {
+            color: gridColor,
+            drawBorder: false,
+          },
+          border: { display: false },
+          ticks: {
+            color: tickColor,
+            font: { size: 11 },
+            callback: (value) => `R$${value}`,
+          },
+        },
       },
     },
   });

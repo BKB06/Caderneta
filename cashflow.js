@@ -31,6 +31,7 @@ const submitButton = document.getElementById("cashflow-submit");
 const resetButton = document.getElementById("cashflow-reset");
 const cashflowBody = document.getElementById("cashflow-body");
 const typeFilter = document.getElementById("type-filter");
+const bookFilterEl = document.getElementById("book-filter");
 const dateFilterStart = document.getElementById("date-filter-start");
 const dateFilterEnd = document.getElementById("date-filter-end");
 const clearFiltersBtn = document.getElementById("clear-filters");
@@ -47,6 +48,7 @@ async function loadCashflows() {
     cashflows = dados.map((flow) => ({
       ...flow,
       amount: Number(flow.amount),
+      book: flow.book || '',
     }));
   } catch (erro) {
     console.error("Erro ao carregar fluxo:", erro);
@@ -54,7 +56,6 @@ async function loadCashflows() {
   }
 }
 
-// Novas funções para falar com a API
 async function salvarFluxoBD(flow) {
   try {
     await fetch('api.php', {
@@ -88,6 +89,52 @@ async function loadProfilesFromApi() {
     console.error("Erro ao carregar perfis:", erro);
     return [];
   }
+}
+
+// Load books from existing bets for the datalist autocomplete
+async function loadBooksFromBets() {
+  try {
+    const profileId = getActiveProfileId();
+    const resposta = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'carregar_apostas', profile_id: profileId })
+    });
+    const dados = await resposta.json();
+    const books = new Set();
+    dados.forEach((b) => { if (b.book) books.add(b.book); });
+    // Also include books from cashflows
+    cashflows.forEach((f) => { if (f.book) books.add(f.book); });
+    return Array.from(books).sort();
+  } catch (erro) {
+    console.error("Erro ao carregar casas:", erro);
+    return [];
+  }
+}
+
+function populateBookDatalist(books) {
+  const datalist = document.getElementById("cashflow-book-datalist");
+  if (!datalist) return;
+  datalist.innerHTML = "";
+  books.forEach((book) => {
+    const opt = document.createElement("option");
+    opt.value = book;
+    datalist.appendChild(opt);
+  });
+}
+
+function renderBookFilter() {
+  if (!bookFilterEl) return;
+  const books = Array.from(new Set(cashflows.map((f) => f.book).filter(Boolean))).sort();
+  const current = bookFilterEl.value || "all";
+  bookFilterEl.innerHTML = '<option value="all">Todas</option>';
+  books.forEach((book) => {
+    const opt = document.createElement("option");
+    opt.value = book;
+    opt.textContent = book;
+    bookFilterEl.appendChild(opt);
+  });
+  bookFilterEl.value = books.includes(current) ? current : "all";
 }
 
 function parseLocaleNumber(value) {
@@ -149,14 +196,14 @@ function cashflowLabel(type) {
 
 function getFilteredCashflows() {
   const type = typeFilter?.value || "all";
+  const bookVal = bookFilterEl?.value || "all";
   const startDate = dateFilterStart?.value ? parseDateForSort(dateFilterStart.value) : null;
   const endDate = dateFilterEnd?.value ? parseDateForSort(dateFilterEnd.value) : null;
 
   return cashflows.filter((flow) => {
-    // Filtro por tipo
     const matchType = type === "all" || flow.type === type;
+    const matchBook = bookVal === "all" || flow.book === bookVal;
 
-    // Filtro por data
     let matchDate = true;
     if (startDate || endDate) {
       const flowDate = parseDateForSort(flow.date);
@@ -168,7 +215,7 @@ function getFilteredCashflows() {
       }
     }
 
-    return matchType && matchDate;
+    return matchType && matchBook && matchDate;
   });
 }
 
@@ -210,7 +257,7 @@ function renderTable() {
   if (data.length === 0) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 5;
+    cell.colSpan = 6;
     cell.textContent = "Nenhuma movimentação encontrada.";
     row.appendChild(cell);
     cashflowBody.appendChild(row);
@@ -238,6 +285,11 @@ function renderTable() {
     typeBadge.textContent = cashflowLabel(flow.type);
     tdType.appendChild(typeBadge);
     row.appendChild(tdType);
+
+    const tdBook = document.createElement("td");
+    tdBook.textContent = flow.book || "-";
+    tdBook.style.fontWeight = "500";
+    row.appendChild(tdBook);
 
     const tdAmount = document.createElement("td");
     const signedAmount = flow.type === "withdraw" ? -Math.abs(flow.amount) : flow.amount;
@@ -430,6 +482,7 @@ function refreshAll() {
   renderTable();
   renderChart();
   renderMonthlyLists();
+  renderBookFilter();
 }
 
 function resetForm() {
@@ -444,6 +497,12 @@ async function handleSubmit(event) {
   const rawDate = document.getElementById("cashflow-date").value.trim();
   const formattedDate = formatDateDisplay(rawDate);
   const amountValue = parseLocaleNumber(document.getElementById("cashflow-amount").value);
+  const bookValue = document.getElementById("cashflow-book").value.trim();
+
+  if (!bookValue) {
+    alert("Selecione ou digite a casa de apostas.");
+    return;
+  }
 
   const flow = {
     id: editingId || crypto.randomUUID(),
@@ -451,6 +510,7 @@ async function handleSubmit(event) {
     type: document.getElementById("cashflow-type").value,
     amount: amountValue,
     note: document.getElementById("cashflow-note").value.trim(),
+    book: bookValue,
   };
 
   if (!flow.date || !Number.isFinite(flow.amount)) {
@@ -475,6 +535,7 @@ function startEdit(flow) {
   editingId = flow.id;
   document.getElementById("cashflow-date").value = formatDateForInput(flow.date);
   document.getElementById("cashflow-type").value = flow.type;
+  document.getElementById("cashflow-book").value = flow.book || "";
   document.getElementById("cashflow-amount").value = numberFormatter.format(flow.amount);
   document.getElementById("cashflow-note").value = flow.note || "";
   submitButton.textContent = "Atualizar movimentação";
@@ -506,6 +567,7 @@ async function handleTableClick(event) {
 
 function clearFilters() {
   typeFilter.value = "all";
+  if (bookFilterEl) bookFilterEl.value = "all";
   dateFilterStart.value = "";
   dateFilterEnd.value = "";
   renderTable();
@@ -516,6 +578,7 @@ form.addEventListener("submit", handleSubmit);
 resetButton.addEventListener("click", resetForm);
 cashflowBody.addEventListener("click", handleTableClick);
 typeFilter?.addEventListener("change", renderTable);
+bookFilterEl?.addEventListener("change", renderTable);
 dateFilterStart?.addEventListener("change", renderTable);
 dateFilterEnd?.addEventListener("change", renderTable);
 clearFiltersBtn?.addEventListener("click", clearFilters);
@@ -563,6 +626,8 @@ profileSwitch?.addEventListener('change', (e) => {
 async function iniciarCashflow() {
   await renderProfileSwitcher();
   await loadCashflows();
+  const books = await loadBooksFromBets();
+  populateBookDatalist(books);
   refreshAll();
 }
 iniciarCashflow();

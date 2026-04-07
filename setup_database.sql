@@ -75,6 +75,7 @@ CREATE TABLE fluxo_caixa (
     type         ENUM('deposit','withdraw') NOT NULL,
     amount       DECIMAL(12,2) NOT NULL,
     note         VARCHAR(500)  DEFAULT '',
+    book         VARCHAR(100)  NOT NULL DEFAULT '' COMMENT 'Casa de apostas',
     created_at   TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
@@ -87,6 +88,7 @@ CREATE TABLE fluxo_caixa (
 
 CREATE INDEX idx_fluxo_profile_date ON fluxo_caixa (profile_id, date DESC);
 CREATE INDEX idx_fluxo_type         ON fluxo_caixa (type);
+CREATE INDEX idx_fluxo_book         ON fluxo_caixa (book);
 
 -- =============================================================
 -- dados_extras

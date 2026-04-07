@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -117,6 +117,12 @@
 
             <section class="panel"><div class="panel-header"><h2>Top 5 Maiores Lucros</h2></div><div class="top-list" id="top-profits"></div></section>
             <section class="panel"><div class="panel-header"><h2>Top 5 Maiores Perdas</h2></div><div class="top-list" id="top-losses"></div></section>
+
+            <section class="panel full" id="balance-ranking-section">
+              <div class="panel-header"><h2>🏆 Ranking de Saldo por Casa</h2><p>Casas ordenadas pelo saldo atual (depósitos - saques + lucro).</p></div>
+              <div class="balance-ranking-podium" id="balance-ranking-podium"></div>
+              <div class="table-wrapper" style="margin-top:16px;"><table><thead><tr><th>#</th><th>Casa</th><th>Depósitos</th><th>Saques</th><th>Lucro Apostas</th><th>Saldo</th></tr></thead><tbody id="balance-ranking-body"></tbody></table></div>
+            </section>
 
             <section class="panel full"><div class="panel-header"><h2>Desempenho por Casa</h2><p>Comparativo entre casas de apostas.</p></div><div class="table-wrapper"><table><thead><tr><th>#</th><th>Casa</th><th>Apostas</th><th>Greens</th><th>Reds</th><th>Taxa Acerto</th><th>Lucro</th><th>ROI</th></tr></thead><tbody id="ranking-by-book"></tbody></table></div></section>
             <section class="panel full"><div class="panel-header"><h2>Ranking de Quem sugeriu</h2><p>Quem mais acerta as sugestões de apostas?</p></div><div class="ai-ranking-grid" id="ai-ranking-grid-page"></div><div class="table-wrapper" style="margin-top:16px;"><table><thead><tr><th>#</th><th>Quem sugeriu</th><th>Apostas</th><th>Greens</th><th>Reds</th><th>Taxa Acerto</th><th>Lucro</th></tr></thead><tbody id="ai-ranking-table"></tbody></table></div></section>

@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -73,7 +73,8 @@
               <form id="cashflow-form" class="form-grid">
                 <label>Data<div class="input-group"><input type="date" id="cashflow-date" inputmode="numeric" required /></div></label>
                 <label>Tipo<select id="cashflow-type" required><option value="deposit">Depósito</option><option value="withdraw">Saque</option></select></label>
-                <label class="full">Valor<div class="input-group"><span class="prefix">R$</span><input type="text" inputmode="decimal" id="cashflow-amount" placeholder="200" required /></div></label>
+                <label>Casa de apostas<div class="input-group"><input type="text" id="cashflow-book" list="cashflow-book-datalist" placeholder="Ex: Betano" required /><datalist id="cashflow-book-datalist"></datalist></div></label>
+                <label>Valor<div class="input-group"><span class="prefix">R$</span><input type="text" inputmode="decimal" id="cashflow-amount" placeholder="200" required /></div></label>
                 <label class="full">Observação<input type="text" id="cashflow-note" placeholder="Opcional - Ex: PIX, Bonus, etc." /></label>
                 <div class="form-footer"><button type="submit" id="cashflow-submit">Salvar movimentação</button><button type="button" class="ghost" id="cashflow-reset">Limpar</button></div>
               </form>
@@ -85,11 +86,12 @@
               <div class="panel-header"><div><h2>Histórico de Movimentações</h2><p>Todas as entradas e saídas registradas.</p></div></div>
               <div class="filters-bar">
                 <label>Tipo<select id="type-filter"><option value="all">Todos</option><option value="deposit">Depósitos</option><option value="withdraw">Saques</option></select></label>
+                <label>Casa<select id="book-filter"><option value="all">Todas</option></select></label>
                 <label>De<input type="date" id="date-filter-start" /></label>
                 <label>Até<input type="date" id="date-filter-end" /></label>
                 <button type="button" class="ghost small" id="clear-filters">Limpar filtros</button>
               </div>
-              <div class="table-wrapper"><table><thead><tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Observação</th><th>Ações</th></tr></thead><tbody id="cashflow-body"></tbody></table></div>
+              <div class="table-wrapper"><table><thead><tr><th>Data</th><th>Tipo</th><th>Casa</th><th>Valor</th><th>Observação</th><th>Ações</th></tr></thead><tbody id="cashflow-body"></tbody></table></div>
             </section>
 
             <section class="panel"><div class="panel-header"><h2>Depósitos por Mês</h2></div><div class="monthly-list" id="deposits-by-month"></div></section>

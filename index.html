@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -308,7 +308,21 @@
                     </label>
                   </div>
                 </div>
-                <canvas id="mini-profit-chart" height="140"></canvas>
+                <div class="chart-summary-grid">
+                  <div class="chart-summary-card">
+                    <span class="chart-summary-label">Total do mês</span>
+                    <strong class="chart-summary-value" id="chart-month-total">R$ 0,00</strong>
+                  </div>
+                  <div class="chart-summary-card">
+                    <span class="chart-summary-label">Melhor dia</span>
+                    <strong class="chart-summary-value positive" id="chart-best-day">R$ 0,00</strong>
+                  </div>
+                  <div class="chart-summary-card">
+                    <span class="chart-summary-label">Pior dia</span>
+                    <strong class="chart-summary-value negative" id="chart-worst-day">R$ 0,00</strong>
+                  </div>
+                </div>
+                <canvas id="mini-profit-chart" height="180"></canvas>
                 <div class="ai-ranking-panel" id="ai-ranking-container" style="margin-top:12px;">
                   <h3>Ranking de Quem sugeriu</h3>
                   <div class="ai-ranking-grid" id="ai-ranking-grid"></div>
