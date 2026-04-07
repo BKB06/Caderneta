@@ -1579,7 +1579,8 @@ function renderMiniProfitChart() {
     data: { labels, datasets: [dataset] },
     options: {
       responsive: true,
-      maintainAspectRatio: false,
+      maintainAspectRatio: true,
+      aspectRatio: 2.5,
       plugins: {
         legend: { display: false },
         tooltip: {

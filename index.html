@@ -18,7 +18,7 @@
       })();
     </script>
     <title>Caderneta de Apostas</title>
-    <link rel="stylesheet" href="./styles.css?v=20260402-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260407-3" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -322,7 +322,9 @@
                     <strong class="chart-summary-value negative" id="chart-worst-day">R$ 0,00</strong>
                   </div>
                 </div>
-                <canvas id="mini-profit-chart" height="180"></canvas>
+                <div class="chart-canvas-wrapper" style="position:relative;">
+                  <canvas id="mini-profit-chart"></canvas>
+                </div>
                 <div class="ai-ranking-panel" id="ai-ranking-container" style="margin-top:12px;">
                   <h3>Ranking de Quem sugeriu</h3>
                   <div class="ai-ranking-grid" id="ai-ranking-grid"></div>
@@ -546,6 +548,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script type="module" src="./app.js?v=20260402-1"></script>
+    <script type="module" src="./app.js?v=20260407-3"></script>
   </body>
 </html>
