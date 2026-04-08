@@ -3674,50 +3674,84 @@ th {
 }
 
 /* =========================================================
-   Chart Summary Grid (Lucro por dia do mês)
+   Profit-Day Panel (Lucro por dia do mês)
    ========================================================= */
-.chart-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+.profit-day-panel {
+  padding: 20px;
+}
+
+.profit-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 16px;
 }
 
-.chart-summary-card {
-  padding: 14px 16px;
+.profit-day-header h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.profit-day-select {
+  min-width: 140px;
+  padding: 8px 32px 8px 14px;
   border-radius: var(--radius-sm);
-  background: var(--panel-strong);
   border: 1px solid var(--border);
-  text-align: center;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: var(--panel-strong);
+  color: var(--text);
+  font-size: 0.88rem;
+  font-family: inherit;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M3 5l3 3 3-3'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px;
+  transition: border-color 0.2s ease;
 }
 
-.chart-summary-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+.profit-day-select:hover,
+.profit-day-select:focus {
+  border-color: var(--primary);
+  outline: none;
 }
 
-.chart-summary-label {
-  display: block;
+.profit-day-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 28px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.profit-day-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profit-day-stat-label {
   font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   color: var(--text-muted);
-  margin-bottom: 6px;
+  font-style: italic;
 }
 
-.chart-summary-value {
-  display: block;
-  font-size: 1.1rem;
+.profit-day-stat-value {
+  font-size: 1.15rem;
   font-weight: 700;
   color: var(--text);
+  letter-spacing: -0.01em;
 }
 
-.chart-summary-value.positive {
+.profit-day-stat-value.positive {
   color: var(--success);
 }
 
-.chart-summary-value.negative {
+.profit-day-stat-value.negative {
   color: var(--danger);
 }
 
@@ -3830,9 +3864,9 @@ th {
 }
 
 @media (max-width: 600px) {
-  .chart-summary-grid {
-    grid-template-columns: 1fr;
-    gap: 8px;
+  .profit-day-stats {
+    flex-direction: column;
+    gap: 10px;
   }
 
   .balance-ranking-podium {

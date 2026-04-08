@@ -153,11 +153,21 @@ function initTheme() {
 
 function toggleTheme() {
   const html = document.documentElement;
+  // Destroy charts so they are recreated with correct theme colors
+  if (typeof miniProfitChart !== "undefined" && miniProfitChart) {
+    miniProfitChart.destroy();
+    miniProfitChart = null;
+  }
+  if (typeof balanceChart !== "undefined" && balanceChart) {
+    balanceChart.destroy();
+    balanceChart = null;
+  }
   if (html.classList.contains("dark")) {
     applyTheme("light-azulado");
-    return;
+  } else {
+    applyTheme("dark");
   }
-  applyTheme("dark");
+  refreshAll();
 }
 //calma
 async function loadBets() {
@@ -1533,15 +1543,15 @@ function renderMiniProfitChart() {
 
   if (monthTotalEl) {
     monthTotalEl.textContent = (monthTotal >= 0 ? "+" : "") + formatProfit(monthTotal);
-    monthTotalEl.className = "chart-summary-value " + (monthTotal >= 0 ? "positive" : "negative");
+    monthTotalEl.className = "profit-day-stat-value " + (monthTotal >= 0 ? "positive" : "negative");
   }
   if (bestDayEl) {
-    bestDayEl.textContent = "+" + formatProfit(bestDay);
-    bestDayEl.className = "chart-summary-value positive";
+    bestDayEl.textContent = (bestDay >= 0 ? "+" : "") + formatProfit(bestDay);
+    bestDayEl.className = "profit-day-stat-value " + (bestDay >= 0 ? "positive" : "negative");
   }
   if (worstDayEl) {
-    worstDayEl.textContent = formatProfit(worstDay);
-    worstDayEl.className = "chart-summary-value negative";
+    worstDayEl.textContent = (worstDay >= 0 ? "+" : "") + formatProfit(worstDay);
+    worstDayEl.className = "profit-day-stat-value " + (worstDay >= 0 ? "positive" : "negative");
   }
 
   if (!labels.length) {
@@ -1549,27 +1559,32 @@ function renderMiniProfitChart() {
     values.push(0);
   }
 
-  const isDark = document.documentElement.classList.contains("dark");
-  const tickColor = isDark ? "rgba(245, 247, 255, 0.5)" : "rgba(30, 40, 60, 0.5)";
-  const gridColor = isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.06)";
+  const html = document.documentElement;
+  const isDark = html.classList.contains("dark") || (!html.classList.contains("light") && !html.classList.contains("light-azulado") && !html.classList.contains("light-bege"));
+  const tickColor = isDark ? "rgba(245, 247, 255, 0.5)" : "rgba(30, 40, 60, 0.75)";
+  const gridColor = isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.1)";
 
   const dataset = {
     label: "Lucro diário",
     data: values,
     backgroundColor: values.map((v) =>
-      v >= 0 ? "rgba(34, 197, 94, 0.65)" : "rgba(239, 68, 68, 0.65)"
+      v >= 0 ? "rgba(34, 197, 94, 0.75)" : "rgba(239, 68, 68, 0.55)"
     ),
-    borderColor: values.map((v) =>
-      v >= 0 ? "#22c55e" : "#ef4444"
-    ),
-    borderWidth: 1,
-    borderRadius: 6,
+    borderColor: "transparent",
+    borderWidth: 0,
+    borderRadius: 3,
     borderSkipped: false,
+    maxBarThickness: 18,
+    categoryPercentage: 0.7,
+    barPercentage: 0.75,
   };
 
   if (miniProfitChart) {
     miniProfitChart.data.labels = labels;
     miniProfitChart.data.datasets[0] = dataset;
+    miniProfitChart.options.scales.x.ticks.color = tickColor;
+    miniProfitChart.options.scales.y.ticks.color = tickColor;
+    miniProfitChart.options.scales.y.grid.color = gridColor;
     miniProfitChart.update();
     return;
   }
@@ -1580,7 +1595,10 @@ function renderMiniProfitChart() {
     options: {
       responsive: true,
       maintainAspectRatio: true,
-      aspectRatio: 2.5,
+      aspectRatio: 2,
+      layout: {
+        padding: { top: 8, bottom: 4, left: 0, right: 0 },
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -1604,21 +1622,29 @@ function renderMiniProfitChart() {
       scales: {
         x: {
           grid: { display: false },
+          border: { display: false },
           ticks: {
             color: tickColor,
-            font: { size: 11, weight: "500" },
+            font: { size: 10, weight: "500" },
+            maxRotation: 0,
+            autoSkip: true,
+            autoSkipPadding: 6,
           },
         },
         y: {
           grid: {
             color: gridColor,
             drawBorder: false,
+            lineWidth: 0.5,
           },
           border: { display: false },
           ticks: {
             color: tickColor,
-            font: { size: 11 },
-            callback: (value) => `R$${value}`,
+            font: { size: 10 },
+            callback: (value) => {
+              return `R$${Number(value).toFixed(2).replace(".", ",")}`;
+            },
+            maxTicksLimit: 6,
           },
         },
       },
