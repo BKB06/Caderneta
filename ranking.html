@@ -3,20 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script>
-      (function () {
-        const key = "caderneta.theme";
-        const html = document.documentElement;
-        const saved = localStorage.getItem(key);
-        const preferredDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-        const theme = (saved === "dark" || saved === "light" || saved === "light-azulado" || saved === "light-bege")
-          ? saved
-          : (preferredDark ? "dark" : "light-azulado");
-
-        html.classList.remove("light", "dark", "light-azulado", "light-bege");
-        html.classList.add(theme);
-      })();
-    </script>
+    <script src="./caderneta-theme-boot.js"></script>
     <title>Ranking - Caderneta de Apostas</title>
     <link rel="stylesheet" href="./styles.css?v=20260402-1" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -25,7 +12,7 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar" id="app-sidebar">
+      <aside class="sidebar" id="app-sidebar" role="navigation">
         <div class="sidebar-brand"><h2>Caderneta</h2><p>v2 · MySQL</p></div>
         <div class="sidebar-group">
           <span class="sidebar-label">Principal</span>
@@ -41,7 +28,7 @@
         <div class="sidebar-group">
           <span class="sidebar-label">Sistema</span>
           <a class="sidebar-item" href="./settings.html"><span class="sidebar-dot"></span><span>Configurações</span></a>
-          <a class="sidebar-item" href="./index.html"><span class="sidebar-dot"></span><span>Exportar / PDF</span></a>
+          <button type="button" class="sidebar-item" id="export-pdf-btn"><span class="sidebar-dot"></span><span>Exportar / PDF</span></button>
         </div>
         <div class="sidebar-profile" id="sidebar-profile">
           <select id="profile-switch" class="profile-switch-native"></select>
@@ -52,8 +39,8 @@
 
       <div class="main-area">
         <header class="topbar">
-          <div class="topbar-left"><button type="button" class="icon-button mobile-menu-btn" id="mobile-menu-btn">☰</button><h1 class="topbar-title">Ranking</h1><button type="button" class="period-pill">Estatísticas</button></div>
-          <div class="topbar-right"><button type="button" class="theme-toggle" id="theme-toggle">🌙</button></div>
+          <div class="topbar-left"><button type="button" class="icon-button mobile-menu-btn" id="mobile-menu-btn" aria-label="Abrir menu">☰</button><h1 class="topbar-title">Ranking</h1><button type="button" class="period-pill">Estatísticas</button></div>
+          <div class="topbar-right"><button type="button" class="theme-toggle" id="theme-toggle" aria-label="Alterar tema">🌙</button></div>
         </header>
 
         <main class="page-content">
@@ -119,13 +106,25 @@
             <section class="panel"><div class="panel-header"><h2>Top 5 Maiores Perdas</h2></div><div class="top-list" id="top-losses"></div></section>
 
             <section class="panel full" id="balance-ranking-section">
-              <div class="panel-header"><h2>🏆 Ranking de Saldo por Casa</h2><p>Casas ordenadas pelo saldo atual (depósitos - saques + lucro).</p></div>
+              <div class="panel-header">
+                <div>
+                  <h2>🏆 Ranking por casa de apostas</h2>
+                  <p>Banca atual, volume apostado, lucro e aproveitamento por casa.</p>
+                </div>
+                <div class="balance-sort-controls" id="balance-sort-controls">
+                  <button type="button" class="ghost small active" data-sort="balance">Banca atual</button>
+                  <button type="button" class="ghost small" data-sort="profit">Lucro</button>
+                  <button type="button" class="ghost small" data-sort="staked">Total apostado</button>
+                  <button type="button" class="ghost small" data-sort="winrate">Aproveitamento</button>
+                </div>
+              </div>
               <div class="balance-ranking-podium" id="balance-ranking-podium"></div>
-              <div class="table-wrapper" style="margin-top:16px;"><table><thead><tr><th>#</th><th>Casa</th><th>Depósitos</th><th>Saques</th><th>Lucro Apostas</th><th>Saldo</th></tr></thead><tbody id="balance-ranking-body"></tbody></table></div>
+              <div class="table-wrapper" style="margin-top:16px;"><table><thead><tr><th>#</th><th>Casa</th><th>Banca atual</th><th>Total apostado</th><th>Lucro apostas</th><th>Aproveit.</th><th>Apostas</th></tr></thead><tbody id="balance-ranking-body"></tbody></table></div>
+              <div class="table-pagination" id="balance-ranking-pagination"><button type="button" class="ghost small" id="balance-ranking-prev">Anterior</button><span id="balance-ranking-info">Mostrando 0-0 de 0</span><button type="button" class="ghost small" id="balance-ranking-next">Próxima</button></div>
             </section>
 
-            <section class="panel full"><div class="panel-header"><h2>Desempenho por Casa</h2><p>Comparativo entre casas de apostas.</p></div><div class="table-wrapper"><table><thead><tr><th>#</th><th>Casa</th><th>Apostas</th><th>Greens</th><th>Reds</th><th>Taxa Acerto</th><th>Lucro</th><th>ROI</th></tr></thead><tbody id="ranking-by-book"></tbody></table></div></section>
-            <section class="panel full"><div class="panel-header"><h2>Ranking de Quem sugeriu</h2><p>Quem mais acerta as sugestões de apostas?</p></div><div class="ai-ranking-grid" id="ai-ranking-grid-page"></div><div class="table-wrapper" style="margin-top:16px;"><table><thead><tr><th>#</th><th>Quem sugeriu</th><th>Apostas</th><th>Greens</th><th>Reds</th><th>Taxa Acerto</th><th>Lucro</th></tr></thead><tbody id="ai-ranking-table"></tbody></table></div></section>
+            <section class="panel full"><div class="panel-header"><h2>Desempenho por Casa</h2><p>Comparativo entre casas de apostas.</p></div><div class="table-wrapper"><table><thead><tr><th>#</th><th>Casa</th><th>Apostas</th><th>Greens</th><th>Reds</th><th>Taxa Acerto</th><th>Lucro</th><th>ROI</th></tr></thead><tbody id="ranking-by-book"></tbody></table></div><div class="table-pagination" id="book-ranking-pagination"><button type="button" class="ghost small" id="book-ranking-prev">Anterior</button><span id="book-ranking-info">Mostrando 0-0 de 0</span><button type="button" class="ghost small" id="book-ranking-next">Próxima</button></div></section>
+            <section class="panel full"><div class="panel-header"><h2>Ranking de Quem sugeriu</h2><p>Quem mais acerta as sugestões de apostas?</p></div><div class="ai-ranking-grid" id="ai-ranking-grid-page"></div><div class="table-wrapper" style="margin-top:16px;"><table><thead><tr><th>#</th><th>Quem sugeriu</th><th>Apostas</th><th>Greens</th><th>Reds</th><th>Taxa Acerto</th><th>Lucro</th></tr></thead><tbody id="ai-ranking-table"></tbody></table></div><div class="table-pagination" id="ai-ranking-pagination"><button type="button" class="ghost small" id="ai-ranking-prev">Anterior</button><span id="ai-ranking-info">Mostrando 0-0 de 0</span><button type="button" class="ghost small" id="ai-ranking-next">Próxima</button></div></section>
             <section class="panel"><div class="panel-header"><h2>Distribuição por Casa</h2></div><div class="chart-container"><canvas id="book-distribution-chart"></canvas></div></section>
             <section class="panel"><div class="panel-header"><h2>Lucro por Casa</h2></div><div class="chart-container"><canvas id="book-profit-chart"></canvas></div></section>
           </div>
@@ -136,62 +135,14 @@
     </div>
 
     <div class="mobile-overlay" id="mobile-overlay"></div>
-    <nav class="bottom-nav"><a href="./index.html">Apostas</a><a href="./casino.html">Cassino</a><a href="./ranking.html" class="active">Ranking</a><a href="./settings.html">Mais</a></nav>
+    <nav class="bottom-nav" role="navigation"><a href="./index.html">Apostas</a><a href="./casino.html">Cassino</a><a href="./ranking.html" class="active">Ranking</a><a href="./settings.html">Mais</a></nav>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="./caderneta-utils.js"></script>
+    <script src="./caderneta-shell.js"></script>
     <script src="./ranking.js?v=20260402-1"></script>
     <script>
-      (function () {
-        const THEME_KEY = "caderneta.theme";
-        const html = document.documentElement;
-        const toggle = document.getElementById("theme-toggle");
-        const saved = localStorage.getItem(THEME_KEY);
-        const preferredDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-        const setTheme = (t) => {
-          html.classList.remove("light", "dark", "light-azulado", "light-bege");
-          html.classList.add(t);
-          localStorage.setItem(THEME_KEY, t);
-          if (toggle) {
-            if (t === "dark") toggle.textContent = "🌙";
-            if (t === "light-azulado" || t === "light") toggle.textContent = "🧊";
-          }
-        };
-        const initial = (saved === "dark" || saved === "light" || saved === "light-azulado") ? saved : (preferredDark ? "dark" : "light-azulado");
-        setTheme(initial);
-        toggle && toggle.addEventListener("click", () => {
-          if (html.classList.contains("dark")) return setTheme("light-azulado");
-          setTheme("dark");
-        });
-
-        const sidebar = document.getElementById("app-sidebar");
-        const overlay = document.getElementById("mobile-overlay");
-        document.getElementById("mobile-menu-btn")?.addEventListener("click", () => { sidebar?.classList.toggle("open"); overlay?.classList.toggle("show"); });
-        overlay?.addEventListener("click", () => { sidebar?.classList.remove("open"); overlay?.classList.remove("show"); });
-
-        const select = document.getElementById("profile-switch");
-        const trigger = document.getElementById("profile-trigger");
-        const dropdown = document.getElementById("profile-dropdown");
-        const avatar = document.getElementById("profile-avatar");
-        const name = document.getElementById("profile-name-display");
-        const initials = (n) => (n || "PF").split(" ").filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("") || "PF";
-        const sync = () => {
-          if (!select) return;
-          const options = Array.from(select.options);
-          const active = options.find((o) => o.selected) || options[0];
-          if (active) { name.textContent = active.textContent; avatar.textContent = initials(active.textContent); }
-          dropdown.innerHTML = "";
-          options.forEach((opt) => {
-            const btn = document.createElement("button"); btn.className = "profile-option" + (opt.selected ? " active" : ""); btn.type = "button"; btn.textContent = opt.textContent;
-            btn.onclick = () => { select.value = opt.value; select.dispatchEvent(new Event("change", { bubbles: true })); };
-            dropdown.appendChild(btn);
-          });
-        };
-        trigger && trigger.addEventListener("click", () => dropdown.classList.toggle("open"));
-        select && select.addEventListener("change", sync);
-        const observer = new MutationObserver(sync);
-        if (select) observer.observe(select, { childList: true, subtree: true, attributes: true });
-        sync();
-      })();
+      window.CadernetaShell.initAppShell({ profileSwitcher: true });
     </script>
   </body>
 </html>

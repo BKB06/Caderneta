@@ -3,20 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script>
-      (function () {
-        const key = "caderneta.theme";
-        const html = document.documentElement;
-        const saved = localStorage.getItem(key);
-        const preferredDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-        const theme = (saved === "dark" || saved === "light" || saved === "light-azulado" || saved === "light-bege")
-          ? saved
-          : (preferredDark ? "dark" : "light-azulado");
-
-        html.classList.remove("light", "dark", "light-azulado", "light-bege");
-        html.classList.add(theme);
-      })();
-    </script>
+    <script src="./caderneta-theme-boot.js"></script>
     <title>Saques e Depósitos - Caderneta de Apostas</title>
     <link rel="stylesheet" href="./styles.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -25,7 +12,7 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar" id="app-sidebar">
+      <aside class="sidebar" id="app-sidebar" role="navigation">
         <div class="sidebar-brand"><h2>Caderneta</h2><p>v2 · MySQL</p></div>
         <div class="sidebar-group">
           <span class="sidebar-label">Principal</span>
@@ -41,7 +28,7 @@
         <div class="sidebar-group">
           <span class="sidebar-label">Sistema</span>
           <a class="sidebar-item" href="./settings.html"><span class="sidebar-dot"></span><span>Configurações</span></a>
-          <a class="sidebar-item" href="./index.html"><span class="sidebar-dot"></span><span>Exportar / PDF</span></a>
+          <button type="button" class="sidebar-item" id="export-pdf-btn"><span class="sidebar-dot"></span><span>Exportar / PDF</span></button>
         </div>
         <div class="sidebar-profile" id="sidebar-profile">
           <select id="profile-switch" class="profile-switch-native"></select>
@@ -52,8 +39,8 @@
 
       <div class="main-area">
         <header class="topbar">
-          <div class="topbar-left"><button type="button" class="icon-button mobile-menu-btn" id="mobile-menu-btn">☰</button><h1 class="topbar-title">Fluxo de caixa</h1><button type="button" class="period-pill">Entradas e saídas</button></div>
-          <div class="topbar-right"><button type="button" class="theme-toggle" id="theme-toggle">🌙</button></div>
+          <div class="topbar-left"><button type="button" class="icon-button mobile-menu-btn" id="mobile-menu-btn" aria-label="Abrir menu">☰</button><h1 class="topbar-title">Fluxo de caixa</h1><button type="button" class="period-pill">Entradas e saídas</button></div>
+          <div class="topbar-right"><button type="button" class="theme-toggle" id="theme-toggle" aria-label="Alterar tema">🌙</button></div>
         </header>
 
         <main class="page-content">
@@ -71,9 +58,10 @@
             <section class="panel">
               <div class="panel-header"><h2>Nova Movimentação</h2><p>Registre depósitos e saques.</p></div>
               <form id="cashflow-form" class="form-grid">
-                <label>Data<div class="input-group"><input type="date" id="cashflow-date" inputmode="numeric" required /></div></label>
+                <label>Data<div class="input-group"><input type="date" id="cashflow-date" data-date-mask="true" inputmode="numeric" required /></div></label>
                 <label>Tipo<select id="cashflow-type" required><option value="deposit">Depósito</option><option value="withdraw">Saque</option></select></label>
                 <label>Casa de apostas<div class="input-group"><input type="text" id="cashflow-book" list="cashflow-book-datalist" placeholder="Ex: Betano" required /><datalist id="cashflow-book-datalist"></datalist></div></label>
+                <label>Casa rápida<select id="cashflow-book-select"><option value="">Selecionar...</option></select></label>
                 <label>Valor<div class="input-group"><span class="prefix">R$</span><input type="text" inputmode="decimal" id="cashflow-amount" placeholder="200" required /></div></label>
                 <label class="full">Observação<input type="text" id="cashflow-note" placeholder="Opcional - Ex: PIX, Bonus, etc." /></label>
                 <div class="form-footer"><button type="submit" id="cashflow-submit">Salvar movimentação</button><button type="button" class="ghost" id="cashflow-reset">Limpar</button></div>
@@ -87,11 +75,12 @@
               <div class="filters-bar">
                 <label>Tipo<select id="type-filter"><option value="all">Todos</option><option value="deposit">Depósitos</option><option value="withdraw">Saques</option></select></label>
                 <label>Casa<select id="book-filter"><option value="all">Todas</option></select></label>
-                <label>De<input type="date" id="date-filter-start" /></label>
-                <label>Até<input type="date" id="date-filter-end" /></label>
+                <label>De<input type="date" id="date-filter-start" data-date-mask="true" /></label>
+                <label>Até<input type="date" id="date-filter-end" data-date-mask="true" /></label>
                 <button type="button" class="ghost small" id="clear-filters">Limpar filtros</button>
               </div>
               <div class="table-wrapper"><table><thead><tr><th>Data</th><th>Tipo</th><th>Casa</th><th>Valor</th><th>Observação</th><th>Ações</th></tr></thead><tbody id="cashflow-body"></tbody></table></div>
+              <div class="table-pagination" id="cashflow-pagination"><button type="button" class="ghost small" id="cashflow-page-prev">Anterior</button><span id="cashflow-page-info">Mostrando 0-0 de 0</span><button type="button" class="ghost small" id="cashflow-page-next">Próxima</button></div>
             </section>
 
             <section class="panel"><div class="panel-header"><h2>Depósitos por Mês</h2></div><div class="monthly-list" id="deposits-by-month"></div></section>
@@ -104,62 +93,14 @@
     </div>
 
     <div class="mobile-overlay" id="mobile-overlay"></div>
-    <nav class="bottom-nav"><a href="./index.html">Apostas</a><a href="./casino.html">Cassino</a><a href="./ranking.html">Ranking</a><a href="./settings.html" class="active">Mais</a></nav>
+    <nav class="bottom-nav" role="navigation"><a href="./index.html">Apostas</a><a href="./casino.html">Cassino</a><a href="./cashflow.html" class="active">Fluxo</a><a href="./settings.html">Mais</a></nav>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="./caderneta-utils.js"></script>
+    <script src="./caderneta-shell.js"></script>
     <script src="./cashflow.js"></script>
     <script>
-      (function () {
-        const THEME_KEY = "caderneta.theme";
-        const html = document.documentElement;
-        const toggle = document.getElementById("theme-toggle");
-        const saved = localStorage.getItem(THEME_KEY);
-        const preferredDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-        const setTheme = (t) => {
-          html.classList.remove("light", "dark", "light-azulado", "light-bege");
-          html.classList.add(t);
-          localStorage.setItem(THEME_KEY, t);
-          if (toggle) {
-            if (t === "dark") toggle.textContent = "🌙";
-            if (t === "light-azulado" || t === "light") toggle.textContent = "🧊";
-          }
-        };
-        const initial = (saved === "dark" || saved === "light" || saved === "light-azulado") ? saved : (preferredDark ? "dark" : "light-azulado");
-        setTheme(initial);
-        toggle && toggle.addEventListener("click", () => {
-          if (html.classList.contains("dark")) return setTheme("light-azulado");
-          setTheme("dark");
-        });
-
-        const sidebar = document.getElementById("app-sidebar");
-        const overlay = document.getElementById("mobile-overlay");
-        document.getElementById("mobile-menu-btn")?.addEventListener("click", () => { sidebar?.classList.toggle("open"); overlay?.classList.toggle("show"); });
-        overlay?.addEventListener("click", () => { sidebar?.classList.remove("open"); overlay?.classList.remove("show"); });
-
-        const select = document.getElementById("profile-switch");
-        const trigger = document.getElementById("profile-trigger");
-        const dropdown = document.getElementById("profile-dropdown");
-        const avatar = document.getElementById("profile-avatar");
-        const name = document.getElementById("profile-name-display");
-        const initials = (n) => (n || "PF").split(" ").filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("") || "PF";
-        const sync = () => {
-          if (!select) return;
-          const options = Array.from(select.options);
-          const active = options.find((o) => o.selected) || options[0];
-          if (active) { name.textContent = active.textContent; avatar.textContent = initials(active.textContent); }
-          dropdown.innerHTML = "";
-          options.forEach((opt) => {
-            const btn = document.createElement("button"); btn.className = "profile-option" + (opt.selected ? " active" : ""); btn.type = "button"; btn.textContent = opt.textContent;
-            btn.onclick = () => { select.value = opt.value; select.dispatchEvent(new Event("change", { bubbles: true })); };
-            dropdown.appendChild(btn);
-          });
-        };
-        trigger && trigger.addEventListener("click", () => dropdown.classList.toggle("open"));
-        select && select.addEventListener("change", sync);
-        const observer = new MutationObserver(sync);
-        if (select) observer.observe(select, { childList: true, subtree: true, attributes: true });
-        sync();
-      })();
+      window.CadernetaShell.initAppShell({ profileSwitcher: true });
     </script>
   </body>
 </html>

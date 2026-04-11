@@ -1,26 +1,18 @@
-const ACTIVE_PROFILE_KEY = "caderneta.activeProfile.v1";
 const THEME_KEY = "caderneta.theme";
-const DEFAULT_AI_OPTIONS = ["Grok", "Claude", "Gemini", "Gemini DS", "ChatGPT"];
+const {
+  DEFAULT_AI_OPTIONS,
+  getActiveProfileId,
+  setActiveProfileId,
+  resolveActiveProfileId,
+  getSettingsKey,
+  parseLocaleNumber,
+  loadProfilesFromApi,
+  currencyFormatter,
+  percentFormatter,
+  numberFormatter,
+} = window.CadernetaUtils;
 
-// Funções para obter chaves dinâmicas baseadas no perfil ativo
-function getActiveProfileId() {
-  return localStorage.getItem(ACTIVE_PROFILE_KEY);
-}
-
-async function loadProfilesFromApi() {
-  try {
-    const resposta = await fetch('api.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ acao: 'carregar_perfis' })
-    });
-    const dados = await resposta.json();
-    return Array.isArray(dados) ? dados : [];
-  } catch (erro) {
-    console.error("Erro ao carregar perfis:", erro);
-    return [];
-  }
-}
+const Shell = window.CadernetaShell || {};
 
 function getStorageKey() {
   const profileId = getActiveProfileId();
@@ -35,11 +27,6 @@ function getCashflowKey() {
 function getBankrollKey() {
   const profileId = getActiveProfileId();
   return profileId ? `caderneta.bankroll.${profileId}` : "caderneta.bankroll.base.v1";
-}
-
-function getSettingsKey() {
-  const profileId = getActiveProfileId();
-  return profileId ? `caderneta.settings.${profileId}` : "caderneta.settings.v1";
 }
 
 function getNotesKey() {
@@ -93,6 +80,12 @@ let tableSortState = {
   direction: DEFAULT_TABLE_SORT.direction,
 };
 
+const BETS_PAGE_SIZE = 50;
+let betsCurrentPage = 1;
+const betsPagePrevButton = document.getElementById("bets-page-prev");
+const betsPageNextButton = document.getElementById("bets-page-next");
+const betsPageInfo = document.getElementById("bets-page-info");
+
 // Modal elements
 const dayModal = document.getElementById("day-modal");
 const modalTitle = document.getElementById("modal-title");
@@ -110,25 +103,9 @@ let baseBankroll = null;
 let settings = null;
 let categories = [];
 
-const currencyFormatter = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  maximumFractionDigits: 2,
-});
-
-const percentFormatter = new Intl.NumberFormat("pt-BR", {
-  style: "percent",
-  maximumFractionDigits: 1,
-});
-
-const numberFormatter = new Intl.NumberFormat("pt-BR", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
 function applyTheme(theme) {
   const html = document.documentElement;
-  const allowed = ["dark", "light-azulado", "light"];
+  const allowed = ["dark", "light-azulado", "light", "light-bege"];
   const resolved = allowed.includes(theme) ? theme : "dark";
   html.classList.remove("light", "dark", "light-azulado", "light-bege");
   html.classList.add(resolved);
@@ -137,13 +114,16 @@ function applyTheme(theme) {
   const toggle = document.getElementById("theme-toggle");
   if (toggle) {
     if (resolved === "dark") toggle.textContent = "🌙";
-    if (resolved === "light-azulado" || resolved === "light") toggle.textContent = "🧊";
+    if (resolved === "light-azulado") toggle.textContent = "🧊";
+    if (resolved === "light") toggle.textContent = "☀️";
+    if (resolved === "light-bege") toggle.textContent = "🏖️";
+    toggle.setAttribute("aria-label", `Alterar tema (atual: ${resolved})`);
   }
 }
 
 function initTheme() {
   const saved = localStorage.getItem(THEME_KEY);
-  if (saved === "dark" || saved === "light" || saved === "light-azulado") {
+  if (saved === "dark" || saved === "light" || saved === "light-azulado" || saved === "light-bege") {
     applyTheme(saved);
     return;
   }
@@ -153,6 +133,7 @@ function initTheme() {
 
 function toggleTheme() {
   const html = document.documentElement;
+  const themeOrder = ["dark", "light-azulado", "light", "light-bege"];
   // Destroy charts so they are recreated with correct theme colors
   if (typeof miniProfitChart !== "undefined" && miniProfitChart) {
     miniProfitChart.destroy();
@@ -162,11 +143,9 @@ function toggleTheme() {
     balanceChart.destroy();
     balanceChart = null;
   }
-  if (html.classList.contains("dark")) {
-    applyTheme("light-azulado");
-  } else {
-    applyTheme("dark");
-  }
+  const currentTheme = themeOrder.find((themeName) => html.classList.contains(themeName)) || "dark";
+  const nextTheme = themeOrder[(themeOrder.indexOf(currentTheme) + 1) % themeOrder.length];
+  applyTheme(nextTheme);
   refreshAll();
 }
 //calma
@@ -204,6 +183,7 @@ async function loadBets() {
 
   } catch (erro) {
     console.error("Erro de comunicação com a API:", erro);
+    Shell.showApiError?.("Nao foi possivel carregar apostas da API.");
     bets = []; 
   }
 }
@@ -224,6 +204,7 @@ async function loadCashflows() {
     }));
   } catch (erro) {
     console.error("Erro ao carregar fluxo na página principal:", erro);
+    Shell.showApiError?.("Nao foi possivel carregar o fluxo de caixa da API.");
     cashflows = [];
   }
 }
@@ -240,6 +221,7 @@ async function loadCategories() {
     categories = Array.isArray(dados) ? dados : [];
   } catch (erro) {
     console.error("Erro ao carregar categorias:", erro);
+    Shell.showApiError?.("Nao foi possivel carregar categorias da API.");
     categories = [];
   }
 }
@@ -556,14 +538,6 @@ function formatAITags(aisString) {
     span.textContent = ai.trim();
     return span;
   });
-}
-
-function parseLocaleNumber(value) {
-  if (typeof value !== "string") {
-    return Number(value);
-  }
-  const normalized = value.replace(/\./g, "").replace(/,/g, ".").trim();
-  return Number(normalized);
 }
 
 function formatStake(value) {
@@ -1123,10 +1097,19 @@ function renderTable() {
       betsMobileList.innerHTML = `<div class="bet-card"><div class="bet-card-event">${emptyMessage}</div></div>`;
     }
     updateSortHeaders();
+    renderBetsPagination(0, 0, 0, 0);
     return;
   }
 
-  data.forEach((bet) => {
+  const totalItems = data.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / BETS_PAGE_SIZE));
+  if (betsCurrentPage > totalPages) betsCurrentPage = totalPages;
+  if (betsCurrentPage < 1) betsCurrentPage = 1;
+  const startIndex = (betsCurrentPage - 1) * BETS_PAGE_SIZE;
+  const endIndex = Math.min(startIndex + BETS_PAGE_SIZE, totalItems);
+  const pageData = data.slice(startIndex, endIndex);
+
+  pageData.forEach((bet) => {
     const profit = calcProfit(bet);
     const potentialProfit = calcPotentialProfit(bet.stake, bet.odds);
     const statusClass = `status-badge ${bet.status}`;
@@ -1201,6 +1184,30 @@ function renderTable() {
   });
 
   updateSortHeaders();
+  renderBetsPagination(startIndex + 1, endIndex, totalItems, totalPages);
+}
+
+function renderBetsPagination(start, end, totalItems, totalPages) {
+  if (betsPageInfo) {
+    betsPageInfo.textContent = `Mostrando ${start}-${end} de ${totalItems}`;
+  }
+
+  if (betsPagePrevButton) {
+    betsPagePrevButton.disabled = betsCurrentPage <= 1 || totalItems === 0;
+  }
+
+  if (betsPageNextButton) {
+    betsPageNextButton.disabled = betsCurrentPage >= totalPages || totalItems === 0;
+  }
+}
+
+function resetBetsPagination() {
+  betsCurrentPage = 1;
+}
+
+function resetBetsPaginationAndRefresh() {
+  resetBetsPagination();
+  refreshAll();
 }
 
 function statusLabel(status) {
@@ -2433,28 +2440,36 @@ function drawMiniStatCard(ctx, x, y, w, h, label, value, color) {
   ctx.fillText(value, x + w / 2, y + 90);
 }
 async function init() {
-  initTheme();
-  applyTableStateFromUrl();
-  const periodPill = document.getElementById("period-pill");
-  if (periodPill) {
-    const date = new Date();
-    const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-    periodPill.textContent = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
-  }
+  Shell.showGlobalLoading?.("Carregando dados da caderneta...");
+  try {
+    initTheme();
+    applyTableStateFromUrl();
+    const periodPill = document.getElementById("period-pill");
+    if (periodPill) {
+      const date = new Date();
+      const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+      periodPill.textContent = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+    }
 
-  await renderProfileSwitcher();
-  await loadBets();
-  await loadCashflows();
-  await loadCategories();
-  loadSettings(); // Podes deixar este normal para já
-  await loadBankrollBase(); // <-- Adiciona o await
-  await loadGoals();        // <-- Adiciona o await
-  applySettings();
-  updatePotentialProfit();
-  refreshAll();
-  renderCalendar();
-  handleHashSection();
-  await loadQuickNotes();   // <-- Adiciona o await
+    await renderProfileSwitcher();
+    await loadBets();
+    await loadCashflows();
+    await loadCategories();
+    loadSettings();
+    await loadBankrollBase();
+    await loadGoals();
+    applySettings();
+    updatePotentialProfit();
+    refreshAll();
+    renderCalendar();
+    handleHashSection();
+    await loadQuickNotes();
+  } catch (error) {
+    console.error("Falha ao iniciar app:", error);
+    Shell.showApiError?.("Nao foi possivel iniciar a pagina de apostas.");
+  } finally {
+    Shell.hideGlobalLoading?.();
+  }
 }
 async function salvarApostaBD(aposta) {
   try {
@@ -2996,22 +3011,31 @@ betStatusSelect?.addEventListener("change", (e) => {
 });
 
 bankrollInput?.addEventListener("input", handleBankrollInput);
-bookFilter?.addEventListener("change", refreshAll);
-statusFilter?.addEventListener("change", refreshAll);
-betSearchInput?.addEventListener("input", refreshAll);
-document.getElementById("category-filter")?.addEventListener("change", refreshAll);
-boostFilter?.addEventListener("change", refreshAll);
-dateFilterStart?.addEventListener("change", refreshAll);
-dateFilterEnd?.addEventListener("change", refreshAll);
+statusFilter?.addEventListener("change", resetBetsPaginationAndRefresh);
+betSearchInput?.addEventListener("input", resetBetsPaginationAndRefresh);
+document.getElementById("category-filter")?.addEventListener("change", resetBetsPaginationAndRefresh);
+boostFilter?.addEventListener("change", resetBetsPaginationAndRefresh);
+dateFilterStart?.addEventListener("change", resetBetsPaginationAndRefresh);
+dateFilterEnd?.addEventListener("change", resetBetsPaginationAndRefresh);
+bookFilter?.addEventListener("change", resetBetsPaginationAndRefresh);
 clearDateFilter?.addEventListener("click", () => {
   if (dateFilterStart) dateFilterStart.value = "";
   if (dateFilterEnd) dateFilterEnd.value = "";
-  refreshAll();
+  resetBetsPaginationAndRefresh();
 });
 betsBody?.addEventListener("click", handleTableClick);
 betsMobileList?.addEventListener("click", handleTableClick);
 finalizedBetsList?.addEventListener("click", handleTableClick);
 document.getElementById("bets-table-head")?.addEventListener("click", handleTableSortClick);
+betsPagePrevButton?.addEventListener("click", () => {
+  if (betsCurrentPage <= 1) return;
+  betsCurrentPage -= 1;
+  renderTable();
+});
+betsPageNextButton?.addEventListener("click", () => {
+  betsCurrentPage += 1;
+  renderTable();
+});
 
 const aiSelector = document.getElementById("bet-ai-selector");
 if (aiSelector) {
@@ -3514,8 +3538,39 @@ REGRAS IMPORTANTES:
   const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!textResponse) return null;
   
-  let cleanJson = textResponse.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  return JSON.parse(cleanJson);
+  return parseGeminiJsonResponse(textResponse);
+}
+
+function parseGeminiJsonResponse(textResponse) {
+  const normalized = textResponse
+    .replace(/```json\n?/gi, "")
+    .replace(/```\n?/g, "")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .trim();
+
+  const tryParse = (value) => {
+    if (!value) return null;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  };
+
+  const direct = tryParse(normalized);
+  if (direct) return direct;
+
+  const start = normalized.indexOf("{");
+  const end = normalized.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    const extracted = normalized.slice(start, end + 1);
+    const withoutTrailingCommas = extracted.replace(/,\s*([}\]])/g, "$1");
+    const parsed = tryParse(withoutTrailingCommas);
+    if (parsed) return parsed;
+  }
+
+  throw new Error("Resposta inválida da IA ao extrair o cupom.");
 }
 
 // ---- PREENCHIMENTO DO FORMULÁRIO ----
@@ -3580,9 +3635,13 @@ async function handleCouponImport(file) {
       // Tentar Gemini primeiro (mais preciso)
       showImportStatus("🤖 Analisando com Gemini...", "info");
       showProgress(50, "Enviando para análise...");
-      
-      const base64 = await fileToBase64(file);
-      betData = await extractBetWithGemini(base64, file.type);
+
+      try {
+        const base64 = await fileToBase64(file);
+        betData = await extractBetWithGemini(base64, file.type);
+      } catch (geminiError) {
+        console.warn("Falha ao analisar com Gemini, usando OCR local:", geminiError);
+      }
       
       if (betData) {
         showProgress(100, "Concluído!");
@@ -3593,7 +3652,7 @@ async function handleCouponImport(file) {
       }
       
       // Se Gemini falhou, usar Tesseract como fallback
-      showImportStatus("⚠️ Gemini indisponível, usando OCR local...", "info");
+      showImportStatus("⚠️ Não foi possível ler com Gemini, usando OCR local...", "info");
     } else {
       showImportStatus("🔍 Analisando cupom (OCR local)...", "info");
     }
@@ -3738,12 +3797,7 @@ async function renderProfileSwitcher() {
   if (!profileSwitch) return;
 
   const profiles = await loadProfilesFromApi();
-  let activeId = getActiveProfileId();
-
-  if (profiles.length > 0 && (!activeId || !profiles.find(p => p.id === activeId))) {
-    activeId = profiles[0].id;
-    localStorage.setItem(ACTIVE_PROFILE_KEY, activeId);
-  }
+  const activeId = await resolveActiveProfileId(profiles);
   
   profileSwitch.innerHTML = '';
   
@@ -3768,7 +3822,7 @@ async function renderProfileSwitcher() {
 profileSwitch?.addEventListener('change', (e) => {
   const newProfileId = e.target.value;
   if (newProfileId) {
-    localStorage.setItem(ACTIVE_PROFILE_KEY, newProfileId);
+    setActiveProfileId(newProfileId);
     // Recarregar a página para aplicar o novo perfil
     window.location.reload();
   }
@@ -3903,8 +3957,13 @@ function closePdfModal() {
 }
 
 exportPdfBtn?.addEventListener('click', openPdfModal);
+window.addEventListener('caderneta:open-pdf-modal', openPdfModal);
 pdfModalClose?.addEventListener('click', closePdfModal);
 pdfModal?.addEventListener('click', (e) => { if (e.target === pdfModal) closePdfModal(); });
+
+if (new URLSearchParams(window.location.search).get('openPdf') === '1') {
+  window.setTimeout(openPdfModal, 100);
+}
 
 pdfGenerateBtn?.addEventListener('click', async () => {
   const val = pdfMonthSelect.value;

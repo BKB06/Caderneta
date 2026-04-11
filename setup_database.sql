@@ -16,6 +16,7 @@ DROP TABLE IF EXISTS ganhos_casino;
 DROP TABLE IF EXISTS categorias;
 DROP TABLE IF EXISTS dados_extras;
 DROP TABLE IF EXISTS fluxo_caixa;
+DROP TABLE IF EXISTS aposta_sugestoes;
 DROP TABLE IF EXISTS apostas;
 DROP TABLE IF EXISTS perfis;
 
@@ -36,12 +37,11 @@ CREATE TABLE perfis (
 CREATE TABLE apostas (
     id             VARCHAR(64)   NOT NULL,
     profile_id     VARCHAR(64)   NOT NULL,
-    date           VARCHAR(10)   NOT NULL COMMENT 'DD/MM/YYYY',
+    date           DATE          NOT NULL,
     event          VARCHAR(500)  NOT NULL,
     odds           DECIMAL(8,3)  NOT NULL,
     stake          DECIMAL(12,2) NOT NULL,
     book           VARCHAR(100)  NOT NULL DEFAULT '',
-    quem_sugeriu   VARCHAR(500)  DEFAULT NULL COMMENT 'CSV com nomes de quem sugeriu',
     status         ENUM('pending','win','loss','void','cashout') NOT NULL DEFAULT 'pending',
     is_freebet     TINYINT(1)    NOT NULL DEFAULT 0,
     is_boost       TINYINT(1)    NOT NULL DEFAULT 0,
@@ -66,12 +66,31 @@ CREATE INDEX idx_apostas_boost          ON apostas (is_boost);
 CREATE INDEX idx_apostas_category       ON apostas (category);
 
 -- =============================================================
+-- aposta_sugestoes (1NF)
+-- =============================================================
+CREATE TABLE aposta_sugestoes (
+    aposta_id       VARCHAR(64)  NOT NULL,
+    profile_id      VARCHAR(64)  NOT NULL,
+    suggestor_name  VARCHAR(120) NOT NULL,
+    created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (aposta_id, suggestor_name),
+    KEY idx_aposta_sugestoes_profile_name (profile_id, suggestor_name),
+    CONSTRAINT fk_aposta_sugestoes_aposta
+      FOREIGN KEY (aposta_id) REFERENCES apostas(id)
+      ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT fk_aposta_sugestoes_perfil
+      FOREIGN KEY (profile_id) REFERENCES perfis(id)
+      ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =============================================================
 -- fluxo_caixa
 -- =============================================================
 CREATE TABLE fluxo_caixa (
     id           VARCHAR(64)   NOT NULL,
     profile_id   VARCHAR(64)   NOT NULL,
-    date         VARCHAR(10)   NOT NULL COMMENT 'DD/MM/YYYY',
+    date         DATE          NOT NULL,
     type         ENUM('deposit','withdraw') NOT NULL,
     amount       DECIMAL(12,2) NOT NULL,
     note         VARCHAR(500)  DEFAULT '',
@@ -132,7 +151,7 @@ CREATE INDEX idx_categorias_profile ON categorias (profile_id, sort_order);
 CREATE TABLE ganhos_casino (
     id           VARCHAR(64)   NOT NULL,
     profile_id   VARCHAR(64)   NOT NULL,
-    date         VARCHAR(10)   NOT NULL COMMENT 'DD/MM/YYYY',
+    date         DATE          NOT NULL,
     game         VARCHAR(200)  NOT NULL,
     platform     VARCHAR(100)  NOT NULL DEFAULT '',
     bet_amount   DECIMAL(12,2) NOT NULL DEFAULT 0.00,

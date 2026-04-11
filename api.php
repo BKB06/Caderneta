@@ -123,7 +123,7 @@ function ensureApostasBoostColumn(mysqli $conn): void {
 }
 
 /**
- * Garante coluna quem_sugeriu na tabela apostas (migra ai legado quando existir).
+ * Garante coluna quem_sugeriu apenas para legado (migra ai legado quando existir).
  */
 function ensureApostasQuemSugeriuColumn(mysqli $conn): void {
     static $checked = false;
@@ -146,8 +146,70 @@ function ensureApostasQuemSugeriuColumn(mysqli $conn): void {
 
         if ($hasOld) {
             $conn->query("ALTER TABLE apostas CHANGE COLUMN ai quem_sugeriu VARCHAR(500) DEFAULT NULL COMMENT 'CSV com nomes de quem sugeriu'");
-        } else {
-            $conn->query("ALTER TABLE apostas ADD COLUMN quem_sugeriu VARCHAR(500) DEFAULT NULL COMMENT 'CSV com nomes de quem sugeriu' AFTER book");
+        }
+    }
+
+    $checked = true;
+}
+
+/**
+ * Transforma CSV de sugestões em lista única e limpa.
+ */
+function parseSuggestionCsv(?string $raw): array {
+    if ($raw === null) return [];
+
+    $parts = explode(',', $raw);
+    $clean = [];
+    $seen = [];
+
+    foreach ($parts as $part) {
+        $name = trim((string)$part);
+        if ($name === '') continue;
+        $key = strtolower($name);
+        if (isset($seen[$key])) continue;
+        $seen[$key] = true;
+        $clean[] = $name;
+    }
+
+    return $clean;
+}
+
+/**
+ * Garante tabela normalizada de sugestões por aposta e migra dados CSV legados.
+ */
+function ensureApostaSugestoesTable(mysqli $conn): void {
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    ensureApostasQuemSugeriuColumn($conn);
+
+    $conn->query("\n        CREATE TABLE IF NOT EXISTS aposta_sugestoes (\n            aposta_id VARCHAR(64) NOT NULL,\n            profile_id VARCHAR(64) NOT NULL,\n            suggestor_name VARCHAR(120) NOT NULL,\n            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,\n            PRIMARY KEY (aposta_id, suggestor_name),\n            KEY idx_aposta_sugestoes_profile_name (profile_id, suggestor_name),\n            CONSTRAINT fk_aposta_sugestoes_aposta\n                FOREIGN KEY (aposta_id) REFERENCES apostas(id)\n                ON DELETE CASCADE ON UPDATE CASCADE\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci\n    ");
+
+    // Migração idempotente de CSV legado para tabela normalizada.
+    $legacyCol = $conn->query("SHOW COLUMNS FROM apostas LIKE 'quem_sugeriu'");
+    $hasLegacyCsv = $legacyCol && $legacyCol->num_rows > 0;
+    if ($legacyCol) {
+        $legacyCol->free();
+    }
+
+    if ($hasLegacyCsv) {
+        $result = $conn->query("SELECT id, profile_id, quem_sugeriu FROM apostas WHERE quem_sugeriu IS NOT NULL AND TRIM(quem_sugeriu) <> ''");
+        if ($result) {
+            $insert = $conn->prepare("INSERT IGNORE INTO aposta_sugestoes (aposta_id, profile_id, suggestor_name) VALUES (?, ?, ?)");
+            while ($row = $result->fetch_assoc()) {
+                $apostaId = (string)$row['id'];
+                $profileId = (string)$row['profile_id'];
+                $names = parseSuggestionCsv((string)$row['quem_sugeriu']);
+
+                foreach ($names as $name) {
+                    $insert->bind_param("sss", $apostaId, $profileId, $name);
+                    $insert->execute();
+                }
+            }
+            $insert->close();
+            $result->free();
         }
     }
 
@@ -178,6 +240,59 @@ function ensureFluxoBookColumn(mysqli $conn): void {
 }
 
 /**
+ * Garante que uma coluna `date` esteja como DATE (migração retrocompatível de VARCHAR).
+ */
+function ensureDateColumnsAreDate(mysqli $conn): void {
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+
+    $tables = [
+        ['table' => 'apostas', 'index' => 'idx_apostas_profile_date', 'indexSql' => 'CREATE INDEX idx_apostas_profile_date ON apostas (profile_id, `date` DESC)'],
+        ['table' => 'fluxo_caixa', 'index' => 'idx_fluxo_profile_date', 'indexSql' => 'CREATE INDEX idx_fluxo_profile_date ON fluxo_caixa (profile_id, `date` DESC)'],
+        ['table' => 'ganhos_casino', 'index' => 'idx_casino_profile_date', 'indexSql' => 'CREATE INDEX idx_casino_profile_date ON ganhos_casino (profile_id, `date` DESC)'],
+    ];
+
+    foreach ($tables as $meta) {
+        $table = $meta['table'];
+        $indexName = $meta['index'];
+
+        $stmt = $conn->prepare("SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'date' LIMIT 1");
+        $stmt->bind_param("s", $table);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result ? $result->fetch_assoc() : null;
+        $stmt->close();
+
+        $dataType = strtolower((string)($row['DATA_TYPE'] ?? ''));
+        if ($dataType === 'date') {
+            continue;
+        }
+
+        $conn->query("ALTER TABLE {$table} ADD COLUMN date_tmp DATE NULL AFTER profile_id");
+        $conn->query("\n            UPDATE {$table}\n            SET date_tmp = CASE\n                WHEN `date` REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN STR_TO_DATE(`date`, '%Y-%m-%d')\n                WHEN `date` REGEXP '^[0-9]{2}/[0-9]{2}/[0-9]{4}$' THEN STR_TO_DATE(`date`, '%d/%m/%Y')\n                ELSE NULL\n            END\n        ");
+        $conn->query("UPDATE {$table} SET date_tmp = COALESCE(date_tmp, DATE(created_at), CURDATE())");
+
+        $conn->query("ALTER TABLE {$table} DROP COLUMN `date`");
+        $conn->query("ALTER TABLE {$table} CHANGE COLUMN date_tmp `date` DATE NOT NULL");
+
+        $stmt = $conn->prepare("SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1");
+        $stmt->bind_param("ss", $table, $indexName);
+        $stmt->execute();
+        $idxResult = $stmt->get_result();
+        $idxExists = $idxResult && $idxResult->fetch_assoc();
+        $stmt->close();
+
+        if (!$idxExists) {
+            $conn->query($meta['indexSql']);
+        }
+    }
+
+    $checked = true;
+}
+
+/**
  * Retorna um profile_id sanitizado (nunca vazio).
  */
 function getProfileId(array $dados): string {
@@ -190,6 +305,22 @@ function getProfileId(array $dados): string {
     }
 
     return $profile_id;
+}
+
+/**
+ * Normaliza data recebida em YYYY-MM-DD (aceita YYYY-MM-DD e DD/MM/YYYY).
+ */
+function normalizeDateInput(string $date): ?string {
+    $value = trim($date);
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+        return $value;
+    }
+
+    if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $value, $m)) {
+        return sprintf('%04d-%02d-%02d', (int)$m[3], (int)$m[2], (int)$m[1]);
+    }
+
+    return null;
 }
 
 /**
@@ -226,6 +357,17 @@ $acoes_permitidas = [
 
 if (!in_array($acao, $acoes_permitidas, true)) {
     responder(["sucesso" => false, "erro" => "Ação não reconhecida."]);
+}
+
+$acoes_com_data = [
+    'salvar_aposta', 'carregar_apostas', 'excluir_aposta',
+    'salvar_fluxo', 'carregar_fluxo', 'excluir_fluxo',
+    'salvar_casino', 'carregar_casino', 'excluir_casino',
+    'ranking_saldo_casas'
+];
+
+if (in_array($acao, $acoes_com_data, true)) {
+    ensureDateColumnsAreDate($conn);
 }
 
 // ---------------------------------------------------------
@@ -372,24 +514,24 @@ elseif ($acao === 'salvar_aposta') {
     }
 
     $profile_id = getProfileId($dados);
-
-    // Validações do lado do servidor
-    $id     = trim($aposta['id'] ?? '');
-    $date   = trim($aposta['date'] ?? '');
-    $event  = trim($aposta['event'] ?? '');
-    $odds   = floatval($aposta['odds'] ?? 0);
-    $stake  = floatval($aposta['stake'] ?? 0);
-    $book   = trim($aposta['book'] ?? '');
+    $id = trim($aposta['id'] ?? '');
+    $date = normalizeDateInput((string)($aposta['date'] ?? ''));
+    $event = trim($aposta['event'] ?? '');
+    $odds = floatval($aposta['odds'] ?? 0);
+    $stake = floatval($aposta['stake'] ?? 0);
+    $book = trim($aposta['book'] ?? '');
     $quem_sugeriu = !empty($aposta['quem_sugeriu'])
         ? trim($aposta['quem_sugeriu'])
         : (!empty($aposta['ai']) ? trim($aposta['ai']) : null);
+    $suggestors = parseSuggestionCsv($quem_sugeriu);
     $status = $aposta['status'] ?? 'pending';
     $isFreebet = !empty($aposta['isFreebet']) ? 1 : 0;
     $isBoost = !empty($aposta['isBoost']) ? 1 : 0;
     $category = !empty($aposta['category']) ? trim($aposta['category']) : null;
+    $cashout_value = ($status === 'cashout' && isset($aposta['cashout_value'])) ? floatval($aposta['cashout_value']) : null;
 
     // Validação de campos obrigatórios
-    if ($id === '' || $date === '' || $event === '' || $book === '') {
+    if ($id === '' || !$date || $event === '' || $book === '') {
         responder(["sucesso" => false, "erro" => "Campos obrigatórios em falta (id, date, event, book)."]);
     }
     if ($odds <= 1.0) {
@@ -402,27 +544,24 @@ elseif ($acao === 'salvar_aposta') {
     // Validar status contra whitelist
     $status_permitidos = ['pending', 'win', 'loss', 'void', 'cashout'];
     if (!in_array($status, $status_permitidos, true)) {
-        $status = 'pending';
+        responder(["sucesso" => false, "erro" => "Status inválido."]);
     }
-
-    $cashout_value = ($status === 'cashout' && isset($aposta['cashout_value'])) ? floatval($aposta['cashout_value']) : null;
 
     // Garantir que o perfil existe e pertence à sessão atual
     ensureAuthorizedProfile($conn, $profile_id);
     ensureApostasBoostColumn($conn);
-    ensureApostasQuemSugeriuColumn($conn);
+    ensureApostaSugestoesTable($conn);
 
     // INSERT ... ON DUPLICATE KEY UPDATE (em vez de REPLACE INTO)
     $stmt = $conn->prepare("
-        INSERT INTO apostas (id, profile_id, date, event, odds, stake, book, quem_sugeriu, status, is_freebet, is_boost, category, cashout_value)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO apostas (id, profile_id, date, event, odds, stake, book, status, is_freebet, is_boost, category, cashout_value)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             date = VALUES(date),
             event = VALUES(event),
             odds = VALUES(odds),
             stake = VALUES(stake),
             book = VALUES(book),
-            quem_sugeriu = VALUES(quem_sugeriu),
             status = VALUES(status),
             is_freebet = VALUES(is_freebet),
             is_boost = VALUES(is_boost),
@@ -430,18 +569,33 @@ elseif ($acao === 'salvar_aposta') {
             cashout_value = VALUES(cashout_value)
     ");
 
-    $stmt->bind_param("ssssddsssiisd",
+    $stmt->bind_param("ssssddssiisd",
         $id, $profile_id, $date, $event,
         $odds, $stake, $book,
-        $quem_sugeriu, $status, $isFreebet, $isBoost, $category,
+        $status, $isFreebet, $isBoost, $category,
         $cashout_value
     );
 
-    if ($stmt->execute()) {
-        responder(["sucesso" => true, "mensagem" => "Aposta salva na base de dados!"]);
-    } else {
+    if (!$stmt->execute()) {
         responder(["sucesso" => false, "erro" => "Erro ao salvar aposta."]);
     }
+    $stmt->close();
+
+    $stmtDelete = $conn->prepare("DELETE FROM aposta_sugestoes WHERE aposta_id = ? AND profile_id = ?");
+    $stmtDelete->bind_param("ss", $id, $profile_id);
+    $stmtDelete->execute();
+    $stmtDelete->close();
+
+    if (!empty($suggestors)) {
+        $stmtInsert = $conn->prepare("INSERT IGNORE INTO aposta_sugestoes (aposta_id, profile_id, suggestor_name) VALUES (?, ?, ?)");
+        foreach ($suggestors as $name) {
+            $stmtInsert->bind_param("sss", $id, $profile_id, $name);
+            $stmtInsert->execute();
+        }
+        $stmtInsert->close();
+    }
+
+    responder(["sucesso" => true, "mensagem" => "Aposta salva na base de dados!"]);
 }
 
 // ---------------------------------------------------------
@@ -451,10 +605,10 @@ elseif ($acao === 'carregar_apostas') {
     $profile_id = getProfileId($dados);
     ensureAuthorizedProfile($conn, $profile_id);
     ensureApostasBoostColumn($conn);
-    ensureApostasQuemSugeriuColumn($conn);
+    ensureApostaSugestoesTable($conn);
 
     // Prepared statement — elimina SQL Injection
-    $stmt = $conn->prepare("SELECT * FROM apostas WHERE profile_id = ? ORDER BY date DESC");
+    $stmt = $conn->prepare("\n        SELECT a.*,\n               (\n                   SELECT GROUP_CONCAT(s.suggestor_name ORDER BY s.suggestor_name SEPARATOR ',')\n                   FROM aposta_sugestoes s\n                   WHERE s.aposta_id = a.id AND s.profile_id = a.profile_id\n               ) AS ai_csv\n        FROM apostas a\n        WHERE a.profile_id = ?\n        ORDER BY a.date DESC\n    ");
     $stmt->bind_param("s", $profile_id);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -467,8 +621,9 @@ elseif ($acao === 'carregar_apostas') {
             unset($row['is_freebet']);
             $row['isBoost'] = (bool)($row['is_boost'] ?? $row['isBoost'] ?? false);
             unset($row['is_boost']);
-            $row['quem_sugeriu'] = $row['quem_sugeriu'] ?? ($row['ai'] ?? null);
+            $row['quem_sugeriu'] = $row['ai_csv'] ?? ($row['quem_sugeriu'] ?? ($row['ai'] ?? null));
             $row['ai'] = $row['quem_sugeriu'];
+            unset($row['ai_csv']);
             $row['odds']  = (float)$row['odds'];
             $row['stake'] = (float)$row['stake'];
             $row['category'] = $row['category'] ?? null;
@@ -493,14 +648,14 @@ elseif ($acao === 'salvar_fluxo') {
     $profile_id = getProfileId($dados);
 
     $id     = trim($fluxo['id'] ?? '');
-    $date   = trim($fluxo['date'] ?? '');
+    $date   = normalizeDateInput((string)($fluxo['date'] ?? ''));
     $type   = $fluxo['type'] ?? '';
     $amount = floatval($fluxo['amount'] ?? 0);
     $note   = trim($fluxo['note'] ?? '');
     $book   = trim($fluxo['book'] ?? '');
 
     // Validações
-    if ($id === '' || $date === '') {
+    if ($id === '' || !$date) {
         responder(["sucesso" => false, "erro" => "Campos obrigatórios em falta (id, date)."]);
     }
     if (!in_array($type, ['deposit', 'withdraw'], true)) {
@@ -771,7 +926,7 @@ elseif ($acao === 'salvar_casino') {
     $profile_id = getProfileId($dados);
 
     $id         = trim($casino['id'] ?? '');
-    $date       = trim($casino['date'] ?? '');
+    $date       = normalizeDateInput((string)($casino['date'] ?? ''));
     $game       = trim($casino['game'] ?? '');
     $platform   = trim($casino['platform'] ?? '');
     $bet_amount = floatval($casino['bet_amount'] ?? 0);
@@ -779,7 +934,7 @@ elseif ($acao === 'salvar_casino') {
     $ais        = !empty($casino['ais']) ? trim($casino['ais']) : null;
     $note       = trim($casino['note'] ?? '');
 
-    if ($id === '' || $date === '' || $game === '') {
+    if ($id === '' || !$date || $game === '') {
         responder(["sucesso" => false, "erro" => "Campos obrigatórios em falta (id, date, game)."]);
     }
 
@@ -870,7 +1025,7 @@ elseif ($acao === 'ranking_saldo_casas') {
                SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END) AS total_deposits,
                SUM(CASE WHEN type = 'withdraw' THEN amount ELSE 0 END) AS total_withdraws
         FROM fluxo_caixa
-        WHERE profile_id = ? AND book != ''
+         WHERE profile_id = ? AND book <> ''
         GROUP BY book
     ");
     $stmt->bind_param("s", $profile_id);
@@ -885,6 +1040,7 @@ elseif ($acao === 'ranking_saldo_casas') {
                 'deposits' => (float)$row['total_deposits'],
                 'withdraws' => (float)$row['total_withdraws'],
                 'profit' => 0.0,
+                'total_staked' => 0.0,
                 'bets_count' => 0,
                 'wins' => 0,
                 'losses' => 0,
@@ -893,11 +1049,25 @@ elseif ($acao === 'ranking_saldo_casas') {
     }
     $stmt->close();
 
-    // Lucro das apostas por casa
+    // Agregados das apostas por casa (wins, bets, volume e lucro)
     $stmt = $conn->prepare("
-        SELECT book, status, odds, stake, is_freebet, is_boost, cashout_value
+        SELECT
+            book,
+            COUNT(*) AS bets_count,
+            SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) AS wins,
+            SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS losses,
+            SUM(CASE WHEN is_freebet = 0 THEN stake ELSE 0 END) AS total_staked,
+            SUM(
+                CASE
+                    WHEN status = 'win' THEN stake * (odds - 1)
+                    WHEN status = 'loss' THEN CASE WHEN is_freebet = 1 THEN 0 ELSE -stake END
+                    WHEN status = 'cashout' THEN CASE WHEN is_freebet = 1 THEN IFNULL(cashout_value, 0) ELSE IFNULL(cashout_value, 0) - stake END
+                    ELSE 0
+                END
+            ) AS total_profit
         FROM apostas
-        WHERE profile_id = ? AND status IN ('win', 'loss', 'cashout', 'void')
+        WHERE profile_id = ? AND book <> '' AND status IN ('win', 'loss', 'cashout', 'void')
+        GROUP BY book
     ");
     $stmt->bind_param("s", $profile_id);
     $stmt->execute();
@@ -912,30 +1082,18 @@ elseif ($acao === 'ranking_saldo_casas') {
                     'deposits' => 0.0,
                     'withdraws' => 0.0,
                     'profit' => 0.0,
+                    'total_staked' => 0.0,
                     'bets_count' => 0,
                     'wins' => 0,
                     'losses' => 0,
                 ];
             }
 
-            $casas[$book]['bets_count']++;
-            $status = $row['status'];
-            $odds = (float)$row['odds'];
-            $stake = (float)$row['stake'];
-            $isFreebet = (bool)$row['is_freebet'];
-
-            if ($status === 'win') {
-                $casas[$book]['wins']++;
-                $casas[$book]['profit'] += $stake * ($odds - 1);
-            } elseif ($status === 'loss') {
-                $casas[$book]['losses']++;
-                if (!$isFreebet) {
-                    $casas[$book]['profit'] -= $stake;
-                }
-            } elseif ($status === 'cashout') {
-                $cashoutVal = (float)($row['cashout_value'] ?? 0);
-                $casas[$book]['profit'] += $isFreebet ? $cashoutVal : ($cashoutVal - $stake);
-            }
+            $casas[$book]['bets_count'] = (int)($row['bets_count'] ?? 0);
+            $casas[$book]['wins'] = (int)($row['wins'] ?? 0);
+            $casas[$book]['losses'] = (int)($row['losses'] ?? 0);
+            $casas[$book]['total_staked'] = (float)($row['total_staked'] ?? 0);
+            $casas[$book]['profit'] = (float)($row['total_profit'] ?? 0);
         }
     }
     $stmt->close();
@@ -944,6 +1102,7 @@ elseif ($acao === 'ranking_saldo_casas') {
     $ranking = array_values($casas);
     foreach ($ranking as &$casa) {
         $casa['balance'] = $casa['deposits'] - $casa['withdraws'] + $casa['profit'];
+        $casa['winrate'] = $casa['bets_count'] > 0 ? ($casa['wins'] / $casa['bets_count']) : 0.0;
     }
     unset($casa);
 

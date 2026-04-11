@@ -3,20 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script>
-      (function () {
-        const key = "caderneta.theme";
-        const html = document.documentElement;
-        const saved = localStorage.getItem(key);
-        const preferredDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-        const theme = (saved === "dark" || saved === "light" || saved === "light-azulado" || saved === "light-bege")
-          ? saved
-          : (preferredDark ? "dark" : "light-azulado");
-
-        html.classList.remove("light", "dark", "light-azulado", "light-bege");
-        html.classList.add(theme);
-      })();
-    </script>
+    <script src="./caderneta-theme-boot.js"></script>
     <title>Caderneta de Apostas</title>
     <link rel="stylesheet" href="./styles.css?v=20260407-4" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -25,7 +12,7 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar" id="app-sidebar">
+      <aside class="sidebar" id="app-sidebar" role="navigation">
         <div class="sidebar-brand">
           <h2>Caderneta</h2>
           <p>v2 · MySQL</p>
@@ -411,6 +398,11 @@
                 <tbody id="bets-body"></tbody>
               </table>
             </div>
+            <div class="table-pagination" id="bets-pagination">
+              <button type="button" class="ghost small" id="bets-page-prev">Anterior</button>
+              <span id="bets-page-info">Mostrando 0-0 de 0</span>
+              <button type="button" class="ghost small" id="bets-page-next">Próxima</button>
+            </div>
             <div class="bets-mobile-list" id="bets-mobile-list"></div>
           </section>
 
@@ -457,7 +449,7 @@
     </div>
 
     <div class="mobile-overlay" id="mobile-overlay"></div>
-    <nav class="bottom-nav">
+    <nav class="bottom-nav" role="navigation">
       <a href="./index.html" class="active">Apostas</a>
       <a href="./casino.html">Cassino</a>
       <a href="./ranking.html">Ranking</a>
@@ -543,6 +535,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="./caderneta-utils.js"></script>
+    <script src="./caderneta-shell.js"></script>
     <script type="module" src="./app.js?v=20260407-7"></script>
   </body>
 </html>

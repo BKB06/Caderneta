@@ -3,20 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script>
-      (function () {
-        const key = "caderneta.theme";
-        const html = document.documentElement;
-        const saved = localStorage.getItem(key);
-        const preferredDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-        const theme = (saved === "dark" || saved === "light" || saved === "light-azulado" || saved === "light-bege")
-          ? saved
-          : (preferredDark ? "dark" : "light-azulado");
-
-        html.classList.remove("light", "dark", "light-azulado", "light-bege");
-        html.classList.add(theme);
-      })();
-    </script>
+    <script src="./caderneta-theme-boot.js"></script>
     <title>Cassino - Caderneta de Apostas</title>
     <link rel="stylesheet" href="./styles.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -400,7 +387,7 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar" id="sidebar">
+      <aside class="sidebar" id="sidebar" role="navigation">
         <div class="sidebar-brand">
           <h2>Caderneta</h2>
           <p>v2 · MySQL</p>
@@ -440,10 +427,10 @@
             <span class="sidebar-dot"></span>
             <span>Configurações</span>
           </a>
-          <a class="sidebar-item" href="./index.html">
+          <button type="button" class="sidebar-item" id="export-pdf-btn">
             <span class="sidebar-dot"></span>
             <span>Exportar / PDF</span>
-          </a>
+          </button>
         </div>
 
         <div class="sidebar-profile" id="sidebar-profile">
@@ -665,6 +652,11 @@
                 <tbody id="casino-body"></tbody>
               </table>
             </div>
+            <div class="table-pagination" id="casino-pagination">
+              <button type="button" class="ghost small" id="casino-page-prev">Anterior</button>
+              <span id="casino-page-info">Mostrando 0-0 de 0</span>
+              <button type="button" class="ghost small" id="casino-page-next">Próxima</button>
+            </div>
 
             <div style="margin-top:12px;">
               <canvas id="casino-chart" height="120"></canvas>
@@ -693,7 +685,7 @@
           </section>
         </main>
 
-        <nav class="bottom-nav">
+        <nav class="bottom-nav" role="navigation">
           <a href="./index.html">Apostas</a>
           <a href="./casino.html" class="active">Cassino</a>
           <a href="./ranking.html">Ranking</a>
@@ -707,6 +699,8 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="./caderneta-utils.js"></script>
+    <script src="./caderneta-shell.js"></script>
     <script src="./casino.js"></script>
   </body>
 </html>

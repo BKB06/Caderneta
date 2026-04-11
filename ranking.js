@@ -1,19 +1,18 @@
-const ACTIVE_PROFILE_KEY = "caderneta.activeProfile.v1";
 const DEFAULT_AI_OPTIONS = ["Grok", "Claude", "Gemini", "Gemini DS", "ChatGPT"];
 
-function getActiveProfileId() {
-  const activeId = localStorage.getItem(ACTIVE_PROFILE_KEY);
-  return activeId || null;
-}
+const {
+  getActiveProfileId,
+  setActiveProfileId,
+  resolveActiveProfileId,
+  getSettingsKey,
+  normalizeAiName,
+  loadProfilesFromApi,
+  currencyFormatter,
+  percentFormatter,
+  numberFormatter,
+} = window.CadernetaUtils;
 
-function getSettingsKey() {
-  const profileId = getActiveProfileId();
-  return profileId ? `caderneta.settings.${profileId}` : "caderneta.settings.v1";
-}
-
-function normalizeAiName(value) {
-  return String(value || "").replace(/\s+/g, " ").trim();
-}
+const Shell = window.CadernetaShell || {};
 
 function getConfiguredAiNames() {
   const fallback = [...DEFAULT_AI_OPTIONS];
@@ -49,42 +48,31 @@ function getAiNamesFromBet(bet) {
     .filter(Boolean);
 }
 
-async function loadProfilesFromApi() {
-  try {
-    const resposta = await fetch('api.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ acao: 'carregar_perfis' })
-    });
-    const dados = await resposta.json();
-    return Array.isArray(dados) ? dados : [];
-  } catch (erro) {
-    console.error("Erro ao carregar perfis:", erro);
-    return [];
-  }
-}
-
 let bets = [];
 let balanceRanking = [];
 let bookDistributionChart = null;
 let bookProfitChart = null;
 const rankingBoostFilter = document.getElementById('ranking-boost-filter');
 
-const currencyFormatter = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  maximumFractionDigits: 2,
-});
+const RANKING_TABLE_PAGE_SIZE = 20;
+let bookRankingCurrentPage = 1;
+let aiRankingCurrentPage = 1;
+let balanceRankingCurrentPage = 1;
 
-const percentFormatter = new Intl.NumberFormat("pt-BR", {
-  style: "percent",
-  maximumFractionDigits: 1,
-});
+const bookRankingPrevButton = document.getElementById('book-ranking-prev');
+const bookRankingNextButton = document.getElementById('book-ranking-next');
+const bookRankingInfo = document.getElementById('book-ranking-info');
 
-const numberFormatter = new Intl.NumberFormat("pt-BR", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+const aiRankingPrevButton = document.getElementById('ai-ranking-prev');
+const aiRankingNextButton = document.getElementById('ai-ranking-next');
+const aiRankingInfo = document.getElementById('ai-ranking-info');
+
+const balanceRankingPrevButton = document.getElementById('balance-ranking-prev');
+const balanceRankingNextButton = document.getElementById('balance-ranking-next');
+const balanceRankingInfo = document.getElementById('balance-ranking-info');
+const balanceSortControls = document.getElementById('balance-sort-controls');
+
+let balanceRankingSort = 'balance';
 
 async function loadBets() {
   try {
@@ -114,6 +102,7 @@ async function loadBets() {
     });
   } catch (erro) {
     console.error("Erro ao carregar apostas no ranking:", erro);
+    Shell.showApiError?.("Nao foi possivel carregar as apostas do ranking.");
     bets = [];
   }
 }
@@ -168,6 +157,7 @@ function calcRankingStats() {
   const settled = filteredBets.filter((bet) => bet.status === 'win' || bet.status === 'loss');
   const wins = filteredBets.filter((bet) => bet.status === 'win');
   const losses = filteredBets.filter((bet) => bet.status === 'loss');
+  const lossesWithValue = losses.filter((bet) => !bet.isFreebet);
   const pending = filteredBets.filter((bet) => bet.status === 'pending');
 
   // Maior lucro em uma única aposta
@@ -184,7 +174,7 @@ function calcRankingStats() {
   // Maior perda em uma única aposta
   let maxLossBet = null;
   let maxLoss = 0;
-  losses.forEach((bet) => {
+  lossesWithValue.forEach((bet) => {
     const loss = Math.abs(calcProfit(bet));
     if (loss > maxLoss) {
       maxLoss = loss;
@@ -274,7 +264,7 @@ function getTopProfits(count = 5) {
 
 function getTopLosses(count = 5) {
   return getFilteredRankingBets()
-    .filter((bet) => bet.status === 'loss')
+    .filter((bet) => bet.status === 'loss' && !bet.isFreebet)
     .map((bet) => ({ ...bet, profit: calcProfit(bet) }))
     .sort((a, b) => a.profit - b.profit)
     .slice(0, count);
@@ -400,17 +390,27 @@ function renderBookTable() {
     cell.textContent = 'Nenhuma aposta cadastrada ainda.';
     row.appendChild(cell);
     rankingByBookBody.appendChild(row);
+    renderRankingTablePagination('book', 0, 0, 0, 0);
     return;
   }
 
   // Ordenar por lucro (maior para menor)
   byBook.sort((a, b) => b.profit - a.profit);
 
-  byBook.forEach((item, index) => {
+  const totalItems = byBook.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / RANKING_TABLE_PAGE_SIZE));
+  if (bookRankingCurrentPage > totalPages) bookRankingCurrentPage = totalPages;
+  if (bookRankingCurrentPage < 1) bookRankingCurrentPage = 1;
+  const startIndex = (bookRankingCurrentPage - 1) * RANKING_TABLE_PAGE_SIZE;
+  const endIndex = Math.min(startIndex + RANKING_TABLE_PAGE_SIZE, totalItems);
+  const pageItems = byBook.slice(startIndex, endIndex);
+
+  pageItems.forEach((item, index) => {
     const row = document.createElement('tr');
 
     const tdRank = document.createElement('td');
-    const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}`;
+    const absoluteIndex = startIndex + index;
+    const medal = absoluteIndex === 0 ? '🥇' : absoluteIndex === 1 ? '🥈' : absoluteIndex === 2 ? '🥉' : `${absoluteIndex + 1}`;
     tdRank.textContent = medal;
     row.appendChild(tdRank);
 
@@ -449,6 +449,8 @@ function renderBookTable() {
 
     rankingByBookBody.appendChild(row);
   });
+
+  renderRankingTablePagination('book', startIndex + 1, endIndex, totalItems, totalPages);
 }
 
 function renderCharts() {
@@ -612,8 +614,17 @@ function renderAIRankingPage() {
   }
 
   if (tableBody) {
-    tableBody.innerHTML = aiStats.map((ai, index) => {
-      const medal = medals[index] || '';
+    const totalItems = aiStats.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / RANKING_TABLE_PAGE_SIZE));
+    if (aiRankingCurrentPage > totalPages) aiRankingCurrentPage = totalPages;
+    if (aiRankingCurrentPage < 1) aiRankingCurrentPage = 1;
+    const startIndex = (aiRankingCurrentPage - 1) * RANKING_TABLE_PAGE_SIZE;
+    const endIndex = Math.min(startIndex + RANKING_TABLE_PAGE_SIZE, totalItems);
+    const pageItems = aiStats.slice(startIndex, endIndex);
+
+    tableBody.innerHTML = pageItems.map((ai, index) => {
+      const absoluteIndex = startIndex + index;
+      const medal = medals[absoluteIndex] || '';
       return `
         <tr>
           <td>${medal}</td>
@@ -626,14 +637,24 @@ function renderAIRankingPage() {
         </tr>
       `;
     }).join('');
+
+    renderRankingTablePagination('ai', startIndex + 1, endIndex, totalItems, totalPages);
   }
 }
 
 async function init() {
-  await renderProfileSwitcher();
-  await loadBets();
-  await loadBalanceRanking();
-  refreshRankingView();
+  Shell.showGlobalLoading?.("Carregando ranking...");
+  try {
+    await renderProfileSwitcher();
+    await loadBets();
+    await loadBalanceRanking();
+    refreshRankingView();
+  } catch (error) {
+    console.error("Falha ao iniciar ranking:", error);
+    Shell.showApiError?.("Nao foi possivel iniciar o ranking.");
+  } finally {
+    Shell.hideGlobalLoading?.();
+  }
 }
 
 function refreshRankingView() {
@@ -655,11 +676,41 @@ async function loadBalanceRanking() {
       body: JSON.stringify({ acao: 'ranking_saldo_casas', profile_id: profileId })
     });
     const dados = await resposta.json();
-    balanceRanking = Array.isArray(dados) ? dados : [];
+    balanceRanking = Array.isArray(dados)
+      ? dados.map((casa) => ({
+        ...casa,
+        deposits: Number(casa.deposits) || 0,
+        withdraws: Number(casa.withdraws) || 0,
+        profit: Number(casa.profit) || 0,
+        balance: Number(casa.balance) || 0,
+        total_staked: Number(casa.total_staked) || 0,
+        wins: Number(casa.wins) || 0,
+        bets_count: Number(casa.bets_count) || 0,
+        winrate: Number(casa.winrate) || 0,
+      }))
+      : [];
   } catch (erro) {
     console.error('Erro ao carregar ranking de saldo:', erro);
+    Shell.showApiError?.("Nao foi possivel carregar o ranking de saldo.");
     balanceRanking = [];
   }
+}
+
+function sortBalanceMetricValue(casa, sortType) {
+  if (sortType === 'profit') return Number(casa.profit) || 0;
+  if (sortType === 'staked') return Number(casa.total_staked) || 0;
+  if (sortType === 'winrate') return Number(casa.winrate) || 0;
+  return Number(casa.balance) || 0;
+}
+
+function getSortedBalanceRanking() {
+  const sorted = [...balanceRanking];
+  sorted.sort((a, b) => {
+    const diff = sortBalanceMetricValue(b, balanceRankingSort) - sortBalanceMetricValue(a, balanceRankingSort);
+    if (Math.abs(diff) > 0.000001) return diff;
+    return (Number(b.balance) || 0) - (Number(a.balance) || 0);
+  });
+  return sorted;
 }
 
 function renderBalanceRanking() {
@@ -667,38 +718,54 @@ function renderBalanceRanking() {
   const tableBody = document.getElementById('balance-ranking-body');
   if (!podium && !tableBody) return;
 
-  if (balanceRanking.length === 0) {
+  const sortedRanking = getSortedBalanceRanking();
+
+  if (sortedRanking.length === 0) {
     if (podium) podium.innerHTML = '<p class="empty-message">Nenhuma movimentação registrada com casa de apostas.</p>';
     if (tableBody) {
-      tableBody.innerHTML = '<tr><td colspan="6">Nenhum dado disponível.</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="7">Nenhum dado disponível.</td></tr>';
     }
+    renderRankingTablePagination('balance', 0, 0, 0, 0);
     return;
   }
 
   const medals = ['🥇', '🥈', '🥉'];
-  const maxBalance = Math.max(...balanceRanking.map(c => Math.abs(c.balance)), 1);
+  const topThree = sortedRanking.slice(0, 3);
+  const maxMetric = Math.max(...topThree.map((casa) => Math.abs(sortBalanceMetricValue(casa, balanceRankingSort))), 1);
+
+  const podiumMetricLabel = {
+    balance: 'banca atual',
+    profit: 'lucro apostas',
+    staked: 'total apostado',
+    winrate: 'aproveitamento',
+  };
 
   // Podium cards
   if (podium) {
-    podium.innerHTML = balanceRanking.map((casa, i) => {
-      const barWidth = Math.min(Math.abs(casa.balance) / maxBalance * 100, 100);
-      const isPositive = casa.balance >= 0;
+    podium.innerHTML = topThree.map((casa, i) => {
+      const metric = sortBalanceMetricValue(casa, balanceRankingSort);
+      const barWidth = Math.min(Math.abs(metric) / maxMetric * 100, 100);
+      const isPositive = metric >= 0;
+
+      const metricText = balanceRankingSort === 'winrate'
+        ? percentFormatter.format(Number(casa.winrate) || 0)
+        : formatProfit(metric);
+
       return `
         <div class="balance-ranking-card ${i === 0 ? 'first' : ''} ${isPositive ? 'positive' : 'negative'}">
           <div class="balance-ranking-header">
             <span class="balance-medal">${medals[i] || (i + 1)}</span>
             <strong class="balance-house-name">${casa.book}</strong>
           </div>
-          <div class="balance-value" style="color: ${isPositive ? 'var(--success)' : 'var(--danger)'}">
-            ${formatProfit(casa.balance)}
-          </div>
+          <div class="balance-value" style="color: ${isPositive ? 'var(--success)' : 'var(--danger)'}">${metricText}</div>
+          <span class="balance-metric-label">${podiumMetricLabel[balanceRankingSort] || 'banca atual'}</span>
           <div class="balance-bar-track">
             <div class="balance-bar-fill ${isPositive ? 'green' : 'red'}" style="width: ${barWidth}%"></div>
           </div>
           <div class="balance-breakdown">
-            <span class="balance-detail">↑ ${formatProfit(casa.deposits)}</span>
-            <span class="balance-detail">↓ ${formatProfit(casa.withdraws)}</span>
-            <span class="balance-detail">💰 ${formatProfit(casa.profit)}</span>
+            <span class="balance-detail">Banca: ${formatProfit(casa.balance)}</span>
+            <span class="balance-detail">Lucro: ${formatProfit(casa.profit)}</span>
+            <span class="balance-detail">Apostas: ${casa.bets_count}</span>
           </div>
         </div>
       `;
@@ -707,21 +774,83 @@ function renderBalanceRanking() {
 
   // Table
   if (tableBody) {
-    tableBody.innerHTML = balanceRanking.map((casa, i) => {
-      const medal = medals[i] || `${i + 1}`;
-      const isPositive = casa.balance >= 0;
+    const totalItems = sortedRanking.length;
+    const totalPages = Math.max(1, Math.ceil(totalItems / RANKING_TABLE_PAGE_SIZE));
+    if (balanceRankingCurrentPage > totalPages) balanceRankingCurrentPage = totalPages;
+    if (balanceRankingCurrentPage < 1) balanceRankingCurrentPage = 1;
+    const startIndex = (balanceRankingCurrentPage - 1) * RANKING_TABLE_PAGE_SIZE;
+    const endIndex = Math.min(startIndex + RANKING_TABLE_PAGE_SIZE, totalItems);
+    const pageItems = sortedRanking.slice(startIndex, endIndex);
+
+    tableBody.innerHTML = pageItems.map((casa, i) => {
+      const absoluteIndex = startIndex + i;
+      const rank = `${absoluteIndex + 1}`;
+      const isPositiveBalance = casa.balance >= 0;
+      const isPositiveProfit = casa.profit >= 0;
+      const winrate = Number(casa.winrate) || 0;
+      const winratePct = Math.max(0, Math.min(100, Math.round(winrate * 100)));
       return `
         <tr>
-          <td>${medal}</td>
+          <td>${rank}</td>
           <td><strong>${casa.book}</strong></td>
-          <td style="color: var(--success)">${formatProfit(casa.deposits)}</td>
-          <td style="color: var(--danger)">${formatProfit(casa.withdraws)}</td>
-          <td style="color: ${casa.profit >= 0 ? 'var(--success)' : 'var(--danger)'}; font-weight: 600">${formatProfit(casa.profit)}</td>
-          <td style="color: ${isPositive ? 'var(--success)' : 'var(--danger)'}; font-weight: 700; font-size: 1.05em">${formatProfit(casa.balance)}</td>
+          <td style="color: ${isPositiveBalance ? 'var(--success)' : 'var(--danger)'}; font-weight: 700; font-size: 1.05em">${formatProfit(casa.balance)}</td>
+          <td>${formatProfit(casa.total_staked)}</td>
+          <td><span class="profit-pill ${isPositiveProfit ? 'positive' : 'negative'}">${formatProfit(casa.profit)}</span></td>
+          <td>
+            <div class="winrate-cell">
+              <div class="winrate-track"><div class="winrate-fill ${winratePct >= 55 ? 'good' : (winratePct >= 45 ? 'mid' : 'bad')}" style="width:${winratePct}%"></div></div>
+              <span>${percentFormatter.format(winrate)}</span>
+            </div>
+          </td>
+          <td>${casa.bets_count}</td>
         </tr>
       `;
     }).join('');
+
+    renderRankingTablePagination('balance', startIndex + 1, endIndex, totalItems, totalPages);
   }
+}
+
+function renderRankingTablePagination(type, start, end, totalItems, totalPages) {
+  const map = {
+    book: {
+      info: bookRankingInfo,
+      prev: bookRankingPrevButton,
+      next: bookRankingNextButton,
+      page: bookRankingCurrentPage,
+    },
+    ai: {
+      info: aiRankingInfo,
+      prev: aiRankingPrevButton,
+      next: aiRankingNextButton,
+      page: aiRankingCurrentPage,
+    },
+    balance: {
+      info: balanceRankingInfo,
+      prev: balanceRankingPrevButton,
+      next: balanceRankingNextButton,
+      page: balanceRankingCurrentPage,
+    },
+  };
+
+  const current = map[type];
+  if (!current) return;
+
+  if (current.info) {
+    current.info.textContent = `Mostrando ${start}-${end} de ${totalItems}`;
+  }
+  if (current.prev) {
+    current.prev.disabled = current.page <= 1 || totalItems === 0;
+  }
+  if (current.next) {
+    current.next.disabled = current.page >= totalPages || totalItems === 0;
+  }
+}
+
+function resetRankingTablePagination() {
+  bookRankingCurrentPage = 1;
+  aiRankingCurrentPage = 1;
+  balanceRankingCurrentPage = 1;
 }
 
 // Profile Switcher
@@ -731,12 +860,7 @@ async function renderProfileSwitcher() {
   if (!profileSwitch) return;
   
   const profiles = await loadProfilesFromApi();
-  let activeId = getActiveProfileId();
-
-  if (profiles.length > 0 && !profiles.find(p => p.id === activeId)) {
-    activeId = profiles[0].id;
-    localStorage.setItem(ACTIVE_PROFILE_KEY, activeId);
-  }
+  const activeId = await resolveActiveProfileId(profiles);
   
   profileSwitch.innerHTML = '';
   
@@ -759,11 +883,61 @@ async function renderProfileSwitcher() {
 profileSwitch?.addEventListener('change', (e) => {
   const newProfileId = e.target.value;
   if (newProfileId) {
-    localStorage.setItem(ACTIVE_PROFILE_KEY, newProfileId);
+    setActiveProfileId(newProfileId);
     window.location.reload();
   }
 });
 
-rankingBoostFilter?.addEventListener('change', refreshRankingView);
+bookRankingPrevButton?.addEventListener('click', () => {
+  if (bookRankingCurrentPage <= 1) return;
+  bookRankingCurrentPage -= 1;
+  renderBookTable();
+});
+bookRankingNextButton?.addEventListener('click', () => {
+  bookRankingCurrentPage += 1;
+  renderBookTable();
+});
+
+aiRankingPrevButton?.addEventListener('click', () => {
+  if (aiRankingCurrentPage <= 1) return;
+  aiRankingCurrentPage -= 1;
+  renderAIRankingPage();
+});
+aiRankingNextButton?.addEventListener('click', () => {
+  aiRankingCurrentPage += 1;
+  renderAIRankingPage();
+});
+
+balanceRankingPrevButton?.addEventListener('click', () => {
+  if (balanceRankingCurrentPage <= 1) return;
+  balanceRankingCurrentPage -= 1;
+  renderBalanceRanking();
+});
+balanceRankingNextButton?.addEventListener('click', () => {
+  balanceRankingCurrentPage += 1;
+  renderBalanceRanking();
+});
+
+rankingBoostFilter?.addEventListener('change', () => {
+  resetRankingTablePagination();
+  refreshRankingView();
+});
+
+balanceSortControls?.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-sort]');
+  if (!button) return;
+
+  const nextSort = button.dataset.sort;
+  if (!nextSort || nextSort === balanceRankingSort) return;
+
+  balanceRankingSort = nextSort;
+  balanceRankingCurrentPage = 1;
+
+  balanceSortControls.querySelectorAll('button[data-sort]').forEach((item) => {
+    item.classList.toggle('active', item.dataset.sort === balanceRankingSort);
+  });
+
+  renderBalanceRanking();
+});
 
 init();

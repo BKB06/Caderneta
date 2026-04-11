@@ -1,11 +1,23 @@
-﻿const ACTIVE_PROFILE_KEY = "caderneta.activeProfile.v1";
-const THEME_KEY = "caderneta.theme";
+﻿const THEME_KEY = "caderneta.theme";
+const {
+  getActiveProfileId,
+  setActiveProfileId,
+  resolveActiveProfileId,
+} = window.CadernetaUtils;
+
+const Shell = window.CadernetaShell || {};
 
 let casinoRecords = [];
 let sessionMode = "normal";
 let activeHistoryFilter = "all";
 let activePeriodFilter = "all";
 let casinoChart = null;
+let casinoHistoryCurrentPage = 1;
+
+const CASINO_HISTORY_PAGE_SIZE = 40;
+const casinoPagePrevButton = document.getElementById("casino-page-prev");
+const casinoPageNextButton = document.getElementById("casino-page-next");
+const casinoPageInfo = document.getElementById("casino-page-info");
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -23,22 +35,25 @@ const percentFormatter = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 0,
 });
 
-function getActiveProfileId() {
-  return localStorage.getItem(ACTIVE_PROFILE_KEY) || null;
-}
-
 async function apiPost(payload) {
-  const response = await fetch("api.php", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  const text = await response.text();
   try {
-    return JSON.parse(text);
-  } catch {
-    console.error("Resposta inválida da API:", text);
+    const response = await fetch("api.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      console.error("Resposta inválida da API:", text);
+      Shell.showApiError?.("Resposta invalida da API no cassino.");
+      return null;
+    }
+  } catch (error) {
+    console.error("Erro de comunicacao com API do cassino:", error);
+    Shell.showApiError?.("Nao foi possivel comunicar com a API do cassino.");
     return null;
   }
 }
@@ -138,20 +153,25 @@ function getPeriodFilteredRecords(list = casinoRecords) {
 
 function setTheme(theme) {
   const html = document.documentElement;
-  const resolved = theme === "light-azulado" || theme === "light" ? "light-azulado" : "dark";
+  const allowedThemes = ["dark", "light-azulado", "light", "light-bege"];
+  const resolved = allowedThemes.includes(theme) ? theme : "dark";
   html.classList.remove("light", "dark", "light-azulado", "light-bege");
   html.classList.add(resolved);
   localStorage.setItem(THEME_KEY, resolved);
 
   const btn = document.getElementById("theme-toggle");
   if (btn) {
-    btn.textContent = resolved === "dark" ? "🌙" : "🧊";
+    if (resolved === "dark") btn.textContent = "🌙";
+    if (resolved === "light-azulado") btn.textContent = "🧊";
+    if (resolved === "light") btn.textContent = "☀️";
+    if (resolved === "light-bege") btn.textContent = "🏖️";
+    btn.setAttribute("aria-label", `Alterar tema (atual: ${resolved})`);
   }
 }
 
 function initTheme() {
   const saved = localStorage.getItem(THEME_KEY);
-  if (saved === "dark" || saved === "light" || saved === "light-azulado") {
+  if (saved === "dark" || saved === "light" || saved === "light-azulado" || saved === "light-bege") {
     setTheme(saved);
     return;
   }
@@ -161,11 +181,10 @@ function initTheme() {
 
 function toggleTheme() {
   const html = document.documentElement;
-  if (html.classList.contains("dark")) {
-    setTheme("light-azulado");
-  } else {
-    setTheme("dark");
-  }
+  const themeOrder = ["dark", "light-azulado", "light", "light-bege"];
+  const current = themeOrder.find((themeName) => html.classList.contains(themeName)) || "dark";
+  const next = themeOrder[(themeOrder.indexOf(current) + 1) % themeOrder.length];
+  setTheme(next);
 }
 
 async function loadProfilesFromApi() {
@@ -215,12 +234,7 @@ async function renderProfileSwitcher() {
   if (!select) return;
 
   const profiles = await loadProfilesFromApi();
-  let activeId = getActiveProfileId();
-
-  if (profiles.length > 0 && (!activeId || !profiles.find((p) => p.id === activeId))) {
-    activeId = profiles[0].id;
-    localStorage.setItem(ACTIVE_PROFILE_KEY, activeId);
-  }
+  const activeId = await resolveActiveProfileId(profiles);
 
   select.innerHTML = "";
   if (profiles.length === 0) {
@@ -251,7 +265,7 @@ function setupProfileSwitchSync() {
   select.addEventListener("change", () => {
     const nextProfile = select.value;
     if (nextProfile) {
-      localStorage.setItem(ACTIVE_PROFILE_KEY, nextProfile);
+      setActiveProfileId(nextProfile);
       window.location.reload();
       return;
     }
@@ -656,10 +670,19 @@ function renderHistory(type = activeHistoryFilter) {
 
   if (!records.length) {
     tbody.innerHTML = '<tr><td colspan="9">Nenhuma sessão encontrada.</td></tr>';
+    renderCasinoHistoryPagination(0, 0, 0, 0);
     return;
   }
 
-  tbody.innerHTML = records
+  const totalItems = records.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / CASINO_HISTORY_PAGE_SIZE));
+  if (casinoHistoryCurrentPage > totalPages) casinoHistoryCurrentPage = totalPages;
+  if (casinoHistoryCurrentPage < 1) casinoHistoryCurrentPage = 1;
+  const startIndex = (casinoHistoryCurrentPage - 1) * CASINO_HISTORY_PAGE_SIZE;
+  const endIndex = Math.min(startIndex + CASINO_HISTORY_PAGE_SIZE, totalItems);
+  const pageData = records.slice(startIndex, endIndex);
+
+  tbody.innerHTML = pageData
     .map((record) => {
       const profit = calcProfit(record);
       const typeLabel = profit > 0 ? "Positiva" : profit < 0 ? "Negativa" : "Neutra";
@@ -685,6 +708,24 @@ function renderHistory(type = activeHistoryFilter) {
       `;
     })
     .join("");
+
+  renderCasinoHistoryPagination(startIndex + 1, endIndex, totalItems, totalPages);
+}
+
+function renderCasinoHistoryPagination(start, end, totalItems, totalPages) {
+  if (casinoPageInfo) {
+    casinoPageInfo.textContent = `Mostrando ${start}-${end} de ${totalItems}`;
+  }
+  if (casinoPagePrevButton) {
+    casinoPagePrevButton.disabled = casinoHistoryCurrentPage <= 1 || totalItems === 0;
+  }
+  if (casinoPageNextButton) {
+    casinoPageNextButton.disabled = casinoHistoryCurrentPage >= totalPages || totalItems === 0;
+  }
+}
+
+function resetCasinoHistoryPagination() {
+  casinoHistoryCurrentPage = 1;
 }
 
 function renderChart() {
@@ -884,6 +925,7 @@ async function loadCasino() {
 
 function filterHistory(type) {
   activeHistoryFilter = type;
+  resetCasinoHistoryPagination();
   document.querySelectorAll(".history-pill").forEach((pill) => {
     pill.classList.toggle("active", pill.dataset.filter === type);
   });
@@ -925,6 +967,7 @@ function runSimulator() {
 function handlePeriodChange() {
   const periodFilter = document.getElementById("period-filter");
   activePeriodFilter = periodFilter?.value || "all";
+  resetCasinoHistoryPagination();
   refreshCasinoView();
 }
 
@@ -942,16 +985,18 @@ window.filterHistory = filterHistory;
 window.toggleSimulator = toggleSimulator;
 
 window.addEventListener("DOMContentLoaded", async () => {
+  Shell.showGlobalLoading?.("Carregando dados do cassino...");
   initTheme();
   setupSidebarDrawer();
 
   document.getElementById("theme-toggle")?.addEventListener("click", toggleTheme);
 
-  await renderProfileSwitcher();
-  setupProfileSwitchSync();
+  try {
+    await renderProfileSwitcher();
+    setupProfileSwitchSync();
 
-  const dateInput = document.getElementById("casino-date");
-  if (dateInput) dateInput.value = getTodayInputDate();
+    const dateInput = document.getElementById("casino-date");
+    if (dateInput) dateInput.value = getTodayInputDate();
 
   setSessionMode("normal");
   recalcRealtime();
@@ -964,8 +1009,8 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("casino-spin-bet")?.addEventListener("input", recalcRealtime);
   document.getElementById("casino-quick-result")?.addEventListener("change", applyQuickResult);
 
-  document.getElementById("casino-date-start")?.addEventListener("change", () => renderHistory(activeHistoryFilter));
-  document.getElementById("casino-date-end")?.addEventListener("change", () => renderHistory(activeHistoryFilter));
+  document.getElementById("casino-date-start")?.addEventListener("change", () => { resetCasinoHistoryPagination(); renderHistory(activeHistoryFilter); });
+  document.getElementById("casino-date-end")?.addEventListener("change", () => { resetCasinoHistoryPagination(); renderHistory(activeHistoryFilter); });
   document.getElementById("casino-clear-filters")?.addEventListener("click", () => {
     const from = document.getElementById("casino-date-start");
     const to = document.getElementById("casino-date-end");
@@ -977,9 +1022,29 @@ window.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("period-filter")?.addEventListener("change", handlePeriodChange);
   document.getElementById("sim-sessions-week")?.addEventListener("input", runSimulator);
   document.getElementById("sim-weeks")?.addEventListener("input", runSimulator);
+  casinoPagePrevButton?.addEventListener("click", () => {
+    if (casinoHistoryCurrentPage <= 1) return;
+    casinoHistoryCurrentPage -= 1;
+    renderHistory(activeHistoryFilter);
+  });
+  casinoPageNextButton?.addEventListener("click", () => {
+    casinoHistoryCurrentPage += 1;
+    renderHistory(activeHistoryFilter);
+  });
 
-  setupHistoryActions();
+    setupHistoryActions();
 
-  await loadCasino();
-  runSimulator();
+    const exportBtn = document.getElementById("export-pdf-btn");
+    exportBtn?.addEventListener("click", () => {
+      window.location.href = "./index.html?openPdf=1";
+    });
+
+    await loadCasino();
+    runSimulator();
+  } catch (error) {
+    console.error("Falha ao iniciar cassino:", error);
+    Shell.showApiError?.("Nao foi possivel iniciar a pagina de cassino.");
+  } finally {
+    Shell.hideGlobalLoading?.();
+  }
 });

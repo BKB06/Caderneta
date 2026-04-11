@@ -1,5 +1,10 @@
-const ACTIVE_PROFILE_KEY = "caderneta.activeProfile.v1";
 const DEFAULT_AI_OPTIONS = ["Grok", "Claude", "Gemini", "Gemini DS", "ChatGPT"];
+const {
+  getActiveProfileId,
+  setActiveProfileId,
+  resolveActiveProfileId,
+  loadProfilesFromApi,
+} = window.CadernetaUtils;
 
 // Chaves dinâmicas baseadas no perfil ativo
 function getStorageKey(profileId) {
@@ -84,21 +89,6 @@ function sanitizeAiOptions(options) {
   return unique.length ? unique : [...DEFAULT_AI_OPTIONS];
 }
 
-async function loadProfilesFromApi() {
-  try {
-    const resposta = await fetch('api.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ acao: 'carregar_perfis' })
-    });
-    const dados = await resposta.json();
-    return Array.isArray(dados) ? dados : [];
-  } catch (e) {
-    console.error("Erro ao carregar perfis:", e);
-    return [];
-  }
-}
-
 async function salvarPerfilApi(perfil) {
   try {
     const resposta = await fetch('api.php', {
@@ -132,12 +122,7 @@ async function excluirPerfilApi(profileId) {
 // Gerenciamento de Perfis
 async function loadProfiles() {
   profiles = await loadProfilesFromApi();
-
-  activeProfileId = localStorage.getItem(ACTIVE_PROFILE_KEY);
-  if (profiles.length > 0 && (!activeProfileId || !profiles.find(p => p.id === activeProfileId))) {
-    activeProfileId = profiles[0].id;
-    localStorage.setItem(ACTIVE_PROFILE_KEY, activeProfileId);
-  }
+  activeProfileId = await resolveActiveProfileId(profiles);
 }
 
 function migrateExistingData(profileId) {
@@ -203,7 +188,7 @@ async function switchProfile(profileId) {
   if (!profile) return false;
   
   activeProfileId = profileId;
-  localStorage.setItem(ACTIVE_PROFILE_KEY, profileId);
+  setActiveProfileId(profileId);
   
   // Recarregar configurações do novo perfil
   await loadSettings();
