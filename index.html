@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script src="./caderneta-theme-boot.js"></script>
     <title>Caderneta de Apostas</title>
-    <link rel="stylesheet" href="./styles.css?v=20260407-4" />
+    <link rel="stylesheet" href="./styles.css?v=20260411-1" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -110,12 +110,6 @@
               <strong id="kpi-avg-odd">0,00x</strong>
               <div class="kpi-delta" id="kpi-avg-odd-delta">-</div>
               <div class="kpi-track"><div id="kpi-avg-odd-track" style="width:0%"></div></div>
-            </article>
-            <article class="kpi-kard">
-              <span>Meta mensal</span>
-              <strong id="monthly-goal-current">R$ 0,00</strong>
-              <div class="kpi-delta" id="monthly-goal-target">de R$ 0,00</div>
-              <div class="kpi-track"><div id="monthly-goal-bar" style="width:0%"></div></div>
             </article>
           </section>
 
@@ -260,8 +254,8 @@
                   </label>
                 </div>
                 <div class="bankroll-breakdown">
-                  <span class="breakdown-item positive" id="bankroll-deposits">+R$ 0,00 depósitos</span>
-                  <span class="breakdown-item negative" id="bankroll-withdraws">-R$ 0,00 saques</span>
+                  <span class="breakdown-item positive" id="bankroll-deposits">R$ 0,00 depósitos</span>
+                  <span class="breakdown-item negative" id="bankroll-withdraws">R$ 0,00 saques</span>
                   <span class="breakdown-item" id="bankroll-profit-indicator">R$ 0,00 lucro</span>
                 </div>
                 <div class="progress">
@@ -271,17 +265,29 @@
                   <span id="bankroll-exposure">0%</span>
                   <span class="muted" id="bankroll-exposure-value">R$ 0,00 expostos</span>
                 </div>
-                <div class="progress-caption">
-                  <span class="profit-goal-percent" id="weekly-goal-percent">0%</span>
-                  <span class="profit-goal-percent" id="monthly-goal-percent">0%</span>
+                <div class="goal-template-grid">
+                  <article class="goal-template-card" id="weekly-goal-card">
+                    <div class="goal-template-head">
+                      <span class="goal-template-label">Resultado semanal</span>
+                      <span class="goal-template-pill profit-goal-percent" id="weekly-goal-percent">0% atingido</span>
+                    </div>
+                    <strong class="goal-template-value" id="weekly-goal-current">R$ 0,00</strong>
+                    <span class="goal-template-meta">Meta da semana</span>
+                    <div class="goal-template-progress"><div class="progress-bar" id="weekly-goal-bar"></div></div>
+                  </article>
+                  <article class="goal-template-card" id="monthly-goal-card">
+                    <div class="goal-template-head">
+                      <span class="goal-template-label">Resultado mensal</span>
+                      <span class="goal-template-pill profit-goal-percent" id="monthly-goal-percent">0% atingido</span>
+                    </div>
+                    <strong class="goal-template-value" id="monthly-goal-current-panel">R$ 0,00</strong>
+                    <span class="goal-template-meta">Meta do mês</span>
+                    <div class="goal-template-progress"><div class="progress-bar" id="monthly-goal-bar"></div></div>
+                  </article>
                 </div>
                 <div class="bankroll-percent-help">
                   <small>Exposição = % da banca em apostas pendentes</small>
                   <small>Semanal/Mensal = % da meta já atingida</small>
-                </div>
-                <div class="profit-goal-values" style="margin-top:8px;display:flex;justify-content:space-between;gap:8px;">
-                  <strong id="weekly-goal-current">R$ 0,00</strong>
-                  <strong id="monthly-goal-current-panel">R$ 0,00</strong>
                 </div>
               </section>
 
@@ -535,8 +541,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="./caderneta-utils.js"></script>
-    <script src="./caderneta-shell.js"></script>
-    <script type="module" src="./app.js?v=20260407-7"></script>
+    <script src="./caderneta-utils.js?v=20260411-3"></script>
+    <script src="./caderneta-shell.js?v=20260411-3"></script>
+    <script type="module" src="./app.js?v=20260411-3"></script>
   </body>
 </html>

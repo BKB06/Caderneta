@@ -7,7 +7,7 @@ const {
   getSettingsKey,
   normalizeAiName,
   loadProfilesFromApi,
-  currencyFormatter,
+  formatCurrencyBRL,
   percentFormatter,
   numberFormatter,
 } = window.CadernetaUtils;
@@ -108,7 +108,7 @@ async function loadBets() {
 }
 
 function formatProfit(value) {
-  return currencyFormatter.format(value);
+  return formatCurrencyBRL(value);
 }
 
 function truncateText(value, maxLength = 58) {
@@ -139,6 +139,74 @@ function calcProfit(bet) {
 
 function getRankingBoostFilterValue() {
   return rankingBoostFilter?.value || 'all';
+}
+
+function parseMoneyInput(value) {
+  if (typeof value !== 'string') return Number(value) || 0;
+  const normalized = value
+    .replace(/\s/g, '')
+    .replace(/R\$/gi, '')
+    .replace(/\./g, '')
+    .replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function getTodayIsoDate() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+async function adjustBookBalance(book) {
+  const house = balanceRanking.find((item) => String(item.book) === String(book));
+  if (!house) return;
+
+  const current = Number(house.balance) || 0;
+  const answer = window.prompt(`Nova banca atual para ${house.book}:`, numberFormatter.format(current));
+  if (answer == null) return;
+
+  const target = parseMoneyInput(answer);
+  if (!Number.isFinite(target) || target < 0) {
+    window.alert('Informe um valor valido (maior ou igual a zero).');
+    return;
+  }
+
+  const delta = Number((target - current).toFixed(2));
+  if (Math.abs(delta) < 0.005) return;
+
+  const flow = {
+    id: (crypto.randomUUID && crypto.randomUUID()) || String(Date.now()),
+    date: getTodayIsoDate(),
+    type: delta > 0 ? 'deposit' : 'withdraw',
+    amount: Math.abs(delta),
+    book: house.book,
+    note: `Ajuste de banca pelo ranking (${formatProfit(current)} -> ${formatProfit(target)})`,
+  };
+
+  try {
+    Shell.showGlobalLoading?.('Salvando ajuste de banca...');
+    const response = await fetch('api.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acao: 'salvar_fluxo', profile_id: getActiveProfileId(), fluxo: flow })
+    });
+    const data = await response.json();
+    if (data?.sucesso === false) {
+      window.alert(data?.erro || 'Nao foi possivel salvar o ajuste.');
+      return;
+    }
+
+    await loadBalanceRanking();
+    renderBalanceRanking();
+  } catch (error) {
+    console.error('Erro ao ajustar banca no ranking:', error);
+    Shell.showApiError?.('Nao foi possivel salvar o ajuste de banca.');
+  } finally {
+    Shell.hideGlobalLoading?.();
+  }
 }
 
 function getFilteredRankingBets() {
@@ -455,6 +523,9 @@ function renderBookTable() {
 
 function renderCharts() {
   const byBook = calcStatsByBook();
+  const isMobile = window.matchMedia('(max-width: 640px)').matches;
+  const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || 'rgba(245, 247, 255, 0.7)';
+  const chartGridColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || 'rgba(255, 255, 255, 0.08)';
 
   if (byBook.length === 0) {
     if (bookDistributionChart) {
@@ -497,9 +568,11 @@ function renderCharts() {
           legend: {
             position: 'bottom',
             labels: {
-              color: 'rgba(245, 247, 255, 0.8)',
-              padding: 12,
-              font: { size: 11 }
+              color: chartTextColor,
+              padding: isMobile ? 8 : 12,
+              boxWidth: isMobile ? 12 : 18,
+              boxHeight: isMobile ? 8 : 12,
+              font: { size: isMobile ? 10 : 11 }
             }
           }
         }
@@ -538,12 +611,12 @@ function renderCharts() {
         },
         scales: {
           x: {
-            ticks: { color: 'rgba(245, 247, 255, 0.6)' },
-            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+            ticks: { color: chartTextColor },
+            grid: { color: chartGridColor }
           },
           y: {
-            ticks: { color: 'rgba(245, 247, 255, 0.6)' },
-            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+            ticks: { color: chartTextColor },
+            grid: { color: chartGridColor }
           }
         }
       }
@@ -682,6 +755,7 @@ async function loadBalanceRanking() {
         deposits: Number(casa.deposits) || 0,
         withdraws: Number(casa.withdraws) || 0,
         profit: Number(casa.profit) || 0,
+        casino_profit: Number(casa.casino_profit) || 0,
         balance: Number(casa.balance) || 0,
         total_staked: Number(casa.total_staked) || 0,
         wins: Number(casa.wins) || 0,
@@ -723,7 +797,7 @@ function renderBalanceRanking() {
   if (sortedRanking.length === 0) {
     if (podium) podium.innerHTML = '<p class="empty-message">Nenhuma movimentação registrada com casa de apostas.</p>';
     if (tableBody) {
-      tableBody.innerHTML = '<tr><td colspan="7">Nenhum dado disponível.</td></tr>';
+      tableBody.innerHTML = '<tr><td colspan="8">Nenhum dado disponível.</td></tr>';
     }
     renderRankingTablePagination('balance', 0, 0, 0, 0);
     return;
@@ -765,6 +839,7 @@ function renderBalanceRanking() {
           <div class="balance-breakdown">
             <span class="balance-detail">Banca: ${formatProfit(casa.balance)}</span>
             <span class="balance-detail">Lucro: ${formatProfit(casa.profit)}</span>
+            <span class="balance-detail">Cassino: ${formatProfit(casa.casino_profit)}</span>
             <span class="balance-detail">Apostas: ${casa.bets_count}</span>
           </div>
         </div>
@@ -803,6 +878,7 @@ function renderBalanceRanking() {
             </div>
           </td>
           <td>${casa.bets_count}</td>
+          <td><button type="button" class="ghost small" data-action="edit-balance" data-book="${encodeURIComponent(casa.book)}">Editar banca</button></td>
         </tr>
       `;
     }).join('');
@@ -938,6 +1014,14 @@ balanceSortControls?.addEventListener('click', (event) => {
   });
 
   renderBalanceRanking();
+});
+
+document.getElementById('balance-ranking-body')?.addEventListener('click', (event) => {
+  const button = event.target.closest('button[data-action="edit-balance"]');
+  if (!button) return;
+  const encodedBook = button.dataset.book || '';
+  const book = decodeURIComponent(encodedBook);
+  adjustBookBalance(book);
 });
 
 init();

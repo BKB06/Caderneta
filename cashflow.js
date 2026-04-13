@@ -3,7 +3,7 @@ const {
   setActiveProfileId,
   resolveActiveProfileId,
   loadProfilesFromApi,
-  currencyFormatter,
+  formatCurrencyBRL,
   numberFormatter,
   parseLocaleNumber,
 } = window.CadernetaUtils;
@@ -139,7 +139,7 @@ function renderBookFilter() {
 }
 
 function formatProfit(value) {
-  return currencyFormatter.format(value);
+  return formatCurrencyBRL(value);
 }
 
 function formatDateDisplay(value) {

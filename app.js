@@ -7,7 +7,7 @@ const {
   getSettingsKey,
   parseLocaleNumber,
   loadProfilesFromApi,
-  currencyFormatter,
+  formatCurrencyBRL,
   percentFormatter,
   numberFormatter,
 } = window.CadernetaUtils;
@@ -541,11 +541,11 @@ function formatAITags(aisString) {
 }
 
 function formatStake(value) {
-  return currencyFormatter.format(value);
+  return formatCurrencyBRL(value);
 }
 
 function formatProfit(value) {
-  return currencyFormatter.format(value);
+  return formatCurrencyBRL(value);
 }
 
 function getThemeColor(variableName, fallback) {
@@ -735,14 +735,13 @@ function updateBankrollDisplay() {
   const settledProfit = calcSettledProfit();
   
   if (bankrollDeposits) {
-    bankrollDeposits.textContent = `+${formatProfit(totalDeposits)} depósitos`;
+    bankrollDeposits.textContent = `${formatProfit(totalDeposits)} depósitos`;
   }
   if (bankrollWithdraws) {
-    bankrollWithdraws.textContent = `-${formatProfit(totalWithdraws)} saques`;
+    bankrollWithdraws.textContent = `${formatProfit(-totalWithdraws)} saques`;
   }
   if (bankrollProfitIndicator) {
-    const profitPrefix = settledProfit >= 0 ? '+' : '';
-    bankrollProfitIndicator.textContent = `${profitPrefix}${formatProfit(settledProfit)} lucro`;
+    bankrollProfitIndicator.textContent = `${formatProfit(settledProfit)} lucro`;
     bankrollProfitIndicator.className = `breakdown-item ${settledProfit >= 0 ? 'positive' : 'negative'}`;
   }
 }
@@ -1549,15 +1548,15 @@ function renderMiniProfitChart() {
   const worstDayEl = document.getElementById("chart-worst-day");
 
   if (monthTotalEl) {
-    monthTotalEl.textContent = (monthTotal >= 0 ? "+" : "") + formatProfit(monthTotal);
+    monthTotalEl.textContent = formatProfit(monthTotal);
     monthTotalEl.className = "profit-day-stat-value " + (monthTotal >= 0 ? "positive" : "negative");
   }
   if (bestDayEl) {
-    bestDayEl.textContent = (bestDay >= 0 ? "+" : "") + formatProfit(bestDay);
+    bestDayEl.textContent = formatProfit(bestDay);
     bestDayEl.className = "profit-day-stat-value " + (bestDay >= 0 ? "positive" : "negative");
   }
   if (worstDayEl) {
-    worstDayEl.textContent = (worstDay >= 0 ? "+" : "") + formatProfit(worstDay);
+    worstDayEl.textContent = formatProfit(worstDay);
     worstDayEl.className = "profit-day-stat-value " + (worstDay >= 0 ? "positive" : "negative");
   }
 
@@ -1621,7 +1620,7 @@ function renderMiniProfitChart() {
             title: (items) => `Dia ${items[0].label}`,
             label: (item) => {
               const val = item.raw;
-              return `${val >= 0 ? "+" : ""}${formatProfit(val)}`;
+              return formatProfit(val);
             },
           },
         },
@@ -1649,7 +1648,7 @@ function renderMiniProfitChart() {
             color: tickColor,
             font: { size: 10 },
             callback: (value) => {
-              return `R$${Number(value).toFixed(2).replace(".", ",")}`;
+              return formatProfit(Number(value) || 0);
             },
             maxTicksLimit: 6,
           },
@@ -1982,7 +1981,7 @@ function renderMonthCalendar() {
     if (profit !== 0) {
       const dayProfit = document.createElement('span');
       dayProfit.className = `day-profit ${profit > 0 ? 'positive' : 'negative'}`;
-      dayProfit.textContent = profit > 0 ? `+${currencyFormatter.format(profit).replace('R$', '')}` : currencyFormatter.format(profit).replace('R$', '');
+      dayProfit.textContent = formatProfit(profit).replace(/^R\$\s*/, '').trim();
       dayEl.appendChild(dayProfit);
     }
 
@@ -2317,7 +2316,7 @@ function renderDayShareCard(dateString, betsList) {
   ctx.font = 'bold 80px Inter, sans-serif';
   ctx.textAlign = 'center';
   // Centralizar verticalmente no box
-  ctx.fillText(`${totalProfit >= 0 ? '+' : ''}${currencyFormatter.format(totalProfit)}`, w / 2, y + 40);
+  ctx.fillText(formatProfit(totalProfit), w / 2, y + 40);
 
   y += 140;
 
@@ -2799,6 +2798,13 @@ function queueSaveGoals() {
 
 function renderProfitGoals() {
   const now = new Date();
+
+  const applyGoalValueTone = (element, value) => {
+    if (!element) return;
+    element.classList.remove('positive', 'negative');
+    if (value > 0) element.classList.add('positive');
+    if (value < 0) element.classList.add('negative');
+  };
   
   // Week start (Sunday)
   const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -2827,12 +2833,11 @@ function renderProfitGoals() {
 
   // Update weekly
   const weeklyGoalCurrent = document.getElementById('weekly-goal-current');
-  const weeklyGoalTarget = document.getElementById('weekly-goal-target');
   const weeklyGoalBar = document.getElementById('weekly-goal-bar');
   const weeklyGoalPercent = document.getElementById('weekly-goal-percent');
 
   if (weeklyGoalCurrent) weeklyGoalCurrent.textContent = formatProfit(weeklyProfit);
-  if (weeklyGoalTarget) weeklyGoalTarget.textContent = `de ${formatProfit(profitGoals.weekly)}`;
+  applyGoalValueTone(weeklyGoalCurrent, weeklyProfit);
   
   const weeklyPct = profitGoals.weekly > 0 ? Math.max(0, (weeklyProfit / profitGoals.weekly) * 100) : 0;
   if (weeklyGoalBar) {
@@ -2840,8 +2845,8 @@ function renderProfitGoals() {
     weeklyGoalBar.className = `progress-bar ${weeklyPct >= 100 ? 'exceeded' : ''}`;
   }
   if (weeklyGoalPercent) {
-    weeklyGoalPercent.textContent = `Semanal ${Math.round(weeklyPct)}%`;
-    weeklyGoalPercent.className = `profit-goal-percent ${weeklyPct >= 100 ? 'reached' : ''}`;
+    weeklyGoalPercent.textContent = `${Math.round(weeklyPct)}% atingido`;
+    weeklyGoalPercent.classList.toggle('reached', weeklyPct >= 100);
   }
 
   // Update monthly
@@ -2853,6 +2858,8 @@ function renderProfitGoals() {
 
   if (monthlyGoalCurrent) monthlyGoalCurrent.textContent = formatProfit(monthlyProfit);
   if (monthlyGoalCurrentPanel) monthlyGoalCurrentPanel.textContent = formatProfit(monthlyProfit);
+  applyGoalValueTone(monthlyGoalCurrent, monthlyProfit);
+  applyGoalValueTone(monthlyGoalCurrentPanel, monthlyProfit);
   if (monthlyGoalTarget) monthlyGoalTarget.textContent = `de ${formatProfit(profitGoals.monthly)}`;
   
   const monthlyPct = profitGoals.monthly > 0 ? Math.max(0, (monthlyProfit / profitGoals.monthly) * 100) : 0;
@@ -2861,8 +2868,8 @@ function renderProfitGoals() {
     monthlyGoalBar.className = `progress-bar ${monthlyPct >= 100 ? 'exceeded' : ''}`;
   }
   if (monthlyGoalPercent) {
-    monthlyGoalPercent.textContent = `Mensal ${Math.round(monthlyPct)}%`;
-    monthlyGoalPercent.className = `profit-goal-percent ${monthlyPct >= 100 ? 'reached' : ''}`;
+    monthlyGoalPercent.textContent = `${Math.round(monthlyPct)}% atingido`;
+    monthlyGoalPercent.classList.toggle('reached', monthlyPct >= 100);
   }
 }
 
@@ -2936,7 +2943,7 @@ function renderFinalizedBets() {
         <div class="fbet-side">
           <div class="fbet-money">
             <span class="fbet-profit ${profitClass}">${formatProfit(profit)}</span>
-            <span class="fbet-stake">stake ${currencyFormatter.format(stakeValue)}</span>
+            <span class="fbet-stake">stake ${formatStake(stakeValue)}</span>
           </div>
           <button type="button" class="quick-action danger" data-action="delete" data-id="${bet.id}">Apagar</button>
         </div>
@@ -4031,13 +4038,13 @@ pdfGenerateBtn?.addEventListener('click', async () => {
       
 
       const kpiData = [
-        ['Total apostado:', currencyFormatter.format(totalStake)],
-        ['Lucro líquido:', currencyFormatter.format(totalProfit)],
+        ['Total apostado:', formatStake(totalStake)],
+        ['Lucro líquido:', formatProfit(totalProfit)],
         ['ROI:', percentFormatter.format(roi)],
         ['Winrate:', `${percentFormatter.format(winrate)} (${wins.length} greens / ${settled.length} apostas)`],
         ['Total de apostas no mês:', `${monthBets.length} (${settled.length} finalizadas, ${monthBets.length - settled.length} pendentes)`],
         ['Odd média:', settled.length > 0 ? `${numberFormatter.format(settled.reduce((s, b) => s + b.odds, 0) / settled.length)}x` : '-'],
-        ['Ticket médio:', settled.length > 0 ? currencyFormatter.format(totalStake / settled.length) : '-'],
+        ['Ticket médio:', settled.length > 0 ? formatStake(totalStake / settled.length) : '-'],
       ];
 
       kpiData.forEach(([label, value]) => {
@@ -4136,7 +4143,7 @@ pdfGenerateBtn?.addEventListener('click', async () => {
           doc.text(String(hLosses), cols[3], y);
           doc.text(percentFormatter.format(hWinrate), cols[4], y);
           doc.setTextColor(hProfit >= 0 ? 34 : 220, hProfit >= 0 ? 150 : 50, hProfit >= 0 ? 80 : 50);
-          doc.text(currencyFormatter.format(hProfit), cols[5], y);
+          doc.text(formatProfit(hProfit), cols[5], y);
           doc.setTextColor(hRoi >= 0 ? 34 : 220, hRoi >= 0 ? 150 : 50, hRoi >= 0 ? 80 : 50);
           doc.text(percentFormatter.format(hRoi), cols[6], y);
           doc.setTextColor(60, 60, 60);
@@ -4178,7 +4185,7 @@ pdfGenerateBtn?.addEventListener('click', async () => {
 
         // 2. Lucro (Alinhado à DIREITA para ficar organizado)
         // Mantemos a cor verde para destacar o ganho
-        doc.text(`+${currencyFormatter.format(bet.profit)}`, pageW - margin, y, { align: 'right' });
+        doc.text(`${formatProfit(bet.profit)}`, pageW - margin, y, { align: 'right' });
 
         // 3. Evento + Odd (Alinhado à ESQUERDA)
         doc.setFont('helvetica', 'normal');
@@ -4277,7 +4284,7 @@ pdfGenerateBtn?.addEventListener('click', async () => {
         const eventText = (bet.event || '-');
         doc.text(eventText.length > 35 ? eventText.substring(0, 35) + '...' : eventText, colX.event, y);
         doc.text(numberFormatter.format(bet.odds), colX.odd, y, { align: 'right' });
-        doc.text(currencyFormatter.format(bet.stake), colX.stake, y, { align: 'right' });
+        doc.text(formatStake(bet.stake), colX.stake, y, { align: 'right' });
 
         if (bet.status === 'win') doc.setTextColor(34, 150, 80);
         else if (bet.status === 'loss') doc.setTextColor(220, 50, 50);
@@ -4285,7 +4292,7 @@ pdfGenerateBtn?.addEventListener('click', async () => {
         doc.text(statusLabel(bet.status).substring(0, 10), colX.status, y);
 
         doc.setTextColor(profit >= 0 ? 34 : 220, profit >= 0 ? 150 : 50, profit >= 0 ? 80 : 50);
-        doc.text(currencyFormatter.format(profit), colX.profit, y, { align: 'right' });
+        doc.text(formatProfit(profit), colX.profit, y, { align: 'right' });
         doc.setTextColor(60, 60, 60);
         doc.text((bet.book || '-').substring(0, 12), colX.book, y);
         y += 5;
@@ -4454,10 +4461,10 @@ function renderShareCard(bet) {
   cardsY += cardH + 20;
 
   // Card: Stake
-  drawInfoCard(ctx, 70, cardsY, cardW, cardH, '💰', 'Stake', currencyFormatter.format(bet.stake));
+  drawInfoCard(ctx, 70, cardsY, cardW, cardH, '💰', 'Stake', formatStake(bet.stake));
   // Card: Lucro
   const profitColor = profit >= 0 ? '#22c55e' : '#ff6b6b';
-  drawInfoCard(ctx, 70 + cardW + 40, cardsY, cardW, cardH, '💸', 'Lucro', currencyFormatter.format(profit), profitColor);
+  drawInfoCard(ctx, 70 + cardW + 40, cardsY, cardW, cardH, '💸', 'Lucro', formatProfit(profit), profitColor);
 
   cardsY += cardH + 20;
 

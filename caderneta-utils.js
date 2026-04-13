@@ -18,6 +18,16 @@
     maximumFractionDigits: 2,
   });
 
+  function formatCurrencyBRL(value) {
+    const amount = Number(value) || 0;
+    const absFormatted = currencyFormatter.format(Math.abs(amount));
+    if (amount < 0) {
+      const numericPart = absFormatted.replace(/^R\$\s*/, "");
+      return `R$ - ${numericPart}`;
+    }
+    return absFormatted;
+  }
+
   function getActiveProfileId() {
     const activeId = localStorage.getItem(ACTIVE_PROFILE_KEY);
     return activeId || null;
@@ -81,6 +91,7 @@
     ACTIVE_PROFILE_KEY,
     DEFAULT_AI_OPTIONS,
     currencyFormatter,
+    formatCurrencyBRL,
     percentFormatter,
     numberFormatter,
     getActiveProfileId,

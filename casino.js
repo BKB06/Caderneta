@@ -3,6 +3,7 @@ const {
   getActiveProfileId,
   setActiveProfileId,
   resolveActiveProfileId,
+  formatCurrencyBRL,
 } = window.CadernetaUtils;
 
 const Shell = window.CadernetaShell || {};
@@ -13,17 +14,12 @@ let activeHistoryFilter = "all";
 let activePeriodFilter = "all";
 let casinoChart = null;
 let casinoHistoryCurrentPage = 1;
+let editingCasinoId = null;
 
 const CASINO_HISTORY_PAGE_SIZE = 40;
 const casinoPagePrevButton = document.getElementById("casino-page-prev");
 const casinoPageNextButton = document.getElementById("casino-page-next");
 const casinoPageInfo = document.getElementById("casino-page-info");
-
-const currencyFormatter = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  maximumFractionDigits: 2,
-});
 
 const numberFormatter = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 2,
@@ -34,6 +30,10 @@ const percentFormatter = new Intl.NumberFormat("pt-BR", {
   style: "percent",
   maximumFractionDigits: 0,
 });
+
+function formatMoney(value) {
+  return formatCurrencyBRL(value);
+}
 
 async function apiPost(payload) {
   try {
@@ -392,11 +392,11 @@ function recalcRealtime() {
 
     if (realtime.label) realtime.label.textContent = "lucro / perda";
     if (realtime.profit) {
-      realtime.profit.textContent = currencyFormatter.format(profit);
+      realtime.profit.textContent = formatMoney(profit);
       realtime.profit.style.color = profit > 0 ? "var(--success)" : profit < 0 ? "var(--danger)" : "var(--text)";
     }
-    if (realtime.bet) realtime.bet.textContent = currencyFormatter.format(bet);
-    if (realtime.win) realtime.win.textContent = currencyFormatter.format(win);
+    if (realtime.bet) realtime.bet.textContent = formatMoney(bet);
+    if (realtime.win) realtime.win.textContent = formatMoney(win);
 
     if (realtime.badge) {
       realtime.badge.className = "hero-tag";
@@ -404,17 +404,17 @@ function recalcRealtime() {
         realtime.badge.textContent = "Sem dados";
       } else if (profit > 0) {
         realtime.badge.classList.add("positive");
-        realtime.badge.textContent = `Sessão positiva · ganhou ${currencyFormatter.format(profit)}`;
+        realtime.badge.textContent = `Sessão positiva · ganhou ${formatMoney(profit)}`;
       } else if (profit < 0) {
         realtime.badge.classList.add("negative");
-        realtime.badge.textContent = `Sessão negativa · perdeu ${currencyFormatter.format(Math.abs(profit))}`;
+        realtime.badge.textContent = `Sessão negativa · perdeu ${formatMoney(Math.abs(profit))}`;
       } else {
         realtime.badge.textContent = "Neutra";
       }
     }
 
     if (formProfit) {
-      formProfit.textContent = currencyFormatter.format(profit);
+      formProfit.textContent = formatMoney(profit);
       formProfit.style.color = profit > 0 ? "var(--success)" : profit < 0 ? "var(--danger)" : "var(--text)";
     }
 
@@ -430,33 +430,33 @@ function recalcRealtime() {
 
   if (realtime.label) realtime.label.textContent = "ganho líquido puro";
   if (realtime.profit) {
-    realtime.profit.textContent = currencyFormatter.format(lucro);
+    realtime.profit.textContent = formatMoney(lucro);
     realtime.profit.style.color = "color-mix(in srgb, var(--warning) 70%, var(--text) 30%)";
   }
-  if (realtime.win) realtime.win.textContent = currencyFormatter.format(win);
+  if (realtime.win) realtime.win.textContent = formatMoney(win);
   if (realtime.spins) realtime.spins.textContent = String(spins || 0);
-  if (realtime.financed) realtime.financed.textContent = currencyFormatter.format(financed || 0);
-  if (realtime.perSpin) realtime.perSpin.textContent = currencyFormatter.format(perSpin || 0);
+  if (realtime.financed) realtime.financed.textContent = formatMoney(financed || 0);
+  if (realtime.perSpin) realtime.perSpin.textContent = formatMoney(perSpin || 0);
 
   if (realtime.badge) {
     realtime.badge.className = "hero-tag";
     if (!win && !spins && !spinBet) {
       realtime.badge.textContent = "Sem dados";
     } else {
-      realtime.badge.textContent = `Ganho puro · ${currencyFormatter.format(lucro)} sem custo`;
+      realtime.badge.textContent = `Ganho puro · ${formatMoney(lucro)} sem custo`;
       realtime.badge.style.background = "color-mix(in srgb, var(--warning) 20%, transparent)";
       realtime.badge.style.color = "color-mix(in srgb, var(--warning) 75%, var(--text) 25%)";
     }
   }
 
   if (formProfit) {
-    formProfit.textContent = currencyFormatter.format(lucro);
+    formProfit.textContent = formatMoney(lucro);
     formProfit.style.color = "color-mix(in srgb, var(--warning) 75%, var(--text) 25%)";
   }
 
   if (freeHint) {
     if (spins > 0 && spinBet > 0) {
-      freeHint.textContent = `Casa financiou ${currencyFormatter.format(financed)} (${spins} rodadas × ${currencyFormatter.format(spinBet)})`;
+      freeHint.textContent = `Casa financiou ${formatMoney(financed)} (${spins} rodadas × ${formatMoney(spinBet)})`;
     } else {
       freeHint.textContent = "Preencha para ver o valor financiado pela casa";
     }
@@ -482,14 +482,14 @@ function updateKpis() {
   const heroLast = document.getElementById("casino-hero-last");
 
   if (profitEl) {
-    profitEl.textContent = currencyFormatter.format(totalProfit);
+    profitEl.textContent = formatMoney(totalProfit);
     profitEl.classList.remove("positive", "negative");
     if (totalProfit > 0) profitEl.classList.add("positive");
     if (totalProfit < 0) profitEl.classList.add("negative");
   }
 
   if (heroSub) {
-    heroSub.textContent = `${totalSessions} sessões · ${currencyFormatter.format(totalVolume)} em volume`;
+    heroSub.textContent = `${totalSessions} sessões · ${formatMoney(totalVolume)} em volume`;
   }
 
   if (heroTag) {
@@ -506,7 +506,7 @@ function updateKpis() {
   }
 
   if (heroAvg) {
-    heroAvg.textContent = `Média: ${currencyFormatter.format(avgPerSession)}/sessão`;
+    heroAvg.textContent = `Média: ${formatMoney(avgPerSession)}/sessão`;
   }
 
   if (heroLast) {
@@ -516,15 +516,14 @@ function updateKpis() {
       const sorted = records.slice().sort((a, b) => (parseDate(b.date) || 0) - (parseDate(a.date) || 0));
       const last = sorted[0];
       const lastProfit = calcProfit(last);
-      const sign = lastProfit > 0 ? "+" : "";
-      heroLast.textContent = `Última sessão: ${sign}${currencyFormatter.format(lastProfit)} · ${last.game || "-"}`;
+      heroLast.textContent = `Última sessão: ${formatMoney(lastProfit)} · ${last.game || "-"}`;
     }
   }
 
   const posPct = totalSessions > 0 ? positiveSessions / totalSessions : 0;
 
   const totalBetEl = document.getElementById("casino-total-bet");
-  if (totalBetEl) totalBetEl.textContent = currencyFormatter.format(totalVolume);
+  if (totalBetEl) totalBetEl.textContent = formatMoney(totalVolume);
 
   const sessionsPosEl = document.getElementById("casino-sessions-pos");
   if (sessionsPosEl) sessionsPosEl.textContent = `${positiveSessions} de ${totalSessions}`;
@@ -534,12 +533,12 @@ function updateKpis() {
 
   const avgSessionEl = document.getElementById("casino-avg-session");
   if (avgSessionEl) {
-    avgSessionEl.textContent = currencyFormatter.format(avgPerSession);
+    avgSessionEl.textContent = formatMoney(avgPerSession);
     avgSessionEl.style.color = avgPerSession > 0 ? "var(--success)" : avgPerSession < 0 ? "var(--danger)" : "var(--text)";
   }
 
   const freeTotalEl = document.getElementById("casino-free-total");
-  if (freeTotalEl) freeTotalEl.textContent = `+${currencyFormatter.format(freeTotal)}`;
+  if (freeTotalEl) freeTotalEl.textContent = formatMoney(freeTotal);
 
   const freeSubEl = document.getElementById("casino-free-sub");
   if (freeSubEl) freeSubEl.textContent = `${freeSessions.length} sessões · ${totalFreeSpins} rodadas`;
@@ -592,7 +591,7 @@ function renderGroupedRanking(containerId, groupedMap) {
           <span class="pos">#${index + 1}</span>
           <strong>${item.name}</strong>
           <span class="sessions">${item.sessions} sess.</span>
-          <span class="profit ${signClass}">${currencyFormatter.format(item.profit)}</span>
+          <span class="profit ${signClass}">${formatMoney(item.profit)}</span>
         </div>
       `;
     })
@@ -690,7 +689,7 @@ function renderHistory(type = activeHistoryFilter) {
       const gameText = isFreeRecord(record)
         ? `${record.game || "-"} <span class="badge free">Grátis</span>`
         : record.game || "-";
-      const betText = isFreeRecord(record) ? "—" : currencyFormatter.format(Number(record.bet_amount) || 0);
+      const betText = isFreeRecord(record) ? "—" : formatMoney(Number(record.bet_amount) || 0);
       const profitClass = profit >= 0 ? "positive" : "negative";
 
       return `
@@ -699,11 +698,14 @@ function renderHistory(type = activeHistoryFilter) {
           <td>${gameText}</td>
           <td>${record.platform || "-"}</td>
           <td>${betText}</td>
-          <td>${currencyFormatter.format(Number(record.win_amount) || 0)}</td>
-          <td class="${profitClass}">${currencyFormatter.format(profit)}</td>
+          <td>${formatMoney(Number(record.win_amount) || 0)}</td>
+          <td class="${profitClass}">${formatMoney(profit)}</td>
           <td><span class="history-type ${typeClass}">${typeLabel}</span></td>
           <td>${record.note || "—"}</td>
-          <td><button type="button" class="ghost small" data-action="delete" data-id="${record.id}">Excluir</button></td>
+          <td>
+            <button type="button" class="ghost small" data-action="edit" data-id="${record.id}">Editar</button>
+            <button type="button" class="ghost small" data-action="delete" data-id="${record.id}">Excluir</button>
+          </td>
         </tr>
       `;
     })
@@ -821,6 +823,40 @@ async function deleteSession(id) {
   refreshCasinoView();
 }
 
+function startEditSession(id) {
+  if (!id) return;
+
+  const record = casinoRecords.find((item) => String(item.id) === String(id));
+  if (!record) return;
+
+  const dateInput = document.getElementById("casino-date");
+  const gameInput = document.getElementById("casino-game");
+  const platformInput = document.getElementById("casino-platform");
+  const betInput = document.getElementById("casino-bet-amount");
+  const winInput = document.getElementById("casino-win-amount");
+  const spinsInput = document.getElementById("casino-free-spins");
+  const spinBetInput = document.getElementById("casino-spin-bet");
+  const noteInput = document.getElementById("casino-note");
+  const quickResult = document.getElementById("casino-quick-result");
+  const submitBtn = document.getElementById("casino-submit");
+
+  editingCasinoId = String(record.id);
+  setSessionMode(Number(record.is_free) === 1 ? "free" : "normal");
+
+  if (dateInput) dateInput.value = formatDateToInput(record.date || "");
+  if (gameInput) gameInput.value = record.game || "";
+  if (platformInput) platformInput.value = record.platform || "";
+  if (betInput) betInput.value = numberFormatter.format(Number(record.bet_amount) || 0);
+  if (winInput) winInput.value = numberFormatter.format(Number(record.win_amount) || 0);
+  if (spinsInput) spinsInput.value = record.free_spins != null ? String(record.free_spins) : "";
+  if (spinBetInput) spinBetInput.value = record.spin_bet != null ? numberFormatter.format(Number(record.spin_bet) || 0) : "";
+  if (noteInput) noteInput.value = record.note || "";
+  if (quickResult) quickResult.value = "";
+  if (submitBtn) submitBtn.textContent = "Atualizar sessão";
+
+  recalcRealtime();
+}
+
 async function saveSession(event) {
   event.preventDefault();
 
@@ -851,7 +887,7 @@ async function saveSession(event) {
   }
 
   const casino = {
-    id: (crypto.randomUUID && crypto.randomUUID()) || String(Date.now()),
+    id: editingCasinoId || ((crypto.randomUUID && crypto.randomUUID()) || String(Date.now())),
     profile_id: getActiveProfileId(),
     date: formatDateToBr(dateInput?.value || ""),
     game,
@@ -876,7 +912,12 @@ async function saveSession(event) {
     return;
   }
 
-  casinoRecords.unshift(casino);
+  const existingIndex = casinoRecords.findIndex((record) => String(record.id) === String(casino.id));
+  if (existingIndex >= 0) {
+    casinoRecords[existingIndex] = { ...casinoRecords[existingIndex], ...casino };
+  } else {
+    casinoRecords.unshift(casino);
+  }
   refreshCasinoView();
   clearForm();
 }
@@ -885,11 +926,16 @@ function clearForm() {
   const form = document.getElementById("casino-form");
   form?.reset();
 
+  editingCasinoId = null;
+
   const dateInput = document.getElementById("casino-date");
   if (dateInput) dateInput.value = getTodayInputDate();
 
   const quick = document.getElementById("casino-quick-result");
   if (quick) quick.value = "";
+
+  const submitBtn = document.getElementById("casino-submit");
+  if (submitBtn) submitBtn.textContent = "Salvar sessão";
 
   if (sessionMode === "free") {
     const betInput = document.getElementById("casino-bet-amount");
@@ -961,7 +1007,7 @@ function runSimulator() {
   const action = projectedResult >= 0 ? "ganhar" : "perder";
   const absResult = Math.abs(projectedResult);
 
-  resultEl.innerHTML = `Com <strong>${sessionsPerWeek} sessões/semana</strong> por <strong>${weeks} semanas</strong> (${projectedSessions} sessões), baseado na média atual de <strong>${currencyFormatter.format(avgPerSession)}/sessão</strong>, a projeção é <strong>${action} ${currencyFormatter.format(absResult)}</strong> nos próximos ${projectedDays} dias.`;
+  resultEl.innerHTML = `Com <strong>${sessionsPerWeek} sessões/semana</strong> por <strong>${weeks} semanas</strong> (${projectedSessions} sessões), baseado na média atual de <strong>${formatMoney(avgPerSession)}/sessão</strong>, a projeção é <strong>${action} ${formatMoney(absResult)}</strong> nos próximos ${projectedDays} dias.`;
 }
 
 function handlePeriodChange() {
@@ -974,9 +1020,17 @@ function handlePeriodChange() {
 function setupHistoryActions() {
   const body = document.getElementById("casino-body");
   body?.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-action='delete']");
+    const button = event.target.closest("button[data-action]");
     if (!button) return;
-    deleteSession(button.dataset.id);
+
+    if (button.dataset.action === "edit") {
+      startEditSession(button.dataset.id);
+      return;
+    }
+
+    if (button.dataset.action === "delete") {
+      deleteSession(button.dataset.id);
+    }
   });
 }
 

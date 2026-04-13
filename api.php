@@ -1040,6 +1040,8 @@ elseif ($acao === 'ranking_saldo_casas') {
                 'deposits' => (float)$row['total_deposits'],
                 'withdraws' => (float)$row['total_withdraws'],
                 'profit' => 0.0,
+                'casino_profit' => 0.0,
+                'returned_stake' => 0.0,
                 'total_staked' => 0.0,
                 'bets_count' => 0,
                 'wins' => 0,
@@ -1057,6 +1059,7 @@ elseif ($acao === 'ranking_saldo_casas') {
             SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) AS wins,
             SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS losses,
             SUM(CASE WHEN is_freebet = 0 THEN stake ELSE 0 END) AS total_staked,
+            SUM(CASE WHEN status = 'win' AND is_freebet = 0 THEN stake ELSE 0 END) AS returned_stake,
             SUM(
                 CASE
                     WHEN status = 'win' THEN stake * (odds - 1)
@@ -1082,6 +1085,8 @@ elseif ($acao === 'ranking_saldo_casas') {
                     'deposits' => 0.0,
                     'withdraws' => 0.0,
                     'profit' => 0.0,
+                    'casino_profit' => 0.0,
+                    'returned_stake' => 0.0,
                     'total_staked' => 0.0,
                     'bets_count' => 0,
                     'wins' => 0,
@@ -1093,7 +1098,36 @@ elseif ($acao === 'ranking_saldo_casas') {
             $casas[$book]['wins'] = (int)($row['wins'] ?? 0);
             $casas[$book]['losses'] = (int)($row['losses'] ?? 0);
             $casas[$book]['total_staked'] = (float)($row['total_staked'] ?? 0);
+            $casas[$book]['returned_stake'] = (float)($row['returned_stake'] ?? 0);
             $casas[$book]['profit'] = (float)($row['total_profit'] ?? 0);
+        }
+    }
+    $stmt->close();
+
+    // Agregados de cassino por plataforma (soma retorno - apostado)
+    $stmt = $conn->prepare("\n        SELECT\n            platform AS book,\n            SUM(IFNULL(win_amount, 0) - IFNULL(bet_amount, 0)) AS casino_profit\n        FROM ganhos_casino\n        WHERE profile_id = ? AND platform <> ''\n        GROUP BY platform\n    ");
+    $stmt->bind_param("s", $profile_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $book = $row['book'];
+            if (!isset($casas[$book])) {
+                $casas[$book] = [
+                    'book' => $book,
+                    'deposits' => 0.0,
+                    'withdraws' => 0.0,
+                    'profit' => 0.0,
+                    'casino_profit' => 0.0,
+                    'returned_stake' => 0.0,
+                    'total_staked' => 0.0,
+                    'bets_count' => 0,
+                    'wins' => 0,
+                    'losses' => 0,
+                ];
+            }
+            $casas[$book]['casino_profit'] = (float)($row['casino_profit'] ?? 0);
         }
     }
     $stmt->close();
@@ -1101,7 +1135,13 @@ elseif ($acao === 'ranking_saldo_casas') {
     // Calcular saldo e ordenar
     $ranking = array_values($casas);
     foreach ($ranking as &$casa) {
-        $casa['balance'] = $casa['deposits'] - $casa['withdraws'] + $casa['profit'];
+        // Banca atual: saldo por casa com fluxo + lucro liquido de apostas + cassino.
+        // Nao somar returned_stake aqui, pois o lucro de apostas ja e liquido.
+        $rawBalance = $casa['deposits']
+            - $casa['withdraws']
+            + $casa['profit']
+            + $casa['casino_profit'];
+        $casa['balance'] = max(0, $rawBalance);
         $casa['winrate'] = $casa['bets_count'] > 0 ? ($casa['wins'] / $casa['bets_count']) : 0.0;
     }
     unset($casa);

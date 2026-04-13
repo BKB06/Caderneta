@@ -772,6 +772,86 @@ button.ghost {
   font-size: 0.76rem;
 }
 
+.goal-template-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.goal-template-card {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg-panel) 92%, #0b111f 8%), color-mix(in srgb, var(--bg-panel) 84%, #0b111f 16%));
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.goal-template-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.goal-template-label {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.goal-template-pill {
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--bg-panel) 85%, var(--text) 15%);
+}
+
+.goal-template-value {
+  font-size: 1.95rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.goal-template-value.positive {
+  color: var(--success);
+}
+
+.goal-template-value.negative {
+  color: var(--danger);
+}
+
+.goal-template-meta {
+  color: color-mix(in srgb, var(--text-muted) 88%, var(--text) 12%);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.goal-template-progress {
+  margin-top: 2px;
+  height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 20%, transparent);
+}
+
+.goal-template-progress .progress-bar {
+  transition: width 0.4s ease;
+}
+
+@media (max-width: 920px) {
+  .goal-template-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .table-wrapper {
   overflow-x: auto;
   border-radius: var(--radius-sm);
@@ -3990,6 +4070,20 @@ th {
 .profit-pill.negative {
   color: #ffb0b0;
   background: rgba(239, 68, 68, 0.26);
+}
+
+html.light .profit-pill.positive,
+html.light-azulado .profit-pill.positive,
+html.light-bege .profit-pill.positive {
+  color: #0f5132;
+  background: rgba(34, 197, 94, 0.2);
+}
+
+html.light .profit-pill.negative,
+html.light-azulado .profit-pill.negative,
+html.light-bege .profit-pill.negative {
+  color: #9f1239;
+  background: rgba(239, 68, 68, 0.22);
 }
 
 .winrate-cell {
