@@ -484,9 +484,13 @@
         <div class="modal-body">
           <p style="margin-bottom:16px;color:var(--text-muted);">Tem certeza que deseja excluir esta aposta?</p>
           <div id="delete-modal-bet-info" class="modal-bet-item" style="margin-bottom:20px;"></div>
+          <label style="display:flex;flex-direction:column;gap:6px;margin-bottom:20px;color:var(--text-muted);font-size:0.85rem;">
+            Digite Excluir para confirmar:
+            <input type="text" id="delete-modal-confirm-input" placeholder="Excluir" style="padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--panel-strong);color:var(--text);" />
+          </label>
           <div style="display:flex;gap:12px;justify-content:flex-end;">
             <button type="button" class="ghost" id="delete-modal-cancel">Cancelar</button>
-            <button type="button" class="danger-btn" id="delete-modal-confirm">Excluir</button>
+            <button type="button" class="danger-btn" id="delete-modal-confirm" disabled>Excluir</button>
           </div>
         </div>
       </div>

@@ -1136,6 +1136,7 @@ function renderTable() {
             <button type="button" class="quick-action cash" data-action="toggle-cash" data-id="${bet.id}">$ Cash</button>
             <button type="button" class="quick-action" data-action="edit" data-id="${bet.id}">...</button>
             <button type="button" class="quick-action" data-action="clone" data-id="${bet.id}">Clonar</button>
+            <button type="button" class="quick-action danger" data-action="delete" data-id="${bet.id}">Apagar</button>
             <div class="inline-cashout" id="cashout-inline-${bet.id}" style="display:none;">
               <input type="text" inputmode="decimal" placeholder="Valor" id="cashout-value-${bet.id}" />
               <button type="button" class="quick-action" data-action="confirm-cash" data-id="${bet.id}">Confirmar</button>
@@ -1172,7 +1173,7 @@ function renderTable() {
           ` : ""}
           <button type="button" class="quick-action" data-action="edit" data-id="${bet.id}">...</button>
           <button type="button" class="quick-action" data-action="clone" data-id="${bet.id}">Clonar</button>
-          ${bet.status !== "pending" ? `<button type="button" class="quick-action danger" data-action="delete" data-id="${bet.id}">Apagar</button>` : ""}
+          <button type="button" class="quick-action danger" data-action="delete" data-id="${bet.id}">Apagar</button>
         </div>
         ${bet.status === "pending" ? `
           <div class="inline-cashout" id="cashout-inline-mobile-${bet.id}" style="display:none;">
@@ -2565,6 +2566,8 @@ const deleteModalClose = document.getElementById('delete-modal-close');
 const deleteModalCancel = document.getElementById('delete-modal-cancel');
 const deleteModalConfirm = document.getElementById('delete-modal-confirm');
 const deleteModalBetInfo = document.getElementById('delete-modal-bet-info');
+const deleteModalConfirmInput = document.getElementById('delete-modal-confirm-input');
+const deleteModalExpectedText = "excluir";
 
 function showDeleteConfirmation(bet) {
   if (!deleteModal) return;
@@ -2583,6 +2586,13 @@ function showDeleteConfirmation(bet) {
       ${bet.ai ? `<span>Quem sugeriu: <strong>${bet.ai.split(",").join(", ")}</strong></span>` : ''}
     </div>
   `;
+  if (deleteModalConfirmInput) {
+    deleteModalConfirmInput.value = "";
+    deleteModalConfirmInput.focus();
+  }
+  if (deleteModalConfirm) {
+    deleteModalConfirm.disabled = true;
+  }
   deleteModal.style.display = 'flex';
 }
 
@@ -2590,6 +2600,8 @@ function closeDeleteModal() {
   if (deleteModal) {
     deleteModal.style.display = 'none';
     deletePendingId = null;
+    if (deleteModalConfirmInput) deleteModalConfirmInput.value = "";
+    if (deleteModalConfirm) deleteModalConfirm.disabled = true;
   }
 }
 
@@ -2597,6 +2609,13 @@ deleteModalClose?.addEventListener('click', closeDeleteModal);
 deleteModalCancel?.addEventListener('click', closeDeleteModal);
 deleteModal?.addEventListener('click', (e) => {
   if (e.target === deleteModal) closeDeleteModal();
+});
+
+deleteModalConfirmInput?.addEventListener('input', () => {
+  if (!deleteModalConfirm) return;
+  const typedValue = String(deleteModalConfirmInput?.value || "").trim().toLowerCase();
+  const expectedValue = deleteModalExpectedText.toLowerCase();
+  deleteModalConfirm.disabled = typedValue !== expectedValue || !expectedValue;
 });
 
 deleteModalConfirm?.addEventListener('click', async () => {
