@@ -1135,12 +1135,14 @@ function renderTable() {
             <button type="button" class="quick-action red" data-action="resolve-loss" data-id="${bet.id}">✗ Red</button>
             <button type="button" class="quick-action cash" data-action="toggle-cash" data-id="${bet.id}">$ Cash</button>
             <button type="button" class="quick-action" data-action="edit" data-id="${bet.id}">...</button>
+            <button type="button" class="quick-action" data-action="clone" data-id="${bet.id}">Clonar</button>
             <div class="inline-cashout" id="cashout-inline-${bet.id}" style="display:none;">
               <input type="text" inputmode="decimal" placeholder="Valor" id="cashout-value-${bet.id}" />
               <button type="button" class="quick-action" data-action="confirm-cash" data-id="${bet.id}">Confirmar</button>
             </div>
           ` : `
             <button type="button" class="quick-action" data-action="edit" data-id="${bet.id}">...</button>
+            <button type="button" class="quick-action" data-action="clone" data-id="${bet.id}">Clonar</button>
             <button type="button" class="quick-action danger" data-action="delete" data-id="${bet.id}">Apagar</button>
           `}
         </td>
@@ -1169,6 +1171,7 @@ function renderTable() {
             <button type="button" class="quick-action cash" data-action="toggle-cash" data-id="${bet.id}">$ Cash</button>
           ` : ""}
           <button type="button" class="quick-action" data-action="edit" data-id="${bet.id}">...</button>
+          <button type="button" class="quick-action" data-action="clone" data-id="${bet.id}">Clonar</button>
           ${bet.status !== "pending" ? `<button type="button" class="quick-action danger" data-action="delete" data-id="${bet.id}">Apagar</button>` : ""}
         </div>
         ${bet.status === "pending" ? `
@@ -1692,6 +1695,36 @@ function resetForm() {
   if (cashoutLabel) cashoutLabel.style.display = "none";
 }
 
+function fillBetForm(bet) {
+  if (!bet) return;
+
+  document.getElementById("bet-date").value = formatDateForInput(bet.date);
+  document.getElementById("bet-event").value = bet.event || "";
+  document.getElementById("bet-odds").value = numberFormatter.format(bet.odds);
+  document.getElementById("bet-stake").value = numberFormatter.format(bet.stake);
+  document.getElementById("bet-book").value = bet.book || "";
+  document.getElementById("bet-status").value = bet.status || "pending";
+  document.getElementById("bet-stake-type").value = bet.isFreebet ? "freebet" : "regular";
+
+  const boostInput = document.getElementById("bet-is-boost");
+  if (boostInput) boostInput.checked = Boolean(bet.isBoost);
+
+  setSelectedAIs("bet-ai-selector", bet.ai || "");
+  document.getElementById("bet-category").value = bet.category || "";
+
+  const cashoutLabel = document.getElementById("cashout-value-label");
+  const cashoutInput = document.getElementById("bet-cashout-value");
+  if (bet.status === "cashout") {
+    if (cashoutLabel) cashoutLabel.style.display = "";
+    if (cashoutInput) cashoutInput.value = bet.cashout_value != null ? numberFormatter.format(bet.cashout_value) : "";
+  } else {
+    if (cashoutLabel) cashoutLabel.style.display = "none";
+    if (cashoutInput) cashoutInput.value = "";
+  }
+
+  updatePotentialProfit();
+}
+
 async function handleSubmit(event) {
   event.preventDefault();
 
@@ -1747,31 +1780,15 @@ async function handleSubmit(event) {
 
 function startEdit(bet) {
   editingId = bet.id;
-  document.getElementById("bet-date").value = formatDateForInput(bet.date);
-  document.getElementById("bet-event").value = bet.event;
-  document.getElementById("bet-odds").value = numberFormatter.format(bet.odds);
-  document.getElementById("bet-stake").value = numberFormatter.format(bet.stake);
-  document.getElementById("bet-book").value = bet.book;
-  document.getElementById("bet-status").value = bet.status;
-  document.getElementById("bet-stake-type").value = bet.isFreebet ? "freebet" : "regular";
-  const boostInput = document.getElementById("bet-is-boost");
-  if (boostInput) boostInput.checked = Boolean(bet.isBoost);
-  setSelectedAIs("bet-ai-selector", bet.ai || "");
-  document.getElementById("bet-category").value = bet.category || "";
-  
-  // Cashout value
-  const cashoutLabel = document.getElementById("cashout-value-label");
-  const cashoutInput = document.getElementById("bet-cashout-value");
-  if (bet.status === "cashout") {
-    if (cashoutLabel) cashoutLabel.style.display = "";
-    if (cashoutInput) cashoutInput.value = bet.cashout_value ? numberFormatter.format(bet.cashout_value) : "";
-  } else {
-    if (cashoutLabel) cashoutLabel.style.display = "none";
-    if (cashoutInput) cashoutInput.value = "";
-  }
-  
-  updatePotentialProfit();
+  fillBetForm(bet);
   submitButton.textContent = "Atualizar aposta";
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function cloneBet(bet) {
+  if (!bet) return;
+  resetForm();
+  fillBetForm(bet);
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -1817,6 +1834,12 @@ async function handleTableClick(event) {
   if (action === "edit") {
     const bet = bets.find((item) => item.id === id);
     if (bet) startEdit(bet);
+    return;
+  }
+
+  if (action === "clone") {
+    const bet = bets.find((item) => item.id === id);
+    if (bet) cloneBet(bet);
     return;
   }
 
@@ -2945,6 +2968,7 @@ function renderFinalizedBets() {
             <span class="fbet-profit ${profitClass}">${formatProfit(profit)}</span>
             <span class="fbet-stake">stake ${formatStake(stakeValue)}</span>
           </div>
+          <button type="button" class="quick-action" data-action="clone" data-id="${bet.id}">Clonar</button>
           <button type="button" class="quick-action danger" data-action="delete" data-id="${bet.id}">Apagar</button>
         </div>
       </div>
