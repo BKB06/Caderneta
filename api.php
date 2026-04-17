@@ -352,7 +352,9 @@ $acoes_permitidas = [
     'salvar_dados_extras', 'carregar_dados_extras',
     'salvar_categoria', 'carregar_categorias', 'excluir_categoria',
     'salvar_casino', 'carregar_casino', 'excluir_casino',
-    'ranking_saldo_casas'
+    'ranking_saldo_casas',
+    'resetar_dados', 'sincronizar_casas', 'agregacoes_periodo', 
+    'obter_casas_com_saldo', 'obter_ia_taxa_acerto', 'criar_casa'
 ];
 
 if (!in_array($acao, $acoes_permitidas, true)) {
@@ -1151,6 +1153,442 @@ elseif ($acao === 'ranking_saldo_casas') {
     });
 
     echo json_encode($ranking, JSON_UNESCAPED_UNICODE);
+}
+
+// ---------------------------------------------------------
+// 17. AÇÃO: OBTER CASAS COM SALDO
+// ---------------------------------------------------------
+elseif ($acao === 'obter_casas_com_saldo') {
+    $profile_id = getProfileId($dados);
+    ensureAuthorizedProfile($conn, $profile_id);
+    ensureFluxoBookColumn($conn);
+    ensureApostasBoostColumn($conn);
+
+    // Depósitos e saques por casa
+    $stmt = $conn->prepare("
+        SELECT book,
+               SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END) AS total_deposits,
+               SUM(CASE WHEN type = 'withdraw' THEN amount ELSE 0 END) AS total_withdraws
+        FROM fluxo_caixa
+        WHERE profile_id = ? AND book <> ''
+        GROUP BY book
+    ");
+    $stmt->bind_param("s", $profile_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    $casas = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $casas[$row['book']] = [
+                'book' => $row['book'],
+                'deposits' => (float)$row['total_deposits'],
+                'withdraws' => (float)$row['total_withdraws'],
+                'profit' => 0.0,
+                'balance' => 0.0,
+                'bets_count' => 0,
+                'wins' => 0,
+                'losses' => 0,
+                'winrate' => 0.0,
+            ];
+        }
+    }
+    $stmt->close();
+
+    // Agregados das apostas por casa
+    $stmt = $conn->prepare("
+        SELECT
+            book,
+            COUNT(*) AS bets_count,
+            SUM(CASE WHEN status = 'win' THEN 1 ELSE 0 END) AS wins,
+            SUM(CASE WHEN status = 'loss' THEN 1 ELSE 0 END) AS losses,
+            SUM(
+                CASE
+                    WHEN status = 'win' THEN stake * (odds - 1)
+                    WHEN status = 'loss' THEN -stake
+                    WHEN status = 'cashout' THEN IFNULL(cashout_value, 0) - stake
+                    ELSE 0
+                END
+            ) AS total_profit
+        FROM apostas
+        WHERE profile_id = ? AND book <> '' AND status IN ('win', 'loss', 'cashout', 'void')
+        GROUP BY book
+    ");
+    $stmt->bind_param("s", $profile_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $book = $row['book'];
+            if (!isset($casas[$book])) {
+                $casas[$book] = [
+                    'book' => $book,
+                    'deposits' => 0.0,
+                    'withdraws' => 0.0,
+                    'profit' => 0.0,
+                    'balance' => 0.0,
+                    'bets_count' => 0,
+                    'wins' => 0,
+                    'losses' => 0,
+                    'winrate' => 0.0,
+                ];
+            }
+
+            $casas[$book]['bets_count'] = (int)($row['bets_count'] ?? 0);
+            $casas[$book]['wins'] = (int)($row['wins'] ?? 0);
+            $casas[$book]['losses'] = (int)($row['losses'] ?? 0);
+            $casas[$book]['profit'] = (float)($row['total_profit'] ?? 0);
+        }
+    }
+    $stmt->close();
+
+    // Calcular saldo final de cada casa
+    foreach ($casas as &$casa) {
+        $rawBalance = $casa['deposits'] - $casa['withdraws'] + $casa['profit'];
+        $casa['balance'] = $rawBalance;
+        $casa['winrate'] = $casa['bets_count'] > 0 ? ($casa['wins'] / $casa['bets_count']) : 0.0;
+    }
+    unset($casa);
+
+    // Ordenar por saldo descendente
+    usort($casas, function($a, $b) {
+        return $b['balance'] <=> $a['balance'];
+    });
+
+    echo json_encode(array_values($casas), JSON_UNESCAPED_UNICODE);
+}
+
+// ---------------------------------------------------------
+// 18. AÇÃO: OBTER TAXA DE ACERTO DA IA
+// ---------------------------------------------------------
+elseif ($acao === 'obter_ia_taxa_acerto') {
+    $profile_id = getProfileId($dados);
+    ensureAuthorizedProfile($conn, $profile_id);
+    ensureApostaSugestoesTable($conn);
+
+    // Contar apostas sugeridas pela IA que venceram vs total
+    $stmt = $conn->prepare("
+        SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN a.status = 'win' THEN 1 ELSE 0 END) AS wins
+        FROM apostas a
+        INNER JOIN aposta_sugestoes s ON a.id = s.aposta_id AND a.profile_id = s.profile_id
+        WHERE a.profile_id = ? AND s.suggestor_name = 'IA'
+    ");
+    $stmt->bind_param("s", $profile_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    $total = (int)($row['total'] ?? 0);
+    $wins = (int)($row['wins'] ?? 0);
+    $winrate = $total > 0 ? ($wins / $total) : 0;
+
+    responder([
+        "sucesso" => true,
+        "total" => $total,
+        "wins" => $wins,
+        "winrate" => $winrate,
+        "taxa_acerto" => $winrate * 100
+    ]);
+}
+
+// ---------------------------------------------------------
+// 19. AÇÃO: AGREGAÇÕES POR PERÍODO (SEMANAL/MENSAL)
+// ---------------------------------------------------------
+elseif ($acao === 'agregacoes_periodo') {
+    $profile_id = getProfileId($dados);
+    $tipo = $dados['tipo'] ?? 'semanal'; // 'semanal', 'mensal'
+    $data_inicio = !empty($dados['data_inicio']) ? $dados['data_inicio'] : null;
+    $data_fim = !empty($dados['data_fim']) ? $dados['data_fim'] : null;
+
+    ensureAuthorizedProfile($conn, $profile_id);
+    ensureApostasBoostColumn($conn);
+
+    // Determinar formato de agrupamento
+    if ($tipo === 'semanal') {
+        $group_expr = "YEARWEEK(a.date, 1)";
+        $date_expr = "DATE(DATE_SUB(a.date, INTERVAL (DAYOFWEEK(a.date) - 2) DAY))";
+    } else {
+        $group_expr = "DATE_FORMAT(a.date, '%Y-%m')";
+        $date_expr = "DATE_FORMAT(a.date, '%Y-%m-01')";
+    }
+
+    $where = "a.profile_id = ? AND a.status IN ('win', 'loss', 'cashout', 'void')";
+    $params = [$profile_id];
+
+    if ($data_inicio && $data_fim) {
+        $where .= " AND a.date BETWEEN ? AND ?";
+        $params[] = $data_inicio;
+        $params[] = $data_fim;
+    }
+
+    // Preparar statement com agregações
+    $sql = "
+        SELECT
+            $group_expr AS periodo_key,
+            $date_expr AS periodo_start,
+            COUNT(*) AS total_apostas,
+            SUM(CASE WHEN a.status = 'win' THEN 1 ELSE 0 END) AS vitrias,
+            SUM(CASE WHEN a.status = 'loss' THEN 1 ELSE 0 END) AS derrotas,
+            SUM(CASE WHEN a.is_boost = 1 THEN 1 ELSE 0 END) AS boosts,
+            SUM(a.stake) AS total_apostado,
+            SUM(
+                CASE
+                    WHEN a.status = 'win' THEN a.stake * (a.odds - 1)
+                    WHEN a.status = 'loss' THEN -a.stake
+                    WHEN a.status = 'cashout' THEN IFNULL(a.cashout_value, 0) - a.stake
+                    ELSE 0
+                END
+            ) AS lucro
+        FROM apostas a
+        WHERE $where
+        GROUP BY $group_expr
+        ORDER BY a.date DESC
+    ";
+
+    $stmt = $conn->prepare($sql);
+    
+    // Vincular parâmetros dinamicamente
+    if (!empty($params)) {
+        $types = '';
+        foreach ($params as $param) {
+            if (is_int($param)) $types .= 'i';
+            else $types .= 's';
+        }
+        $stmt->bind_param($types, ...$params);
+    }
+
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    $agregacoes = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $total = (int)($row['total_apostas'] ?? 0);
+            $vitrias = (int)($row['vitrias'] ?? 0);
+            $apostado = (float)($row['total_apostado'] ?? 0);
+            $lucro = (float)($row['lucro'] ?? 0);
+
+            $agregacoes[] = [
+                'periodo' => $row['periodo_start'],
+                'total_apostas' => $total,
+                'vitrias' => $vitrias,
+                'derrotas' => (int)($row['derrotas'] ?? 0),
+                'boosts' => (int)($row['boosts'] ?? 0),
+                'total_apostado' => $apostado,
+                'lucro' => $lucro,
+                'roi' => $apostado > 0 ? ($lucro / $apostado) : 0,
+                'winrate' => $total > 0 ? ($vitrias / $total) : 0,
+            ];
+        }
+    }
+    $stmt->close();
+
+    echo json_encode($agregacoes, JSON_UNESCAPED_UNICODE);
+}
+
+// ---------------------------------------------------------
+// 20. AÇÃO: RESETAR DADOS (mantendo IA e pending)
+// ---------------------------------------------------------
+elseif ($acao === 'resetar_dados') {
+    $profile_id = getProfileId($dados);
+    ensureAuthorizedProfile($conn, $profile_id);
+
+    // Iniciar transação
+    $conn->begin_transaction();
+
+    try {
+        // 1. Deletar apostas finalizadas (não pending)
+        $stmt = $conn->prepare("DELETE FROM apostas WHERE profile_id = ? AND status != 'pending'");
+        $stmt->bind_param("s", $profile_id);
+        $stmt->execute();
+        $stmt->close();
+
+        // 2. Deletar registros de cassino
+        $stmt = $conn->prepare("DELETE FROM ganhos_casino WHERE profile_id = ?");
+        $stmt->bind_param("s", $profile_id);
+        $stmt->execute();
+        $stmt->close();
+
+        // 3. Manter histórico de IA antes de limpar fluxo
+        // (as sugestões associadas às apostas pending serão mantidas automaticamente)
+
+        // 4. Deletar fluxo de caixa
+        $stmt = $conn->prepare("DELETE FROM fluxo_caixa WHERE profile_id = ?");
+        $stmt->bind_param("s", $profile_id);
+        $stmt->execute();
+        $stmt->close();
+
+        $conn->commit();
+
+        responder([
+            "sucesso" => true,
+            "mensagem" => "Dados resetados com sucesso! Apostas em aberto e taxa de IA foram preservadas."
+        ]);
+    } catch (Exception $e) {
+        $conn->rollback();
+        responder([
+            "sucesso" => false,
+            "erro" => "Erro ao resetar dados: " . $e->getMessage()
+        ]);
+    }
+}
+
+// ---------------------------------------------------------
+// 21. AÇÃO: SINCRONIZAR CASAS
+// ---------------------------------------------------------
+elseif ($acao === 'sincronizar_casas') {
+    $profile_id = getProfileId($dados);
+    $casas_atualizacoes = $dados['casas'] ?? [];
+
+    ensureAuthorizedProfile($conn, $profile_id);
+    ensureFluxoBookColumn($conn);
+
+    if (!is_array($casas_atualizacoes)) {
+        responder(["sucesso" => false, "erro" => "Dados de casas ausentes."]);
+    }
+
+    $conn->begin_transaction();
+
+    try {
+        foreach ($casas_atualizacoes as $casa_update) {
+            $book = trim($casa_update['book'] ?? '');
+            $deposits = floatval($casa_update['deposits'] ?? 0);
+            $withdraws = floatval($casa_update['withdraws'] ?? 0);
+
+            if ($book === '') continue;
+
+            // Sincronizar: buscar fluxo existente e ajustar
+            $stmt = $conn->prepare("
+                SELECT 
+                    SUM(CASE WHEN type = 'deposit' THEN amount ELSE 0 END) AS current_deposits,
+                    SUM(CASE WHEN type = 'withdraw' THEN amount ELSE 0 END) AS current_withdraws
+                FROM fluxo_caixa
+                WHERE profile_id = ? AND book = ?
+            ");
+            $stmt->bind_param("ss", $profile_id, $book);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $row = $result ? $result->fetch_assoc() : null;
+            $stmt->close();
+
+            $current_deposits = (float)($row['current_deposits'] ?? 0);
+            $current_withdraws = (float)($row['current_withdraws'] ?? 0);
+
+            // Calcular diferenças
+            $deposits_diff = $deposits - $current_deposits;
+            $withdraws_diff = $withdraws - $current_withdraws;
+
+            // Ajustar com fluxos de sincronização
+            if (abs($deposits_diff) > 0.01) {
+                $type = 'deposit';
+                $amount = abs($deposits_diff);
+                $id = 'sync_dep_' . $profile_id . '_' . $book . '_' . time();
+                $date = date('Y-m-d');
+                $note = 'Sincronização automática';
+
+                $stmt = $conn->prepare("
+                    INSERT INTO fluxo_caixa (id, profile_id, date, type, amount, note, book)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE amount = VALUES(amount)
+                ");
+                $stmt->bind_param("ssssdss", $id, $profile_id, $date, $type, $amount, $note, $book);
+                $stmt->execute();
+                $stmt->close();
+            }
+
+            if (abs($withdraws_diff) > 0.01) {
+                $type = 'withdraw';
+                $amount = abs($withdraws_diff);
+                $id = 'sync_wth_' . $profile_id . '_' . $book . '_' . time();
+                $date = date('Y-m-d');
+                $note = 'Sincronização automática';
+
+                $stmt = $conn->prepare("
+                    INSERT INTO fluxo_caixa (id, profile_id, date, type, amount, note, book)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE amount = VALUES(amount)
+                ");
+                $stmt->bind_param("ssssdss", $id, $profile_id, $date, $type, $amount, $note, $book);
+                $stmt->execute();
+                $stmt->close();
+            }
+        }
+
+        $conn->commit();
+
+        responder([
+            "sucesso" => true,
+            "mensagem" => "Casas sincronizadas com sucesso!"
+        ]);
+    } catch (Exception $e) {
+        $conn->rollback();
+        responder([
+            "sucesso" => false,
+            "erro" => "Erro ao sincronizar casas: " . $e->getMessage()
+        ]);
+    }
+}
+
+// ---------------------------------------------------------
+// 22. AÇÃO: CRIAR CASA
+// ---------------------------------------------------------
+elseif ($acao === 'criar_casa') {
+    $profile_id = getProfileId($dados);
+    $book = trim($dados['book'] ?? '');
+    $saldo_inicial = floatval($dados['saldo_inicial'] ?? 0);
+
+    ensureAuthorizedProfile($conn, $profile_id);
+    ensureFluxoBookColumn($conn);
+
+    if ($book === '') {
+        responder(["sucesso" => false, "erro" => "Nome da casa é obrigatório."]);
+    }
+
+    // Verificar se a casa já existe
+    $stmt = $conn->prepare("SELECT COUNT(*) as total FROM fluxo_caixa WHERE profile_id = ? AND book = ?");
+    $stmt->bind_param("ss", $profile_id, $book);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result ? $result->fetch_assoc() : null;
+    $stmt->close();
+
+    $exists = (int)($row['total'] ?? 0) > 0;
+
+    if ($exists) {
+        responder(["sucesso" => false, "erro" => "Casa já existe."]);
+    }
+
+    // Criar registro inicial com saldo
+    if ($saldo_inicial > 0) {
+        $id = 'init_' . bin2hex(random_bytes(8));
+        $date = date('Y-m-d');
+        $type = 'deposit';
+        $note = 'Saldo inicial ao adicionar casa';
+
+        $stmt = $conn->prepare("
+            INSERT INTO fluxo_caixa (id, profile_id, date, type, amount, note, book)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->bind_param("ssssdss", $id, $profile_id, $date, $type, $saldo_inicial, $note, $book);
+
+        if (!$stmt->execute()) {
+            responder(["sucesso" => false, "erro" => "Erro ao criar casa."]);
+        }
+        $stmt->close();
+    }
+
+    responder([
+        "sucesso" => true,
+        "mensagem" => "Casa '$book' criada com sucesso!",
+        "casa" => [
+            "book" => $book,
+            "saldo_inicial" => $saldo_inicial
+        ]
+    ]);
 }
 
 $conn->close();

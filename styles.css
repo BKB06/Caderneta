@@ -3456,7 +3456,7 @@ th {
 
 .kpi-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -3465,6 +3465,7 @@ th {
   border-radius: 12px;
   background: var(--bg-panel);
   padding: 12px;
+  min-width: 0;
 }
 
 .kpi-kard span {
@@ -3475,9 +3476,12 @@ th {
 .kpi-kard strong {
   display: block;
   margin-top: 4px;
-  font-size: 1.9rem;
+  font-size: clamp(1.45rem, 3.8vw, 1.9rem);
   line-height: 1.1;
   font-weight: 500;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .kpi-delta {
@@ -3784,8 +3788,16 @@ th {
     grid-template-columns: 1fr 1fr;
   }
 
-  .kpi-strip .kpi-kard:nth-child(5) {
+  .kpi-strip .kpi-kard:nth-child(n + 5) {
     grid-column: 1 / -1;
+  }
+
+  .kpi-kard {
+    padding: 10px;
+  }
+
+  .kpi-kard strong {
+    font-size: clamp(1.25rem, 7vw, 1.6rem);
   }
 
   .content-band {
@@ -4136,4 +4148,144 @@ html.light-bege .profit-pill.negative {
   .balance-ranking-podium {
     grid-template-columns: 1fr;
   }
+}
+
+/* ========================================== */
+/* CASAS PAGE STYLES                        */
+/* ========================================== */
+
+.casas-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.casa-card {
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--surface);
+  transition: all 0.2s ease;
+}
+
+.casa-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.casa-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+
+.casa-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.casa-balance {
+  font-size: 20px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.casa-balance.positive {
+  color: var(--success);
+}
+
+.casa-balance.negative {
+  color: var(--danger);
+}
+
+.casa-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.stat-value.positive {
+  color: var(--success);
+}
+
+.stat-value.negative {
+  color: var(--danger);
+}
+
+.sync-button {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.sync-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: rotate(90deg);
+}
+
+.sync-button:active {
+  transform: rotate(180deg);
+}
+
+.danger {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.danger:active {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+.form-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+.button-primary {
+  background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+  color: white;
+  box-shadow: 0 12px 24px rgba(92, 72, 255, 0.35);
+}
+
+.button-primary:hover {
+  box-shadow: 0 16px 32px rgba(92, 72, 255, 0.45);
 }

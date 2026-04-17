@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="./caderneta-theme-boot.js"></script>
+    <title>Casas de Apostas - Caderneta de Apostas</title>
+    <link rel="stylesheet" href="./styles.css?v=20260411-1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="app-sidebar" role="navigation">
+        <div class="sidebar-brand"><h2>Caderneta</h2><p>v2 · MySQL</p></div>
+        <div class="sidebar-group">
+          <span class="sidebar-label">Principal</span>
+          <a class="sidebar-item is-bets" href="./index.html"><span class="sidebar-dot"></span><span>Apostas</span></a>
+          <a class="sidebar-item" href="./casino.html"><span class="sidebar-dot"></span><span>Cassino</span></a>
+          <a class="sidebar-item" href="./cashflow.html"><span class="sidebar-dot"></span><span>Fluxo de caixa</span></a>
+        </div>
+        <div class="sidebar-group">
+          <span class="sidebar-label">Análise</span>
+          <a class="sidebar-item active" href="./casas.html"><span class="sidebar-dot"></span><span>Casas</span></a>
+          <a class="sidebar-item" href="./ranking.html"><span class="sidebar-dot"></span><span>Ranking</span></a>
+          <a class="sidebar-item" href="./index.html#calendar-container"><span class="sidebar-dot"></span><span>Calendário</span></a>
+        </div>
+        <div class="sidebar-group">
+          <span class="sidebar-label">Sistema</span>
+          <a class="sidebar-item" href="./settings.html"><span class="sidebar-dot"></span><span>Configurações</span></a>
+          <button type="button" class="sidebar-item" id="export-pdf-btn"><span class="sidebar-dot"></span><span>Exportar / PDF</span></button>
+        </div>
+        <div class="sidebar-profile" id="sidebar-profile">
+          <select id="profile-switch" class="profile-switch-native"></select>
+          <button type="button" class="profile-trigger" id="profile-trigger"><span class="profile-avatar" id="profile-avatar">--</span><span class="profile-meta"><strong class="profile-name" id="profile-name-display">Perfil</strong><small class="profile-role" id="profile-role-display">Perfil principal</small></span><span class="profile-caret">▴</span></button>
+          <div class="profile-dropdown" id="profile-dropdown"></div>
+        </div>
+      </aside>
+
+      <div class="main-area">
+        <header class="topbar">
+          <div class="topbar-left"><button type="button" class="icon-button mobile-menu-btn" id="mobile-menu-btn" aria-label="Abrir menu">☰</button><h1 class="topbar-title">Casas de Apostas</h1><button type="button" class="period-pill">Saldos por Casa</button></div>
+          <div class="topbar-right"><button type="button" class="theme-toggle" id="theme-toggle" aria-label="Alternar tema">🌙</button><button type="button" id="sync-btn" class="sync-button" title="Sincronizar casas">🔄</button></div>
+        </header>
+
+        <main class="page-content">
+          <div class="app-grid">
+            <!-- KPI Section -->
+            <section class="kpi-strip kpi-grid">
+              <article class="kpi-kard">
+                <span>Saldo Total</span>
+                <strong id="total-balance">R$ 0,00</strong>
+                <div class="kpi-delta">Todas as casas</div>
+              </article>
+              <article class="kpi-kard">
+                <span>Casas Ativas</span>
+                <strong id="casas-count">0</strong>
+                <div class="kpi-delta">Com dados</div>
+              </article>
+              <article class="kpi-kard">
+                <span>Melhor Casa</span>
+                <strong id="best-casa">-</strong>
+                <div class="kpi-delta" id="best-casa-valor">R$ 0,00</div>
+              </article>
+              <article class="kpi-kard">
+                <span>Taxa IA</span>
+                <strong id="ia-winrate">-</strong>
+                <div class="kpi-delta" id="ia-bets">0 apostas</div>
+              </article>
+            </section>
+
+            <!-- Nova Casa -->
+            <section class="panel">
+              <div class="panel-header">
+                <h2>Adicionar Casa</h2>
+                <p>Registre uma nova casa de apostas</p>
+              </div>
+              <form class="form-grid" id="nova-casa-form">
+                <label>Nome da casa
+                  <div class="input-group">
+                    <input type="text" id="nova-casa-nome" placeholder="Ex: Bet365, Betano, etc." required />
+                  </div>
+                </label>
+                <label>Saldo inicial
+                  <div class="input-group">
+                    <span class="prefix">R$</span>
+                    <input type="text" inputmode="decimal" id="nova-casa-saldo" placeholder="0,00" />
+                  </div>
+                </label>
+                <div class="form-footer">
+                  <button type="submit" class="button-primary">Adicionar casa</button>
+                  <button type="button" class="ghost" id="nova-casa-reset">Limpar</button>
+                </div>
+              </form>
+            </section>
+
+            <!-- Casas List -->
+            <section class="panel full">
+              <div class="panel-header">
+                <h2>Casas de Apostas</h2>
+                <p>Saldo e desempenho por casa</p>
+              </div>
+              <div class="casas-list" id="casas-list"></div>
+            </section>
+
+            <!-- Weekly/Monthly Aggregations -->
+            <section class="panel full">
+              <div class="panel-header">
+                <h2>Resultados Semanais</h2>
+                <p>Lucro semanal e estatísticas</p>
+              </div>
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Semana</th>
+                      <th>Apostas</th>
+                      <th>Vitórias</th>
+                      <th>Taxa</th>
+                      <th>Apostado</th>
+                      <th>Lucro</th>
+                      <th>ROI</th>
+                    </tr>
+                  </thead>
+                  <tbody id="semanal-body"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel full">
+              <div class="panel-header">
+                <h2>Resultados Mensais</h2>
+                <p>Lucro mensal e estatísticas</p>
+              </div>
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Mês</th>
+                      <th>Apostas</th>
+                      <th>Vitórias</th>
+                      <th>Taxa</th>
+                      <th>Apostado</th>
+                      <th>Lucro</th>
+                      <th>ROI</th>
+                    </tr>
+                  </thead>
+                  <tbody id="mensal-body"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <!-- Reset Data Section -->
+            <section class="panel">
+              <div class="panel-header"><h2>Manutenção</h2><p>Operações de sincronização e reset</p></div>
+              <div class="form-grid">
+                <button type="button" id="reset-btn" class="danger">Resetar Dados (manter IA e pending)</button>
+                <p class="form-hint">Deleta apostas finalizadas, cassino e fluxo antigo. Mantém apostas em aberto e taxa de IA.</p>
+              </div>
+            </section>
+          </div>
+        </main>
+
+        <footer class="app-footer"><p>Dados salvos no MySQL via api.php · App local</p></footer>
+      </div>
+    </div>
+
+    <div class="mobile-overlay" id="mobile-overlay"></div>
+    <nav class="bottom-nav" role="navigation"><a href="./index.html">Apostas</a><a href="./casino.html">Cassino</a><a href="./casas.html" class="active">Casas</a><a href="./settings.html">Mais</a></nav>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="./caderneta-utils.js?v=20260411-2"></script>
+    <script src="./caderneta-shell.js?v=20260411-2"></script>
+    <script src="./casas.js?v=20260411-2"></script>
+    <script>
+      window.CadernetaShell.initAppShell({ profileSwitcher: true });
+    </script>
+  </body>
+</html>
